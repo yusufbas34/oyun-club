@@ -1,6 +1,247 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 // ============================================================
+// SOCKET HOOK — Backend'e uyumlu (register + callback'li)
+// ============================================================
+const BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
+
+function useSocket(username) {
+  const socketRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [roomData, setRoomData] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [socketError, setSocketError] = useState(null);
+
+  useEffect(() => {
+    if (!username) return;
+    let socket;
+    import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js').then(({ io }) => {
+      socket = io(BACKEND_URL, { transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 1000 });
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        console.log('✅ Socket bağlandı:', socket.id);
+        setIsConnected(true);
+        setSocketError(null);
+        socket.emit('register', { name: username }, (res) => {
+          if (res && res.success) { console.log('✅ Kayıt başarılı:', res.user); setIsRegistered(true); }
+          else { console.error('🔴 Kayıt hatası:', res?.error); setSocketError(res?.error || 'Kayıt başarısız'); }
+        });
+      });
+
+      socket.on('disconnect', () => { console.log('❌ Socket koptu'); setIsConnected(false); setIsRegistered(false); });
+      socket.on('connect_error', (err) => { console.error('🔴 Bağlantı hatası:', err.message); setSocketError('Sunucuya bağlanılamadı'); setIsConnected(false); });
+      socket.on('room_updated', (data) => { console.log('🏠 Oda güncellendi:', data); setRoomData(data); });
+      socket.on('player_left', (data) => { setMessages((prev) => [...prev, { type: 'system', text: `${data.name} masadan ayrıldı` }]); });
+      socket.on('chat_new_message', (msg) => { setMessages((prev) => [...prev, { username: msg.name, text: msg.message, timestamp: msg.timestamp }]); });
+      socket.on('game_started', (data) => { console.log('▶ Oyun başladı:', data); setRoomData(data); });
+      socket.on('game_state_updated', (data) => { setRoomData((prev) => prev ? { ...prev, gameState: data.gameState, state: data.state } : prev); });
+      socket.on('game_finished', (data) => { setRoomData((prev) => prev ? { ...prev, gameResult: data } : prev); });
+      socket.on('rps_opponent_chose', () => { console.log('✊ Rakip seçim yaptı'); });
+      socket.on('rps_reveal', (data) => { setRoomData((prev) => prev ? { ...prev, rpsReveal: data } : prev); });
+      socket.on('rps_new_round', (data) => { setRoomData((prev) => prev ? { ...prev, rpsNewRound: data } : prev); });
+    }).catch(err => { console.error('Socket.io yüklenemedi:', err); setSocketError('Socket.io yüklenemedi'); });
+    return () => { if (socket) { socket.removeAllListeners(); socket.disconnect(); } socketRef.current = null; };
+  }, [username]);
+
+  const createRoom = useCallback((gameId) => {
+    if (!socketRef.current || !isRegistered) return;
+    socketRef.current.emit('create_room', { gameId }, (res) => {
+      if (res && res.success) { console.log('✅ Oda oluşturuldu:', res.room); setRoomData(res.room); setMessages([]); }
+      else { console.error('🔴 Oda hatası:', res?.error); setSocketError(res?.error || 'Oda oluşturulamadı'); }
+    });
+  }, [isRegistered]);
+
+  const joinRoom = useCallback((roomCode) => {
+    if (!socketRef.current || !isRegistered) return;
+    socketRef.current.emit('join_room', { roomId: roomCode }, (res) => {
+      if (res && res.success) { console.log('✅ Odaya katıldı:', res.room); setRoomData(res.room); setMessages([]); }
+      else { console.error('🔴 Katılma hatası:', res?.error); setSocketError(res?.error || 'Katılma başarısız'); }
+    });
+  }, [isRegistered]);
+
+  const leaveRoom = useCallback(() => {
+    if (!socketRef.current) return;
+    socketRef.current.emit('leave_room', null, () => { setRoomData(null); setMessages([]); });
+  }, []);
+
+  const sendMessage = useCallback((text) => {
+    if (!socketRef.current || !text.trim()) return;
+    socketRef.current.emit('chat_message', { message: text.trim() }, () => {});
+  }, []);
+
+  const startGame = useCallback(() => {
+    if (!socketRef.current) return;
+    socketRef.current.emit('start_game', null, (res) => {
+      if (!res?.success) { setSocketError(res?.error || 'Başlatılamadı'); }
+    });
+  }, []);
+
+  return { isConnected, isRegistered, roomData, messages, socketError, createRoom, joinRoom, leaveRoom, sendMessage, startGame, setSocketError };
+}
+
+// ============================================================
+// CHAT PANEL
+// ============================================================
+function ChatPanel({ messages = [], onSend, currentUser, isConnected = false, playerCount = 0 }) {
+  const [text, setText] = useState('');
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  const handleSend = () => { if (!text.trim() || !onSend) return; onSend(text.trim()); setText(''); inputRef.current?.focus(); };
+  const handleKeyDown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+  const formatTime = (ts) => { if (!ts) return ''; return new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 360, height: 400, borderRadius: 16, overflow: 'hidden', background: 'var(--surface)', border: '1px solid var(--border)', fontFamily: "'DM Sans', sans-serif" }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--surface-hover)', borderBottom: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />Masa Sohbeti
+        </h3>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{isConnected ? `${playerCount} oyuncu` : 'Bağlanıyor...'}</span>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {messages.length === 0 ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20, opacity: 0.5 }}>💬 Henüz mesaj yok.<br />İlk mesajı sen gönder!</div>
+        ) : messages.map((msg, i) => {
+          if (msg.type === 'system') return <div key={i} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)', padding: '4px 0', fontStyle: 'italic' }}>{msg.text}</div>;
+          const isMine = msg.username === currentUser;
+          return (
+            <div key={i} style={{ maxWidth: '80%', padding: '8px 12px', borderRadius: isMine ? '12px 12px 4px 12px' : '12px 12px 12px 4px', background: isMine ? '#6366f1' : 'var(--surface-hover)', color: isMine ? '#fff' : 'var(--text)', alignSelf: isMine ? 'flex-end' : 'flex-start', fontSize: 13, lineHeight: 1.4, wordBreak: 'break-word' }}>
+              {!isMine && <div style={{ fontSize: 11, fontWeight: 600, color: '#818cf8', marginBottom: 2 }}>{msg.username}</div>}
+              <div>{msg.text}</div>
+              <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2, textAlign: 'right' }}>{formatTime(msg.timestamp)}</div>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
+        <input ref={inputRef} style={{ flex: 1, padding: '8px 12px', borderRadius: 20, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: "'DM Sans', sans-serif" }}
+          type="text" placeholder={isConnected ? 'Mesajınızı yazın...' : 'Bağlantı bekleniyor...'} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={handleKeyDown} disabled={!isConnected} maxLength={500} />
+        <button style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: '#6366f1', color: '#fff', cursor: text.trim() && isConnected ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, opacity: text.trim() && isConnected ? 1 : 0.4, flexShrink: 0 }}
+          onClick={handleSend} disabled={!text.trim() || !isConnected}>➤</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MULTIPLAYER LOBBY
+// ============================================================
+const MP_GAMES = [
+  { id: 'xox', name: 'XOX', icon: '❌⭕', players: 2 },
+  { id: 'rps', name: 'Taş Kağıt Makas', icon: '✊✋✌️', players: 2 },
+];
+
+function MultiplayerLobby() {
+  const [username, setUsername] = useState('');
+  const [isNameSet, setIsNameSet] = useState(false);
+  const [selectedMPGame, setSelectedMPGame] = useState(null);
+  const [joinCode, setJoinCode] = useState('');
+  const { isConnected, isRegistered, roomData, messages, socketError, createRoom, joinRoom, leaveRoom, sendMessage, startGame, setSocketError } = useSocket(isNameSet ? username : null);
+
+  if (!isNameSet) {
+    return (
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: 24, fontFamily: "'DM Sans', sans-serif", color: 'var(--text)' }}>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 24, fontWeight: 700, marginBottom: 8 }}>🎮 Multiplayer Lobi</h2>
+        <p style={{ opacity: 0.6, marginBottom: 16, fontSize: 14 }}>Oyunculara görünecek adını gir</p>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <input style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 15, width: '100%', maxWidth: 300, outline: 'none', fontFamily: "'DM Sans', sans-serif" }}
+            placeholder="Kullanıcı adın..." value={username} onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && username.trim().length >= 2) setIsNameSet(true); }} maxLength={20} autoFocus />
+          <button onClick={() => setIsNameSet(true)} disabled={username.trim().length < 2}
+            style={{ padding: '12px 24px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 15, cursor: username.trim().length >= 2 ? 'pointer' : 'not-allowed', opacity: username.trim().length >= 2 ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif" }}>Devam →</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (roomData) {
+    const players = roomData.players || [];
+    const maxP = roomData.maxPlayers || 2;
+    const canStart = players.length >= maxP;
+    return (
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: 24, fontFamily: "'DM Sans', sans-serif", color: 'var(--text)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 10, background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', fontSize: 13, marginBottom: 20 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80' }} /><span>Bağlı — {username}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 300 }}>
+            <div style={{ padding: 20, borderRadius: 14, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 20, textAlign: 'center' }}>
+              <div style={{ fontSize: 13, opacity: 0.6, marginBottom: 4 }}>Oda Kodu (arkadaşına gönder)</div>
+              <div style={{ fontFamily: "'Sora', sans-serif", fontSize: 32, fontWeight: 800, letterSpacing: 6, color: '#E63946', padding: '10px 0', userSelect: 'all' }}>{roomData.id}</div>
+              <div style={{ fontSize: 12, opacity: 0.5 }}>Oyun: {MP_GAMES.find(g => g.id === roomData.gameId)?.name || roomData.gameId}</div>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Oyuncular ({players.length}/{maxP})</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {players.map((p, i) => (
+                  <div key={i} style={{ padding: '6px 14px', borderRadius: 20, background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', fontSize: 13, fontWeight: 500 }}>
+                    {p.name === username ? '👤 ' : '🎮 '}{p.name}{p.name === username ? ' (sen)' : ''}
+                  </div>
+                ))}
+                {players.length < maxP && <div style={{ padding: '6px 14px', borderRadius: 20, background: 'var(--surface-hover)', border: '1px solid var(--border)', fontSize: 13 }}>⏳ Rakip bekleniyor...</div>}
+              </div>
+            </div>
+            {roomData.state === 'waiting' && canStart && (
+              <button onClick={startGame} style={{ padding: '12px 24px', borderRadius: 10, border: 'none', background: '#2A9D8F', color: '#fff', fontWeight: 600, fontSize: 15, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", marginBottom: 12, width: '100%' }}>▶ Oyunu Başlat</button>
+            )}
+            {roomData.state === 'waiting' && !canStart && <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>⏳ Rakip bekleniyor... Oda kodunu arkadaşına gönder!</p>}
+            {roomData.state === 'playing' && (
+              <div style={{ padding: 16, borderRadius: 12, background: 'rgba(42,157,143,0.1)', border: '1px solid rgba(42,157,143,0.3)', marginBottom: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#2A9D8F' }}>🎮 Oyun Devam Ediyor!</div>
+              </div>
+            )}
+            <button onClick={leaveRoom} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>🚪 Masadan Ayrıl</button>
+          </div>
+          <div style={{ flex: '0 0 360px' }}>
+            <ChatPanel messages={messages} onSend={sendMessage} currentUser={username} isConnected={isRegistered} playerCount={players.length} />
+          </div>
+        </div>
+        {socketError && <div style={{ padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, marginTop: 16 }}>⚠️ {socketError}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: 24, fontFamily: "'DM Sans', sans-serif", color: 'var(--text)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 10, background: isRegistered ? 'rgba(74,222,128,0.1)' : isConnected ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${isRegistered ? 'rgba(74,222,128,0.3)' : isConnected ? 'rgba(251,191,36,0.3)' : 'rgba(239,68,68,0.3)'}`, fontSize: 13, marginBottom: 20 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: isRegistered ? '#4ade80' : isConnected ? '#fbbf24' : '#ef4444' }} />
+        <span>{isRegistered ? `Bağlı — ${username}` : isConnected ? 'Kayıt yapılıyor...' : 'Sunucuya bağlanılıyor...'}</span>
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>🎮 Oyun Seç</h2>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {MP_GAMES.map((g) => (
+            <div key={g.id} onClick={() => setSelectedMPGame(g.id)} style={{ padding: '14px 20px', borderRadius: 12, border: `2px solid ${selectedMPGame === g.id ? '#6366f1' : 'var(--border)'}`, background: selectedMPGame === g.id ? 'rgba(99,102,241,0.15)' : 'var(--surface)', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center', minWidth: 140 }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{g.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{g.name}</div>
+              <div style={{ fontSize: 11, opacity: 0.5 }}>{g.players} oyuncu</div>
+            </div>
+          ))}
+        </div>
+        {selectedMPGame && (
+          <button onClick={() => { setSocketError(null); createRoom(selectedMPGame); }} disabled={!isRegistered}
+            style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 14, cursor: isRegistered ? 'pointer' : 'not-allowed', opacity: isRegistered ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif" }}>🏠 Masa Oluştur</button>
+        )}
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>🔗 Masaya Katıl</h2>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <input style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 16, fontFamily: 'monospace', letterSpacing: 4, textTransform: 'uppercase', width: 180, textAlign: 'center', outline: 'none' }}
+            placeholder="ABCD" value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+            onKeyDown={(e) => { if (e.key === 'Enter' && joinCode.length >= 4) joinRoom(joinCode); }} />
+          <button onClick={() => joinRoom(joinCode)} disabled={joinCode.length < 4 || !isRegistered}
+            style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 14, cursor: joinCode.length >= 4 && isRegistered ? 'pointer' : 'not-allowed', opacity: joinCode.length >= 4 && isRegistered ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif" }}>Katıl →</button>
+        </div>
+      </div>
+      {socketError && <div style={{ padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13 }}>⚠️ {socketError}</div>}
+    </div>
+  );
+}
+// ============================================================
 // CONSTANTS & HELPERS
 // ============================================================
 const GAMES = [
@@ -270,7 +511,7 @@ const StatBox = ({ label, value, color, delay = 0 }) => (
 // ============================================================
 // HEADER
 // ============================================================
-const Header = ({ user, onBack, showBack, onProfile, onLeaderboard, onHome, dark, onToggleDark }) => (
+const Header = ({ user, onBack, showBack, onProfile, onLeaderboard, onMultiplayer, onHome, dark, onToggleDark }) => (
   <header style={{
     display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "14px 20px", background: "var(--header-bg)",
@@ -297,6 +538,13 @@ const Header = ({ user, onBack, showBack, onProfile, onLeaderboard, onHome, dark
           onMouseEnter={e => e.currentTarget.style.background = "var(--surface-hover)"}
           onMouseLeave={e => e.currentTarget.style.background = "none"}
         >{dark ? "☀️" : "🌙"}</button>
+        <button onClick={onMultiplayer} title="Multiplayer" style={{
+          background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "6px 10px",
+          borderRadius: 8, transition: "var(--transition)",
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = "var(--surface-hover)"}
+          onMouseLeave={e => e.currentTarget.style.background = "none"}
+        >🎮</button>
         <button onClick={onLeaderboard} title="Skor Tablosu" style={{
           background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "6px 10px",
           borderRadius: 8, transition: "var(--transition)",
@@ -523,7 +771,6 @@ const LeaderboardPage = ({ user, stats }) => {
     <div style={{ maxWidth: 520, margin: "0 auto", padding: "32px 20px", animation: "fadeUp 0.4s ease" }}>
       <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 28, fontWeight: 700, letterSpacing: "-0.5px", marginBottom: 20 }}>🏆 Skor Tablosu</h2>
 
-      {/* Game Tabs */}
       <div style={{
         display: "flex", gap: 8, marginBottom: 24, overflowX: "auto",
         paddingBottom: 4, scrollbarWidth: "none",
@@ -548,7 +795,6 @@ const LeaderboardPage = ({ user, stats }) => {
         })}
       </div>
 
-      {/* User Rank Banner */}
       <Card style={{
         padding: "16px 20px", marginBottom: 20,
         background: activeGame?.bg, color: "#fff", border: "none",
@@ -567,7 +813,6 @@ const LeaderboardPage = ({ user, stats }) => {
         </div>
       </Card>
 
-      {/* Podium */}
       <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 12, marginBottom: 24 }}>
         {[1, 0, 2].map((rank) => {
           const p = allPlayers[rank];
@@ -592,7 +837,6 @@ const LeaderboardPage = ({ user, stats }) => {
         })}
       </div>
 
-      {/* Full List */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {allPlayers.map((p, i) => {
           const winRate = p.played > 0 ? Math.round((p.wins / p.played) * 100) : 0;
@@ -837,7 +1081,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn }) => {
 // ============================================================
 // MINESWEEPER GAME
 // ============================================================
-const MinesweeperGame = ({ game, onGameEnd, soundOn }) => {
+const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
   const ROWS = 9, COLS = 9, MINES = 10;
   const initBoard = useCallback(() => {
     const cells = Array.from({ length: ROWS * COLS }, () => ({ mine: false, revealed: false, flagged: false, adjacent: 0 }));
@@ -1101,8 +1345,7 @@ const MemoryGame = ({ game, onGameEnd, soundOn }) => {
             background: card.flipped || card.matched ? (card.matched ? "var(--surface-hover)" : "var(--surface)") : game.bg,
             cursor: card.flipped || card.matched ? "default" : "pointer",
             fontSize: "clamp(24px, 7vw, 36px)", display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all 0.3s ease", transform: card.flipped || card.matched ? "rotateY(0)" : "rotateY(0)",
-            opacity: card.matched ? 0.7 : 1,
+            transition: "all 0.3s ease", opacity: card.matched ? 0.7 : 1,
           }}>
             {card.flipped || card.matched ? (
               <span style={{ animation: "scaleIn 0.25s ease" }}>{card.emoji}</span>
@@ -1133,9 +1376,9 @@ const MemoryGame = ({ game, onGameEnd, soundOn }) => {
 // SNAKE GAME
 // ============================================================
 const GRID = 20;
-const SnakeGame = ({ game, onGameEnd, soundOn }) => {
+const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
   const canvasRef = useRef(null);
-  const [gameState, setGameState] = useState("idle"); // idle | playing | over
+  const [gameState, setGameState] = useState("idle");
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const snakeRef = useRef([{ x: 10, y: 10 }]);
@@ -1164,20 +1407,14 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const size = canvas.width / GRID;
-
-    // Background
     ctx.fillStyle = darkRef.current ? "#1A1A2E" : "#F8FAFC";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Grid lines
     ctx.strokeStyle = darkRef.current ? "#2A2A45" : "#E5E7EB";
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= GRID; i++) {
       ctx.beginPath(); ctx.moveTo(i * size, 0); ctx.lineTo(i * size, canvas.height); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i * size); ctx.lineTo(canvas.width, i * size); ctx.stroke();
     }
-
-    // Snake
     const snake = snakeRef.current;
     snake.forEach((seg, i) => {
       const ratio = 1 - (i / snake.length) * 0.4;
@@ -1190,8 +1427,6 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
       ctx.roundRect(seg.x * size + pad, seg.y * size + pad, size - pad * 2, size - pad * 2, i === 0 ? 6 : 4);
       ctx.fill();
     });
-
-    // Eyes on head
     const head = snake[0];
     const ex = head.x * size + size * 0.3;
     const ey = head.y * size + size * 0.3;
@@ -1201,8 +1436,6 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
     ctx.fillStyle = "#1A1A2E";
     ctx.beginPath(); ctx.arc(ex + 1, ey, 1.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(ex + size * 0.35 + 1, ey, 1.5, 0, Math.PI * 2); ctx.fill();
-
-    // Food
     const food = foodRef.current;
     ctx.font = `${size - 4}px serif`;
     ctx.textAlign = "center";
@@ -1214,61 +1447,32 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
     dirRef.current = nextDirRef.current;
     const snake = snakeRef.current;
     const head = { x: snake[0].x + dirRef.current.x, y: snake[0].y + dirRef.current.y };
-
-    // Wall collision
     if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
       clearInterval(loopRef.current);
-      if (!gameOverRef.current) {
-        gameOverRef.current = true;
-        setGameState("over");
-        if (soundOnRef.current) playSound("explode");
-        onGameEndRef.current(scoreRef.current >= 5 ? "win" : "loss");
-      }
+      if (!gameOverRef.current) { gameOverRef.current = true; setGameState("over"); if (soundOnRef.current) playSound("explode"); onGameEndRef.current(scoreRef.current >= 5 ? "win" : "loss"); }
       return;
     }
-    // Self collision
     if (snake.some(s => s.x === head.x && s.y === head.y)) {
       clearInterval(loopRef.current);
-      if (!gameOverRef.current) {
-        gameOverRef.current = true;
-        setGameState("over");
-        if (soundOnRef.current) playSound("explode");
-        onGameEndRef.current(scoreRef.current >= 5 ? "win" : "loss");
-      }
+      if (!gameOverRef.current) { gameOverRef.current = true; setGameState("over"); if (soundOnRef.current) playSound("explode"); onGameEndRef.current(scoreRef.current >= 5 ? "win" : "loss"); }
       return;
     }
-
     const newSnake = [head, ...snake];
     if (head.x === foodRef.current.x && head.y === foodRef.current.y) {
-      scoreRef.current++;
-      setScore(scoreRef.current);
-      setHighScore(h => Math.max(h, scoreRef.current));
-      if (soundOnRef.current) playSound("eat");
-      spawnFood();
-    } else {
-      newSnake.pop();
-    }
+      scoreRef.current++; setScore(scoreRef.current); setHighScore(h => Math.max(h, scoreRef.current));
+      if (soundOnRef.current) playSound("eat"); spawnFood();
+    } else { newSnake.pop(); }
     snakeRef.current = newSnake;
     draw();
   }, [draw, spawnFood]);
 
   const startGame = useCallback(() => {
-    snakeRef.current = [{ x: 10, y: 10 }];
-    dirRef.current = { x: 1, y: 0 };
-    nextDirRef.current = { x: 1, y: 0 };
-    scoreRef.current = 0;
-    gameOverRef.current = false;
-    setScore(0);
-    spawnFood();
-    setGameState("playing");
-    draw();
-    clearInterval(loopRef.current);
-    loopRef.current = setInterval(gameLoop, 120);
+    snakeRef.current = [{ x: 10, y: 10 }]; dirRef.current = { x: 1, y: 0 }; nextDirRef.current = { x: 1, y: 0 };
+    scoreRef.current = 0; gameOverRef.current = false; setScore(0); spawnFood(); setGameState("playing"); draw();
+    clearInterval(loopRef.current); loopRef.current = setInterval(gameLoop, 120);
   }, [gameLoop, draw, spawnFood]);
 
-  useEffect(() => {
-    return () => clearInterval(loopRef.current);
-  }, []);
+  useEffect(() => { return () => clearInterval(loopRef.current); }, []);
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -1286,7 +1490,6 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
     return () => window.removeEventListener("keydown", handleKey);
   }, [gameState]);
 
-  // Touch controls
   const touchStart = useRef(null);
   const handleTouchStart = (e) => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
   const handleTouchEnd = (e) => {
@@ -1314,13 +1517,10 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
         <div style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 16 }}>🍎 {score}</div>
         <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>En yüksek: {highScore}</div>
       </div>
-
       <div style={{ position: "relative", margin: "0 auto", width: canvasSize, height: canvasSize }}
-        onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}
-      >
+        onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <canvas ref={canvasRef} width={canvasSize} height={canvasSize}
-          style={{ borderRadius: "var(--radius-sm)", border: "2px solid var(--border)", display: "block" }}
-        />
+          style={{ borderRadius: "var(--radius-sm)", border: "2px solid var(--border)", display: "block" }} />
         {gameState !== "playing" && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
@@ -1346,8 +1546,6 @@ const SnakeGame = ({ game, onGameEnd, soundOn }) => {
           </div>
         )}
       </div>
-
-      {/* Mobile D-Pad */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 20, gap: 4 }}>
         <button onClick={() => { if (gameState === "playing" && dirRef.current.y !== 1) nextDirRef.current = { x: 0, y: -1 }; }}
           style={{ width: 56, height: 56, borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>↑</button>
@@ -1440,9 +1638,10 @@ export default function App() {
     <><GlobalStyle dark={dark} />
       <div style={{ minHeight: "100vh", background: "var(--bg)", transition: "background 0.3s ease" }}>
         <Header user={user} onBack={handleBack}
-          showBack={!["lobby", "profile", "leaderboard"].includes(page)}
+          showBack={!["lobby", "profile", "leaderboard", "multiplayer"].includes(page)}
           onProfile={() => setPage("profile")}
           onLeaderboard={() => setPage("leaderboard")}
+          onMultiplayer={() => setPage("multiplayer")}
           onHome={handleHome}
           dark={dark}
           onToggleDark={() => setDark(d => !d)}
@@ -1450,6 +1649,7 @@ export default function App() {
         {page === "lobby" && <Lobby onSelectGame={handleSelectGame} onJoinRoom={handleJoinRoom} user={user} stats={stats} />}
         {page === "profile" && <ProfilePage user={user} stats={stats} onLogout={() => { setUser(null); setPage("login"); }} />}
         {page === "leaderboard" && <LeaderboardPage user={user} stats={stats} />}
+        {page === "multiplayer" && <MultiplayerLobby />}
         {page === "room" && selectedGame && <RoomLobby game={selectedGame} roomId={roomId} players={players} onStart={handleStartGame} onCopyLink={handleCopyLink} />}
         {page === "game" && selectedGame && renderGame()}
       </div>
