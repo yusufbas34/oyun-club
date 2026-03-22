@@ -83,7 +83,18 @@ function useSocket(username) {
         socket.on('game_finished', (data) => {
           console.log('🏆 Oyun bitti:', data);
           setRoomData((prev) =>
-            prev ? { ...prev, state: 'finished', gameResult: data } : prev
+            prev
+              ? {
+                  ...prev,
+                  state: 'finished',
+                  gameResult: data,
+                  gameState: {
+                    ...prev.gameState,
+                    winner: data.winner,
+                    winLine: data.winLine,
+                  },
+                }
+              : prev
           );
         });
         socket.on('rps_opponent_chose', () => {
@@ -167,20 +178,21 @@ function useSocket(username) {
 
   const sendXOXMove = useCallback((cellIndex) => {
     if (!socketRef.current) return;
+    setSocketError(null);
     socketRef.current.emit('xox_move', { cellIndex }, (res) => {
       if (res?.error) {
-        console.error('🔴 Hamle hatası:', res.error);
-        setSocketError(res.error);
+        console.log('⚠️ Hamle:', res.error);
       }
     });
   }, []);
-
   const restartGame = useCallback(() => {
     if (!socketRef.current) return;
+    setSocketError(null);
     socketRef.current.emit('restart_game', null, (res) => {
       if (res?.error) {
         console.error('🔴 Restart hatası:', res.error);
-        setSocketError(res.error);
+      } else {
+        setRoomData((prev) => (prev ? { ...prev, gameResult: null } : prev));
       }
     });
   }, []);
