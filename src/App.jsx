@@ -814,16 +814,24 @@ function MultiplayerLobby() {
             )}
 
             {/* XOX Oyun Tahtası */}
-            {roomData.state === 'playing' && roomData.gameId === 'xox' && (
-              <MultiplayerXOX
-                gameState={roomData.gameState}
-                players={players}
-                username={username}
-                onMove={sendXOXMove}
-                onRestart={restartGame}
-                isHost={isHost}
-              />
-            )}
+            {roomData.state === 'playing' &&
+              (console.log(
+                'DEBUG:',
+                roomData.state,
+                roomData.gameId,
+                typeof roomData.gameId
+              ) ||
+                true) &&
+              roomData.gameId === 'xox' && (
+                <MultiplayerXOX
+                  gameState={roomData.gameState}
+                  players={players}
+                  username={username}
+                  onMove={sendXOXMove}
+                  onRestart={restartGame}
+                  isHost={isHost}
+                />
+              )}
 
             {/* Diğer oyunlar (henüz yapılmadı) */}
             {roomData.state === 'playing' && roomData.gameId !== 'xox' && (
