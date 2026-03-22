@@ -964,7 +964,7 @@ function MultiplayerLobby(props) {
   var joinCode = s4[0];
   var setJoinCode = s4[1];
 
-  var sock = useSocket(isNameSet ? username : null);
+  var sock = useSocket(username);
   var s6 = useState(false);
   var autoJoined = s6[0];
   var setAutoJoined = s6[1];
