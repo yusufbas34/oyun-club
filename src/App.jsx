@@ -965,81 +965,18 @@ function MultiplayerLobby(props) {
   var setJoinCode = s4[1];
 
   var sock = useSocket(isNameSet ? username : null);
-
-  if (!isNameSet) {
-    return (
-      <div
-        style={{
-          maxWidth: 800,
-          margin: '0 auto',
-          padding: 24,
-          fontFamily: "'DM Sans', sans-serif",
-          color: 'var(--text)',
-        }}
-      >
-        <h2
-          style={{
-            fontFamily: "'Sora', sans-serif",
-            fontSize: 24,
-            fontWeight: 700,
-            marginBottom: 8,
-          }}
-        >
-          Multiplayer Lobi
-        </h2>
-        <p style={{ opacity: 0.6, marginBottom: 16, fontSize: 14 }}>
-          Oyunculara gorunecek adini gir
-        </p>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <input
-            style={{
-              padding: '12px 16px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              fontSize: 15,
-              width: '100%',
-              maxWidth: 300,
-              outline: 'none',
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-            placeholder="Kullanici adin..."
-            value={username}
-            onChange={function (e) {
-              setUsername(e.target.value);
-            }}
-            onKeyDown={function (e) {
-              if (e.key === 'Enter' && username.trim().length >= 2)
-                setIsNameSet(true);
-            }}
-            maxLength={20}
-            autoFocus
-          />
-          <button
-            onClick={function () {
-              setIsNameSet(true);
-            }}
-            disabled={username.trim().length < 2}
-            style={{
-              padding: '12px 24px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontWeight: 600,
-              fontSize: 15,
-              cursor: username.trim().length >= 2 ? 'pointer' : 'not-allowed',
-              opacity: username.trim().length >= 2 ? 1 : 0.5,
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
-            Devam
-          </button>
-        </div>
-      </div>
-    );
-  }
+  var s6 = useState(false);
+  var autoJoined = s6[0];
+  var setAutoJoined = s6[1];
+  useEffect(
+    function () {
+      if (initialCode && sock.isRegistered && !autoJoined && !sock.roomData) {
+        setAutoJoined(true);
+        sock.joinRoom(initialCode);
+      }
+    },
+    [initialCode, sock.isRegistered, autoJoined, sock.roomData]
+  );
 
   if (sock.roomData) {
     var players = sock.roomData.players || [];
@@ -5110,7 +5047,12 @@ export default function App() {
         {page === 'leaderboard' && (
           <LeaderboardPage user={user} stats={stats} />
         )}
-        {page === 'multiplayer' && <MultiplayerLobby initialCode={roomId} />}
+        {page === 'multiplayer' && (
+          <MultiplayerLobby
+            initialCode={roomId}
+            userName={user ? user.name : ''}
+          />
+        )}
         {page === 'room' && selectedGame && (
           <RoomLobby
             game={selectedGame}
