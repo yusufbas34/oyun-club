@@ -970,9 +970,9 @@ function MultiplayerLobby(props) {
   var setAutoJoined = s6[1];
   useEffect(
     function () {
-      if (initialCode && sock.isRegistered && !autoJoined && !sock.roomData) {
+      if (joinCode && sock.isRegistered && !autoJoined && !sock.roomData) {
         setAutoJoined(true);
-        sock.joinRoom(initialCode);
+        sock.joinRoom(joinCode);
       }
     },
     [sock.isRegistered]
