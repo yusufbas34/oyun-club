@@ -975,7 +975,7 @@ function MultiplayerLobby(props) {
         sock.joinRoom(initialCode);
       }
     },
-    [initialCode, sock.isRegistered, autoJoined, sock.roomData]
+    [sock.isRegistered]
   );
 
   if (sock.roomData) {
