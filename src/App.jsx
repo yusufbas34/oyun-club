@@ -1,14 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
+var BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
 
 function useSocket(username) {
-  const socketRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [roomData, setRoomData] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [socketError, setSocketError] = useState(null);
+  var socketRef = useRef(null);
+  var s1 = useState(false);
+  var isConnected = s1[0];
+  var setIsConnected = s1[1];
+  var s2 = useState(false);
+  var isRegistered = s2[0];
+  var setIsRegistered = s2[1];
+  var s3 = useState(null);
+  var roomData = s3[0];
+  var setRoomData = s3[1];
+  var s4 = useState([]);
+  var messages = s4[0];
+  var setMessages = s4[1];
+  var s5 = useState(null);
+  var socketError = s5[0];
+  var setSocketError = s5[1];
 
   useEffect(
     function () {
@@ -16,8 +26,7 @@ function useSocket(username) {
       var socket;
       import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
         .then(function (mod) {
-          var io = mod.io;
-          socket = io(BACKEND_URL, {
+          socket = mod.io(BACKEND_URL, {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: 5,
@@ -50,7 +59,23 @@ function useSocket(username) {
           });
 
           socket.on('room_updated', function (data) {
-            setRoomData(data);
+            console.log('Oda guncellendi:', data);
+            setRoomData(function (prev) {
+              if (!prev) return data;
+              // Oyuncu sayısı azaldıysa oyunu sıfırla
+              if (
+                data.players &&
+                prev.players &&
+                data.players.length < prev.players.length
+              ) {
+                return Object.assign({}, data, {
+                  state: 'waiting',
+                  gameState: null,
+                  gameResult: null,
+                });
+              }
+              return Object.assign({}, prev, data);
+            });
           });
 
           socket.on('player_left', function (data) {
@@ -106,25 +131,39 @@ function useSocket(username) {
               return Object.assign({}, prev, {
                 state: 'finished',
                 gameResult: data,
-                gameState: Object.assign({}, prev.gameState, {
-                  winner: data.winner,
-                  winLine: data.winLine,
-                }),
+                gameState: prev.gameState
+                  ? Object.assign({}, prev.gameState, {
+                      winner: data.winner,
+                      winLine: data.winLine,
+                    })
+                  : null,
               });
             });
           });
 
-          socket.on('rps_opponent_chose', function () {});
+          socket.on('rps_opponent_chose', function () {
+            console.log('Rakip secim yapti');
+          });
+
           socket.on('rps_reveal', function (data) {
+            console.log('RPS sonuc:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
-              return Object.assign({}, prev, { rpsReveal: data });
+              return Object.assign({}, prev, {
+                rpsReveal: data,
+                state: data.gameWinner !== null ? 'finished' : prev.state,
+              });
             });
           });
+
           socket.on('rps_new_round', function (data) {
+            console.log('Yeni raund:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
-              return Object.assign({}, prev, { rpsNewRound: data });
+              return Object.assign({}, prev, {
+                rpsReveal: null,
+                rpsNewRound: data,
+              });
             });
           });
         })
@@ -213,6 +252,16 @@ function useSocket(username) {
     );
   }, []);
 
+  var sendRPSChoice = useCallback(function (choice) {
+    if (!socketRef.current) return;
+    setSocketError(null);
+    socketRef.current.emit('rps_choice', { choice: choice }, function (res) {
+      if (res && res.error) {
+        console.log('RPS:', res.error);
+      }
+    });
+  }, []);
+
   var restartGame = useCallback(function () {
     if (!socketRef.current) return;
     setSocketError(null);
@@ -222,7 +271,7 @@ function useSocket(username) {
       } else {
         setRoomData(function (prev) {
           if (!prev) return prev;
-          return Object.assign({}, prev, { gameResult: null });
+          return Object.assign({}, prev, { gameResult: null, rpsReveal: null });
         });
       }
     });
@@ -240,24 +289,24 @@ function useSocket(username) {
     sendMessage: sendMessage,
     startGame: startGame,
     sendXOXMove: sendXOXMove,
+    sendRPSChoice: sendRPSChoice,
     restartGame: restartGame,
     setSocketError: setSocketError,
   };
 }
 
-function ChatPanel({
-  messages,
-  onSend,
-  currentUser,
-  isConnected,
-  playerCount,
-}) {
-  var _messages = messages || [];
-  var _isConnected = isConnected || false;
-  var _playerCount = playerCount || 0;
-  var _text = useState('');
-  var text = _text[0];
-  var setText = _text[1];
+// ============================================================
+// CHAT PANEL
+// ============================================================
+function ChatPanel(props) {
+  var messages = props.messages || [];
+  var onSend = props.onSend;
+  var currentUser = props.currentUser;
+  var isConnected = props.isConnected || false;
+  var playerCount = props.playerCount || 0;
+  var s1 = useState('');
+  var text = s1[0];
+  var setText = s1[1];
   var messagesEndRef = useRef(null);
   var inputRef = useRef(null);
 
@@ -266,30 +315,15 @@ function ChatPanel({
       if (messagesEndRef.current)
         messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     },
-    [_messages]
+    [messages]
   );
 
-  var handleSend = function () {
+  function handleSend() {
     if (!text.trim() || !onSend) return;
     onSend(text.trim());
     setText('');
     if (inputRef.current) inputRef.current.focus();
-  };
-
-  var handleKeyDown = function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  var formatTime = function (ts) {
-    if (!ts) return '';
-    return new Date(ts).toLocaleTimeString('tr-TR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  }
 
   return (
     <div
@@ -322,24 +356,12 @@ function ChatPanel({
             fontWeight: 600,
             color: 'var(--text)',
             margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
           }}
         >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: '#4ade80',
-              display: 'inline-block',
-            }}
-          />
           Masa Sohbeti
         </h3>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          {_isConnected ? _playerCount + ' oyuncu' : 'Baglanıyor...'}
+          {isConnected ? playerCount + ' oyuncu' : 'Baglaniyor...'}
         </span>
       </div>
       <div
@@ -352,7 +374,7 @@ function ChatPanel({
           gap: 8,
         }}
       >
-        {_messages.length === 0 ? (
+        {messages.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -366,10 +388,10 @@ function ChatPanel({
               opacity: 0.5,
             }}
           >
-            Henüz mesaj yok. İlk mesajı sen gönder!
+            Henüz mesaj yok.
           </div>
         ) : (
-          _messages.map(function (msg, i) {
+          messages.map(function (msg, i) {
             if (msg.type === 'system')
               return (
                 <div
@@ -416,16 +438,6 @@ function ChatPanel({
                   </div>
                 )}
                 <div>{msg.text}</div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    opacity: 0.5,
-                    marginTop: 2,
-                    textAlign: 'right',
-                  }}
-                >
-                  {formatTime(msg.timestamp)}
-                </div>
               </div>
             );
           })
@@ -456,14 +468,19 @@ function ChatPanel({
           }}
           type="text"
           placeholder={
-            _isConnected ? 'Mesajınızı yazın...' : 'Bağlantı bekleniyor...'
+            isConnected ? 'Mesajinizi yazin...' : 'Baglanti bekleniyor...'
           }
           value={text}
           onChange={function (e) {
             setText(e.target.value);
           }}
-          onKeyDown={handleKeyDown}
-          disabled={!_isConnected}
+          onKeyDown={function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          disabled={!isConnected}
           maxLength={500}
         />
         <button
@@ -474,16 +491,15 @@ function ChatPanel({
             border: 'none',
             background: '#6366f1',
             color: '#fff',
-            cursor: text.trim() && _isConnected ? 'pointer' : 'default',
+            cursor: text.trim() && isConnected ? 'pointer' : 'default',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 16,
-            opacity: text.trim() && _isConnected ? 1 : 0.4,
-            flexShrink: 0,
+            opacity: text.trim() && isConnected ? 1 : 0.4,
           }}
           onClick={handleSend}
-          disabled={!text.trim() || !_isConnected}
+          disabled={!text.trim() || !isConnected}
         >
           ➤
         </button>
@@ -492,13 +508,27 @@ function ChatPanel({
   );
 }
 
-function MultiplayerXOX({ gameState, players, username, onMove }) {
-  if (!gameState) return null;
-  var myIndex = players.findIndex(function (p) {
-    return p.name === username;
-  });
-  var isMyTurn = gameState.currentTurn === myIndex;
+// ============================================================
+// MULTIPLAYER XOX
+// ============================================================
+function MultiplayerXOX(props) {
+  var gs = props.gameState;
+  var players = props.players;
+  var username = props.username;
+  var onMove = props.onMove;
+  if (!gs) return null;
+  var myIndex = -1;
+  for (var i = 0; i < players.length; i++) {
+    if (players[i].name === username) {
+      myIndex = i;
+      break;
+    }
+  }
+  var isMyTurn = gs.currentTurn === myIndex;
   var mySymbol = myIndex === 0 ? 'X' : 'O';
+  var turnPlayerName = players[gs.currentTurn]
+    ? players[gs.currentTurn].name
+    : '?';
 
   return (
     <div
@@ -527,7 +557,7 @@ function MultiplayerXOX({ gameState, players, username, onMove }) {
             {myIndex === 0 ? 'O' : 'X'}
           </strong>
         </div>
-        {gameState.winner === null && (
+        {gs.winner === null && (
           <div
             style={{
               fontSize: 16,
@@ -535,11 +565,7 @@ function MultiplayerXOX({ gameState, players, username, onMove }) {
               color: isMyTurn ? '#2A9D8F' : 'var(--text-secondary)',
             }}
           >
-            {isMyTurn
-              ? 'Senin sıran!'
-              : (players[gameState.currentTurn]
-                  ? players[gameState.currentTurn].name
-                  : '') + ' oynuyor...'}
+            {isMyTurn ? 'Senin siran!' : turnPlayerName + ' oynuyor...'}
           </div>
         )}
       </div>
@@ -552,14 +578,13 @@ function MultiplayerXOX({ gameState, players, username, onMove }) {
           margin: '0 auto',
         }}
       >
-        {gameState.board.map(function (cell, i) {
-          var isWinCell =
-            gameState.winLine && gameState.winLine.indexOf(i) !== -1;
+        {gs.board.map(function (cell, i) {
+          var isWinCell = gs.winLine && gs.winLine.indexOf(i) !== -1;
           return (
             <button
               key={i}
               onClick={function () {
-                if (isMyTurn && !cell && gameState.winner === null) onMove(i);
+                if (isMyTurn && !cell && gs.winner === null) onMove(i);
               }}
               style={{
                 width: '100%',
@@ -574,7 +599,7 @@ function MultiplayerXOX({ gameState, players, username, onMove }) {
                     : '#DBEAFE'
                   : 'var(--surface-hover)',
                 cursor:
-                  isMyTurn && !cell && gameState.winner === null
+                  isMyTurn && !cell && gs.winner === null
                     ? 'pointer'
                     : 'default',
                 fontSize: 28,
@@ -584,9 +609,7 @@ function MultiplayerXOX({ gameState, players, username, onMove }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transition: 'all 0.15s ease',
-                opacity:
-                  !isMyTurn && !cell && gameState.winner === null ? 0.5 : 1,
+                opacity: !isMyTurn && !cell && gs.winner === null ? 0.5 : 1,
               }}
             >
               {cell}
@@ -598,27 +621,292 @@ function MultiplayerXOX({ gameState, players, username, onMove }) {
   );
 }
 
+// ============================================================
+// MULTIPLAYER RPS (Taş Kağıt Makas)
+// ============================================================
+function MultiplayerRPS(props) {
+  var players = props.players;
+  var username = props.username;
+  var onChoice = props.onChoice;
+  var rpsReveal = props.rpsReveal;
+  var rpsNewRound = props.rpsNewRound;
+  var gameState = props.gameState;
+
+  var s1 = useState(false);
+  var hasChosen = s1[0];
+  var setHasChosen = s1[1];
+  var s2 = useState(null);
+  var myChoice = s2[0];
+  var setMyChoice = s2[1];
+
+  var myIndex = -1;
+  for (var i = 0; i < players.length; i++) {
+    if (players[i].name === username) {
+      myIndex = i;
+      break;
+    }
+  }
+
+  // Yeni raund geldiğinde seçimi sıfırla
+  useEffect(
+    function () {
+      if (rpsNewRound) {
+        setHasChosen(false);
+        setMyChoice(null);
+      }
+    },
+    [rpsNewRound]
+  );
+
+  var choices = [
+    { id: 'rock', emoji: '✊', name: 'Taş' },
+    { id: 'paper', emoji: '✋', name: 'Kağıt' },
+    { id: 'scissors', emoji: '✌️', name: 'Makas' },
+  ];
+
+  var scores = rpsReveal
+    ? rpsReveal.scores
+    : gameState
+    ? gameState.scores
+    : [0, 0];
+  var round = rpsNewRound ? rpsNewRound.round : gameState ? gameState.round : 1;
+
+  function handleChoice(choiceId) {
+    if (hasChosen) return;
+    setHasChosen(true);
+    setMyChoice(choiceId);
+    onChoice(choiceId);
+  }
+
+  var getEmoji = function (id) {
+    for (var j = 0; j < choices.length; j++) {
+      if (choices[j].id === id) return choices[j].emoji;
+    }
+    return '?';
+  };
+
+  var getResultText = function () {
+    if (!rpsReveal) return '';
+    if (rpsReveal.roundResult === 'draw') return 'Berabere!';
+    if (rpsReveal.roundResult === myIndex) return 'Bu eli kazandin!';
+    return 'Bu eli kaybettin!';
+  };
+
+  return (
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 14,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        marginBottom: 12,
+      }}
+    >
+      {/* Skor */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 24,
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {players[0] ? players[0].name : '?'}
+          </div>
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              fontFamily: "'Sora', sans-serif",
+              color: '#2A9D8F',
+            }}
+          >
+            {scores[0]}
+          </div>
+        </div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+          Raund {round}
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {players[1] ? players[1].name : '?'}
+          </div>
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              fontFamily: "'Sora', sans-serif",
+              color: '#E63946',
+            }}
+          >
+            {scores[1]}
+          </div>
+        </div>
+      </div>
+
+      {/* Sonuç göster */}
+      {rpsReveal && rpsReveal.choices && (
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 24,
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ fontSize: 48 }}>{getEmoji(rpsReveal.choices[0])}</div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              vs
+            </div>
+            <div style={{ fontSize: 48 }}>{getEmoji(rpsReveal.choices[1])}</div>
+          </div>
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color:
+                rpsReveal.roundResult === myIndex
+                  ? '#2A9D8F'
+                  : rpsReveal.roundResult === 'draw'
+                  ? 'var(--text-secondary)'
+                  : '#E63946',
+            }}
+          >
+            {getResultText()}
+          </div>
+          {rpsReveal.gameWinner !== null && (
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 800,
+                marginTop: 12,
+                color: rpsReveal.gameWinner === myIndex ? '#2A9D8F' : '#E63946',
+              }}
+            >
+              {rpsReveal.gameWinner === myIndex
+                ? 'Oyunu Kazandin!'
+                : players[rpsReveal.gameWinner]
+                ? players[rpsReveal.gameWinner].name + ' Kazandi!'
+                : 'Kaybettin!'}
+            </div>
+          )}
+          {rpsReveal.gameWinner === null && (
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                marginTop: 8,
+              }}
+            >
+              Sonraki el yakinda...
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Seçim butonları */}
+      {!rpsReveal && (
+        <div>
+          {hasChosen ? (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>
+                {getEmoji(myChoice)}
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                Secimini yaptin! Rakip bekleniyor...
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  textAlign: 'center',
+                  fontSize: 14,
+                  color: 'var(--text-secondary)',
+                  marginBottom: 12,
+                }}
+              >
+                Secimini yap:
+              </div>
+              <div
+                style={{ display: 'flex', justifyContent: 'center', gap: 12 }}
+              >
+                {choices.map(function (c) {
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={function () {
+                        handleChoice(c.id);
+                      }}
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 12,
+                        border: '2px solid var(--border)',
+                        background: 'var(--surface-hover)',
+                        cursor: 'pointer',
+                        fontSize: 36,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 2,
+                      }}
+                    >
+                      <span>{c.emoji}</span>
+                      <span
+                        style={{ fontSize: 10, color: 'var(--text-secondary)' }}
+                      >
+                        {c.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// MULTIPLAYER LOBBY
+// ============================================================
 var MP_GAMES = [
   { id: 'xox', name: 'XOX', icon: 'XO', players: 2 },
   { id: 'rps', name: 'Tas Kagit Makas', icon: 'TKM', players: 2 },
 ];
 
 function MultiplayerLobby() {
-  var _username = useState('');
-  var username = _username[0];
-  var setUsername = _username[1];
-  var _isNameSet = useState(false);
-  var isNameSet = _isNameSet[0];
-  var setIsNameSet = _isNameSet[1];
-  var _selectedMPGame = useState(null);
-  var selectedMPGame = _selectedMPGame[0];
-  var setSelectedMPGame = _selectedMPGame[1];
-  var _joinCode = useState('');
-  var joinCode = _joinCode[0];
-  var setJoinCode = _joinCode[1];
+  var s1 = useState('');
+  var username = s1[0];
+  var setUsername = s1[1];
+  var s2 = useState(false);
+  var isNameSet = s2[0];
+  var setIsNameSet = s2[1];
+  var s3 = useState(null);
+  var selectedMPGame = s3[0];
+  var setSelectedMPGame = s3[1];
+  var s4 = useState('');
+  var joinCode = s4[0];
+  var setJoinCode = s4[1];
 
   var sock = useSocket(isNameSet ? username : null);
 
+  // İsim giriş ekranı
   if (!isNameSet) {
     return (
       <div
@@ -641,7 +929,7 @@ function MultiplayerLobby() {
           Multiplayer Lobi
         </h2>
         <p style={{ opacity: 0.6, marginBottom: 16, fontSize: 14 }}>
-          Oyunculara görünecek adını gir
+          Oyunculara gorunecek adini gir
         </p>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -657,7 +945,7 @@ function MultiplayerLobby() {
               outline: 'none',
               fontFamily: "'DM Sans', sans-serif",
             }}
-            placeholder="Kullanıcı adın..."
+            placeholder="Kullanici adin..."
             value={username}
             onChange={function (e) {
               setUsername(e.target.value);
@@ -694,6 +982,7 @@ function MultiplayerLobby() {
     );
   }
 
+  // Oda içi ekran
   if (sock.roomData) {
     var players = sock.roomData.players || [];
     var maxP = sock.roomData.maxPlayers || 2;
@@ -735,6 +1024,7 @@ function MultiplayerLobby() {
         </div>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 300 }}>
+            {/* Oda kodu */}
             <div
               style={{
                 padding: 20,
@@ -746,7 +1036,7 @@ function MultiplayerLobby() {
               }}
             >
               <div style={{ fontSize: 13, opacity: 0.6, marginBottom: 4 }}>
-                Oda Kodu (arkadaşına gönder)
+                Oda Kodu
               </div>
               <div
                 style={{
@@ -762,9 +1052,16 @@ function MultiplayerLobby() {
                 {sock.roomData.id}
               </div>
               <div style={{ fontSize: 12, opacity: 0.5 }}>
-                Oyun: {sock.roomData.gameId}
+                Oyun:{' '}
+                {sock.roomData.gameId === 'xox'
+                  ? 'XOX'
+                  : sock.roomData.gameId === 'rps'
+                  ? 'Tas Kagit Makas'
+                  : sock.roomData.gameId}
               </div>
             </div>
+
+            {/* Oyuncular */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
                 Oyuncular ({players.length}/{maxP})
@@ -804,6 +1101,7 @@ function MultiplayerLobby() {
               </div>
             </div>
 
+            {/* Bekleme */}
             {sock.roomData.state === 'waiting' && canStart && isHost && (
               <button
                 onClick={sock.startGame}
@@ -821,7 +1119,7 @@ function MultiplayerLobby() {
                   width: '100%',
                 }}
               >
-                Oyunu Başlat
+                Oyunu Baslat
               </button>
             )}
             {sock.roomData.state === 'waiting' && canStart && !isHost && (
@@ -832,7 +1130,7 @@ function MultiplayerLobby() {
                   marginBottom: 12,
                 }}
               >
-                Host oyunu başlatmasını bekliyor...
+                Host oyunu baslatmasini bekliyor...
               </p>
             )}
             {sock.roomData.state === 'waiting' && !canStart && (
@@ -843,10 +1141,11 @@ function MultiplayerLobby() {
                   marginBottom: 12,
                 }}
               >
-                Rakip bekleniyor... Oda kodunu arkadaşına gönder!
+                Rakip bekleniyor... Oda kodunu arkadasina gonder!
               </p>
             )}
 
+            {/* XOX Oyunu */}
             {sock.roomData.state === 'playing' &&
               sock.roomData.gameId === 'xox' && (
                 <MultiplayerXOX
@@ -856,26 +1155,21 @@ function MultiplayerLobby() {
                   onMove={sock.sendXOXMove}
                 />
               )}
+
+            {/* RPS Oyunu */}
             {sock.roomData.state === 'playing' &&
-              sock.roomData.gameId !== 'xox' && (
-                <div
-                  style={{
-                    padding: 16,
-                    borderRadius: 12,
-                    background: 'rgba(42,157,143,0.1)',
-                    border: '1px solid rgba(42,157,143,0.3)',
-                    marginBottom: 12,
-                    textAlign: 'center',
-                  }}
-                >
-                  <div
-                    style={{ fontSize: 16, fontWeight: 700, color: '#2A9D8F' }}
-                  >
-                    Oyun Devam Ediyor!
-                  </div>
-                </div>
+              sock.roomData.gameId === 'rps' && (
+                <MultiplayerRPS
+                  players={players}
+                  username={username}
+                  onChoice={sock.sendRPSChoice}
+                  rpsReveal={sock.roomData.rpsReveal}
+                  rpsNewRound={sock.roomData.rpsNewRound}
+                  gameState={sock.roomData.gameState}
+                />
               )}
 
+            {/* Oyun bitti */}
             {sock.roomData.state === 'finished' && (
               <div
                 style={{
@@ -900,11 +1194,56 @@ function MultiplayerLobby() {
                     ? 'Berabere!'
                     : sock.roomData.gameResult &&
                       sock.roomData.gameResult.winnerName === username
-                    ? 'Kazandın!'
+                    ? 'Kazandin!'
                     : (sock.roomData.gameResult
                         ? sock.roomData.gameResult.winnerName
-                        : '') + ' Kazandı!'}
+                        : '') + ' Kazandi!'}
                 </div>
+                {/* Son XOX tahtasi */}
+                {sock.roomData.gameState &&
+                  sock.roomData.gameId === 'xox' &&
+                  sock.roomData.gameState.board && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: 4,
+                        maxWidth: 150,
+                        margin: '8px auto',
+                      }}
+                    >
+                      {sock.roomData.gameState.board.map(function (cell, i) {
+                        var isWin =
+                          sock.roomData.gameState.winLine &&
+                          sock.roomData.gameState.winLine.indexOf(i) !== -1;
+                        return (
+                          <div
+                            key={i}
+                            style={{
+                              aspectRatio: '1',
+                              borderRadius: 4,
+                              border: isWin
+                                ? '2px solid #E63946'
+                                : '1px solid var(--border)',
+                              background: isWin
+                                ? cell === 'X'
+                                  ? '#FEE2E2'
+                                  : '#DBEAFE'
+                                : 'var(--surface-hover)',
+                              fontSize: 16,
+                              fontWeight: 800,
+                              color: cell === 'X' ? '#E63946' : '#457B9D',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {cell}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 {isHost && players.length >= maxP && (
                   <button
                     onClick={sock.restartGame}
@@ -918,14 +1257,38 @@ function MultiplayerLobby() {
                       fontSize: 14,
                       cursor: 'pointer',
                       fontFamily: "'DM Sans', sans-serif",
+                      marginTop: 8,
                     }}
                   >
                     Tekrar Oyna
                   </button>
                 )}
+                {isHost && players.length < maxP && (
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--text-secondary)',
+                      marginTop: 8,
+                    }}
+                  >
+                    Tekrar oynamak icin rakip gerekli
+                  </p>
+                )}
+                {!isHost && (
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--text-secondary)',
+                      marginTop: 8,
+                    }}
+                  >
+                    Host yeni oyun baslatabilir
+                  </p>
+                )}
               </div>
             )}
 
+            {/* Masadan ayrıl */}
             <button
               onClick={sock.leaveRoom}
               style={{
@@ -941,9 +1304,11 @@ function MultiplayerLobby() {
                 marginTop: 8,
               }}
             >
-              Masadan Ayrıl
+              Masadan Ayril
             </button>
           </div>
+
+          {/* Chat */}
           <div style={{ flex: '0 0 360px' }}>
             <ChatPanel
               messages={sock.messages}
@@ -973,6 +1338,7 @@ function MultiplayerLobby() {
     );
   }
 
+  // Ana lobi
   return (
     <div
       style={{
@@ -1023,7 +1389,7 @@ function MultiplayerLobby() {
             marginBottom: 12,
           }}
         >
-          Oyun Seç
+          Oyun Sec
         </h2>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {MP_GAMES.map(function (g) {
@@ -1077,7 +1443,7 @@ function MultiplayerLobby() {
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            Masa Oluştur
+            Masa Olustur
           </button>
         )}
       </div>
@@ -1090,7 +1456,7 @@ function MultiplayerLobby() {
             marginBottom: 12,
           }}
         >
-          Masaya Katıl
+          Masaya Katil
         </h2>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -1139,7 +1505,7 @@ function MultiplayerLobby() {
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            Katıl
+            Katil
           </button>
         </div>
       </div>
