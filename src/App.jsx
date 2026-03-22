@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-// ============================================================
-// SOCKET HOOK — Backend'e uyumlu (register + callback'li)
-// ============================================================
 const BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
 
 function useSocket(username) {
@@ -13,232 +10,280 @@ function useSocket(username) {
   const [messages, setMessages] = useState([]);
   const [socketError, setSocketError] = useState(null);
 
-  useEffect(() => {
-    if (!username) return;
-    let socket;
-    import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
-      .then(({ io }) => {
-        socket = io(BACKEND_URL, {
-          transports: ['websocket', 'polling'],
-          reconnection: true,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-        });
-        socketRef.current = socket;
-
-        socket.on('connect', () => {
-          console.log('✅ Socket bağlandı:', socket.id);
-          setIsConnected(true);
-          setSocketError(null);
-          socket.emit('register', { name: username }, (res) => {
-            if (res && res.success) {
-              console.log('✅ Kayıt başarılı:', res.user);
-              setIsRegistered(true);
-            } else {
-              console.error('🔴 Kayıt hatası:', res?.error);
-              setSocketError(res?.error || 'Kayıt başarısız');
-            }
+  useEffect(
+    function () {
+      if (!username) return;
+      var socket;
+      import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
+        .then(function (mod) {
+          var io = mod.io;
+          socket = io(BACKEND_URL, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
           });
+          socketRef.current = socket;
+
+          socket.on('connect', function () {
+            console.log('Socket baglandi:', socket.id);
+            setIsConnected(true);
+            setSocketError(null);
+            socket.emit('register', { name: username }, function (res) {
+              if (res && res.success) {
+                console.log('Kayit basarili:', res.user);
+                setIsRegistered(true);
+              } else {
+                setSocketError(res ? res.error : 'Kayit basarisiz');
+              }
+            });
+          });
+
+          socket.on('disconnect', function () {
+            setIsConnected(false);
+            setIsRegistered(false);
+          });
+
+          socket.on('connect_error', function () {
+            setSocketError('Sunucuya baglanamadi');
+            setIsConnected(false);
+          });
+
+          socket.on('room_updated', function (data) {
+            setRoomData(data);
+          });
+
+          socket.on('player_left', function (data) {
+            setMessages(function (prev) {
+              return prev.concat([
+                { type: 'system', text: data.name + ' masadan ayrildi' },
+              ]);
+            });
+            setRoomData(function (prev) {
+              if (!prev) return prev;
+              return Object.assign({}, prev, {
+                state: 'waiting',
+                gameState: null,
+                gameResult: null,
+              });
+            });
+          });
+
+          socket.on('chat_new_message', function (msg) {
+            setMessages(function (prev) {
+              return prev.concat([
+                {
+                  username: msg.name,
+                  text: msg.message,
+                  timestamp: msg.timestamp,
+                },
+              ]);
+            });
+          });
+
+          socket.on('game_started', function (data) {
+            console.log('Oyun basladi:', data);
+            setRoomData(function (prev) {
+              if (!prev) return data;
+              return Object.assign({}, prev, data);
+            });
+          });
+
+          socket.on('game_state_updated', function (data) {
+            setRoomData(function (prev) {
+              if (!prev) return prev;
+              return Object.assign({}, prev, {
+                gameState: data.gameState,
+                state: data.state,
+              });
+            });
+          });
+
+          socket.on('game_finished', function (data) {
+            console.log('Oyun bitti:', data);
+            setRoomData(function (prev) {
+              if (!prev) return prev;
+              return Object.assign({}, prev, {
+                state: 'finished',
+                gameResult: data,
+                gameState: Object.assign({}, prev.gameState, {
+                  winner: data.winner,
+                  winLine: data.winLine,
+                }),
+              });
+            });
+          });
+
+          socket.on('rps_opponent_chose', function () {});
+          socket.on('rps_reveal', function (data) {
+            setRoomData(function (prev) {
+              if (!prev) return prev;
+              return Object.assign({}, prev, { rpsReveal: data });
+            });
+          });
+          socket.on('rps_new_round', function (data) {
+            setRoomData(function (prev) {
+              if (!prev) return prev;
+              return Object.assign({}, prev, { rpsNewRound: data });
+            });
+          });
+        })
+        .catch(function () {
+          setSocketError('Socket.io yuklenemedi');
         });
 
-        socket.on('disconnect', () => {
-          console.log('❌ Socket koptu');
-          setIsConnected(false);
-          setIsRegistered(false);
-        });
-        socket.on('connect_error', (err) => {
-          console.error('🔴 Bağlantı hatası:', err.message);
-          setSocketError('Sunucuya bağlanılamadı');
-          setIsConnected(false);
-        });
-        socket.on('room_updated', (data) => {
-          console.log('🏠 Oda güncellendi:', data);
-          setRoomData(data);
-        });
-socket.on('player_left', (data) => { setMessages((prev) => [...prev, { type: 'system', text: `${data.name} masadan ayrıldı` }]); });
-        });
-        socket.on('chat_new_message', (msg) => {
-          setMessages((prev) => [
-            ...prev,
-            { username: msg.name, text: msg.message, timestamp: msg.timestamp },
-          ]);
-        });
-        socket.on('game_started', (data) => {
-          console.log('▶ Oyun başladı:', data);
-          setRoomData((prev) => ({ ...prev, ...data }));
-        });
+      return function () {
+        if (socket) {
+          socket.removeAllListeners();
+          socket.disconnect();
+        }
+        socketRef.current = null;
+      };
+    },
+    [username]
+  );
 
-        socket.on('game_state_updated', (data) => {
-          console.log('🎮 Oyun durumu:', data);
-          setRoomData((prev) =>
-            prev
-              ? { ...prev, gameState: data.gameState, state: data.state }
-              : prev
-          );
-        });
-        socket.on('game_finished', (data) => {
-          console.log('🏆 Oyun bitti:', data);
-          setRoomData((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  state: 'finished',
-                  gameResult: data,
-                  gameState: {
-                    ...prev.gameState,
-                    winner: data.winner,
-                    winLine: data.winLine,
-                  },
-                }
-              : prev
-          );
-        });
-        socket.on('rps_opponent_chose', () => {
-          console.log('✊ Rakip seçim yaptı');
-        });
-        socket.on('rps_reveal', (data) => {
-          setRoomData((prev) => (prev ? { ...prev, rpsReveal: data } : prev));
-        });
-        socket.on('rps_new_round', (data) => {
-          setRoomData((prev) => (prev ? { ...prev, rpsNewRound: data } : prev));
-        });
-      })
-      .catch((err) => {
-        console.error('Socket.io yüklenemedi:', err);
-        setSocketError('Socket.io yüklenemedi');
-      });
-    return () => {
-      if (socket) {
-        socket.removeAllListeners();
-        socket.disconnect();
-      }
-      socketRef.current = null;
-    };
-  }, [username]);
-
-  const createRoom = useCallback(
-    (gameId) => {
+  var createRoom = useCallback(
+    function (gameId) {
       if (!socketRef.current || !isRegistered) return;
-      socketRef.current.emit('create_room', { gameId }, (res) => {
+      socketRef.current.emit('create_room', { gameId: gameId }, function (res) {
         if (res && res.success) {
-          console.log('✅ Oda oluşturuldu:', res.room);
           setRoomData(res.room);
           setMessages([]);
         } else {
-          console.error('🔴 Oda hatası:', res?.error);
-          setSocketError(res?.error || 'Oda oluşturulamadı');
+          setSocketError(res ? res.error : 'Oda olusturulamadi');
         }
       });
     },
     [isRegistered]
   );
 
-  const joinRoom = useCallback(
-    (roomCode) => {
+  var joinRoom = useCallback(
+    function (roomCode) {
       if (!socketRef.current || !isRegistered) return;
-      socketRef.current.emit('join_room', { roomId: roomCode }, (res) => {
+      socketRef.current.emit('join_room', { roomId: roomCode }, function (res) {
         if (res && res.success) {
-          console.log('✅ Odaya katıldı:', res.room);
           setRoomData(res.room);
           setMessages([]);
         } else {
-          console.error('🔴 Katılma hatası:', res?.error);
-          setSocketError(res?.error || 'Katılma başarısız');
+          setSocketError(res ? res.error : 'Katilma basarisiz');
         }
       });
     },
     [isRegistered]
   );
 
-  const leaveRoom = useCallback(() => {
+  var leaveRoom = useCallback(function () {
     if (!socketRef.current) return;
-    socketRef.current.emit('leave_room', null, () => {
+    socketRef.current.emit('leave_room', null, function () {
       setRoomData(null);
       setMessages([]);
     });
   }, []);
 
-  const sendMessage = useCallback((text) => {
+  var sendMessage = useCallback(function (text) {
     if (!socketRef.current || !text.trim()) return;
-    socketRef.current.emit('chat_message', { message: text.trim() }, () => {});
+    socketRef.current.emit(
+      'chat_message',
+      { message: text.trim() },
+      function () {}
+    );
   }, []);
 
-  const startGame = useCallback(() => {
+  var startGame = useCallback(function () {
     if (!socketRef.current) return;
-    socketRef.current.emit('start_game', null, (res) => {
-      if (!res?.success) {
-        setSocketError(res?.error || 'Başlatılamadı');
+    socketRef.current.emit('start_game', null, function (res) {
+      if (res && !res.success) {
+        setSocketError(res.error || 'Baslatilamadi');
       }
     });
   }, []);
 
-  const sendXOXMove = useCallback((cellIndex) => {
+  var sendXOXMove = useCallback(function (cellIndex) {
     if (!socketRef.current) return;
     setSocketError(null);
-    socketRef.current.emit('xox_move', { cellIndex }, (res) => {
-      if (res?.error) {
-        console.log('⚠️ Hamle:', res.error);
+    socketRef.current.emit(
+      'xox_move',
+      { cellIndex: cellIndex },
+      function (res) {
+        if (res && res.error) {
+          console.log('Hamle:', res.error);
+        }
       }
-    });
+    );
   }, []);
-  const restartGame = useCallback(() => {
+
+  var restartGame = useCallback(function () {
     if (!socketRef.current) return;
     setSocketError(null);
-    socketRef.current.emit('restart_game', null, (res) => {
-      if (res?.error) {
-        console.error('🔴 Restart hatası:', res.error);
+    socketRef.current.emit('restart_game', null, function (res) {
+      if (res && res.error) {
+        console.log('Restart:', res.error);
       } else {
-        setRoomData((prev) => (prev ? { ...prev, gameResult: null } : prev));
+        setRoomData(function (prev) {
+          if (!prev) return prev;
+          return Object.assign({}, prev, { gameResult: null });
+        });
       }
     });
   }, []);
 
   return {
-    isConnected,
-    isRegistered,
-    roomData,
-    messages,
-    socketError,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    sendMessage,
-    startGame,
-    sendXOXMove,
-    restartGame,
-    setSocketError,
+    isConnected: isConnected,
+    isRegistered: isRegistered,
+    roomData: roomData,
+    messages: messages,
+    socketError: socketError,
+    createRoom: createRoom,
+    joinRoom: joinRoom,
+    leaveRoom: leaveRoom,
+    sendMessage: sendMessage,
+    startGame: startGame,
+    sendXOXMove: sendXOXMove,
+    restartGame: restartGame,
+    setSocketError: setSocketError,
   };
 }
 
-// ============================================================
-// CHAT PANEL
-// ============================================================
 function ChatPanel({
-  messages = [],
+  messages,
   onSend,
   currentUser,
-  isConnected = false,
-  playerCount = 0,
+  isConnected,
+  playerCount,
 }) {
-  const [text, setText] = useState('');
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-  const handleSend = () => {
+  var _messages = messages || [];
+  var _isConnected = isConnected || false;
+  var _playerCount = playerCount || 0;
+  var _text = useState('');
+  var text = _text[0];
+  var setText = _text[1];
+  var messagesEndRef = useRef(null);
+  var inputRef = useRef(null);
+
+  useEffect(
+    function () {
+      if (messagesEndRef.current)
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    },
+    [_messages]
+  );
+
+  var handleSend = function () {
     if (!text.trim() || !onSend) return;
     onSend(text.trim());
     setText('');
-    inputRef.current?.focus();
+    if (inputRef.current) inputRef.current.focus();
   };
-  const handleKeyDown = (e) => {
+
+  var handleKeyDown = function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
-  const formatTime = (ts) => {
+
+  var formatTime = function (ts) {
     if (!ts) return '';
     return new Date(ts).toLocaleTimeString('tr-TR', {
       hour: '2-digit',
@@ -294,7 +339,7 @@ function ChatPanel({
           Masa Sohbeti
         </h3>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          {isConnected ? `${playerCount} oyuncu` : 'Bağlanıyor...'}
+          {_isConnected ? _playerCount + ' oyuncu' : 'Baglanıyor...'}
         </span>
       </div>
       <div
@@ -307,7 +352,7 @@ function ChatPanel({
           gap: 8,
         }}
       >
-        {messages.length === 0 ? (
+        {_messages.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -321,12 +366,10 @@ function ChatPanel({
               opacity: 0.5,
             }}
           >
-            💬 Henüz mesaj yok.
-            <br />
-            İlk mesajı sen gönder!
+            Henüz mesaj yok. İlk mesajı sen gönder!
           </div>
         ) : (
-          messages.map((msg, i) => {
+          _messages.map(function (msg, i) {
             if (msg.type === 'system')
               return (
                 <div
@@ -342,7 +385,7 @@ function ChatPanel({
                   {msg.text}
                 </div>
               );
-            const isMine = msg.username === currentUser;
+            var isMine = msg.username === currentUser;
             return (
               <div
                 key={i}
@@ -413,12 +456,14 @@ function ChatPanel({
           }}
           type="text"
           placeholder={
-            isConnected ? 'Mesajınızı yazın...' : 'Bağlantı bekleniyor...'
+            _isConnected ? 'Mesajınızı yazın...' : 'Bağlantı bekleniyor...'
           }
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={function (e) {
+            setText(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
-          disabled={!isConnected}
+          disabled={!_isConnected}
           maxLength={500}
         />
         <button
@@ -429,16 +474,16 @@ function ChatPanel({
             border: 'none',
             background: '#6366f1',
             color: '#fff',
-            cursor: text.trim() && isConnected ? 'pointer' : 'default',
+            cursor: text.trim() && _isConnected ? 'pointer' : 'default',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 16,
-            opacity: text.trim() && isConnected ? 1 : 0.4,
+            opacity: text.trim() && _isConnected ? 1 : 0.4,
             flexShrink: 0,
           }}
           onClick={handleSend}
-          disabled={!text.trim() || !isConnected}
+          disabled={!text.trim() || !_isConnected}
         >
           ➤
         </button>
@@ -447,21 +492,13 @@ function ChatPanel({
   );
 }
 
-// ============================================================
-// MULTIPLAYER XOX — Gerçek zamanlı XOX oyunu
-// ============================================================
-function MultiplayerXOX({
-  gameState,
-  players,
-  username,
-  onMove,
-  onRestart,
-  isHost,
-}) {
+function MultiplayerXOX({ gameState, players, username, onMove }) {
   if (!gameState) return null;
-  const myIndex = players.findIndex((p) => p.name === username);
-  const isMyTurn = gameState.currentTurn === myIndex;
-  const mySymbol = myIndex === 0 ? 'X' : 'O';
+  var myIndex = players.findIndex(function (p) {
+    return p.name === username;
+  });
+  var isMyTurn = gameState.currentTurn === myIndex;
+  var mySymbol = myIndex === 0 ? 'X' : 'O';
 
   return (
     <div
@@ -496,12 +533,13 @@ function MultiplayerXOX({
               fontSize: 16,
               fontWeight: 700,
               color: isMyTurn ? '#2A9D8F' : 'var(--text-secondary)',
-              animation: isMyTurn ? 'pulse 1.5s ease infinite' : 'none',
             }}
           >
             {isMyTurn
-              ? '🎯 Senin sıran!'
-              : `⏳ ${players[gameState.currentTurn]?.name} oynuyor...`}
+              ? 'Senin sıran!'
+              : (players[gameState.currentTurn]
+                  ? players[gameState.currentTurn].name
+                  : '') + ' oynuyor...'}
           </div>
         )}
       </div>
@@ -514,79 +552,73 @@ function MultiplayerXOX({
           margin: '0 auto',
         }}
       >
-        {gameState.board.map((cell, i) => (
-          <button
-            key={i}
-            onClick={() => {
-              if (isMyTurn && !cell && gameState.winner === null) onMove(i);
-            }}
-            style={{
-              width: '100%',
-              aspectRatio: '1',
-              borderRadius: 8,
-              border: gameState.winLine?.includes(i)
-                ? '2px solid #E63946'
-                : '2px solid var(--border)',
-              background: gameState.winLine?.includes(i)
-                ? cell === 'X'
-                  ? '#FEE2E2'
-                  : '#DBEAFE'
-                : 'var(--surface-hover)',
-              cursor:
-                isMyTurn && !cell && gameState.winner === null
-                  ? 'pointer'
-                  : 'default',
-              fontSize: 28,
-              fontFamily: "'Sora', sans-serif",
-              fontWeight: 800,
-              color: cell === 'X' ? '#E63946' : '#457B9D',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease',
-              opacity:
-                !isMyTurn && !cell && gameState.winner === null ? 0.5 : 1,
-              animation: cell ? 'scaleIn 0.2s ease' : 'none',
-            }}
-          >
-            {cell}
-          </button>
-        ))}
+        {gameState.board.map(function (cell, i) {
+          var isWinCell =
+            gameState.winLine && gameState.winLine.indexOf(i) !== -1;
+          return (
+            <button
+              key={i}
+              onClick={function () {
+                if (isMyTurn && !cell && gameState.winner === null) onMove(i);
+              }}
+              style={{
+                width: '100%',
+                aspectRatio: '1',
+                borderRadius: 8,
+                border: isWinCell
+                  ? '2px solid #E63946'
+                  : '2px solid var(--border)',
+                background: isWinCell
+                  ? cell === 'X'
+                    ? '#FEE2E2'
+                    : '#DBEAFE'
+                  : 'var(--surface-hover)',
+                cursor:
+                  isMyTurn && !cell && gameState.winner === null
+                    ? 'pointer'
+                    : 'default',
+                fontSize: 28,
+                fontFamily: "'Sora', sans-serif",
+                fontWeight: 800,
+                color: cell === 'X' ? '#E63946' : '#457B9D',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease',
+                opacity:
+                  !isMyTurn && !cell && gameState.winner === null ? 0.5 : 1,
+              }}
+            >
+              {cell}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ============================================================
-// MULTIPLAYER LOBBY
-// ============================================================
-const MP_GAMES = [
-  { id: 'xox', name: 'XOX', icon: '❌⭕', players: 2 },
-  { id: 'rps', name: 'Taş Kağıt Makas', icon: '✊✋✌️', players: 2 },
+var MP_GAMES = [
+  { id: 'xox', name: 'XOX', icon: 'XO', players: 2 },
+  { id: 'rps', name: 'Tas Kagit Makas', icon: 'TKM', players: 2 },
 ];
 
 function MultiplayerLobby() {
-  const [username, setUsername] = useState('');
-  const [isNameSet, setIsNameSet] = useState(false);
-  const [selectedMPGame, setSelectedMPGame] = useState(null);
-  const [joinCode, setJoinCode] = useState('');
-  const {
-    isConnected,
-    isRegistered,
-    roomData,
-    messages,
-    socketError,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    sendMessage,
-    startGame,
-    sendXOXMove,
-    restartGame,
-    setSocketError,
-  } = useSocket(isNameSet ? username : null);
+  var _username = useState('');
+  var username = _username[0];
+  var setUsername = _username[1];
+  var _isNameSet = useState(false);
+  var isNameSet = _isNameSet[0];
+  var setIsNameSet = _isNameSet[1];
+  var _selectedMPGame = useState(null);
+  var selectedMPGame = _selectedMPGame[0];
+  var setSelectedMPGame = _selectedMPGame[1];
+  var _joinCode = useState('');
+  var joinCode = _joinCode[0];
+  var setJoinCode = _joinCode[1];
 
-  // İsim giriş ekranı
+  var sock = useSocket(isNameSet ? username : null);
+
   if (!isNameSet) {
     return (
       <div
@@ -606,7 +638,7 @@ function MultiplayerLobby() {
             marginBottom: 8,
           }}
         >
-          🎮 Multiplayer Lobi
+          Multiplayer Lobi
         </h2>
         <p style={{ opacity: 0.6, marginBottom: 16, fontSize: 14 }}>
           Oyunculara görünecek adını gir
@@ -627,8 +659,10 @@ function MultiplayerLobby() {
             }}
             placeholder="Kullanıcı adın..."
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={(e) => {
+            onChange={function (e) {
+              setUsername(e.target.value);
+            }}
+            onKeyDown={function (e) {
               if (e.key === 'Enter' && username.trim().length >= 2)
                 setIsNameSet(true);
             }}
@@ -636,7 +670,9 @@ function MultiplayerLobby() {
             autoFocus
           />
           <button
-            onClick={() => setIsNameSet(true)}
+            onClick={function () {
+              setIsNameSet(true);
+            }}
             disabled={username.trim().length < 2}
             style={{
               padding: '12px 24px',
@@ -651,19 +687,18 @@ function MultiplayerLobby() {
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            Devam →
+            Devam
           </button>
         </div>
       </div>
     );
   }
 
-  // Oda içi ekran
-  if (roomData) {
-    const players = roomData.players || [];
-    const maxP = roomData.maxPlayers || 2;
-    const canStart = players.length >= maxP;
-    const isHost = players[0]?.name === username;
+  if (sock.roomData) {
+    var players = sock.roomData.players || [];
+    var maxP = sock.roomData.maxPlayers || 2;
+    var canStart = players.length >= maxP;
+    var isHost = players[0] && players[0].name === username;
 
     return (
       <div
@@ -675,7 +710,6 @@ function MultiplayerLobby() {
           color: 'var(--text)',
         }}
       >
-        {/* Bağlantı durumu */}
         <div
           style={{
             display: 'flex',
@@ -697,13 +731,10 @@ function MultiplayerLobby() {
               background: '#4ade80',
             }}
           />
-          <span>Bağlı — {username}</span>
+          <span>Bagli — {username}</span>
         </div>
-
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          {/* Sol: Oda bilgisi + oyun */}
           <div style={{ flex: 1, minWidth: 300 }}>
-            {/* Oda kodu */}
             <div
               style={{
                 padding: 20,
@@ -728,39 +759,35 @@ function MultiplayerLobby() {
                   userSelect: 'all',
                 }}
               >
-                {roomData.id}
+                {sock.roomData.id}
               </div>
               <div style={{ fontSize: 12, opacity: 0.5 }}>
-                Oyun:{' '}
-                {MP_GAMES.find((g) => g.id === roomData.gameId)?.name ||
-                  roomData.gameId}
+                Oyun: {sock.roomData.gameId}
               </div>
             </div>
-
-            {/* Oyuncular */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
                 Oyuncular ({players.length}/{maxP})
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {players.map((p, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 20,
-                      background: 'rgba(74,222,128,0.15)',
-                      border: '1px solid rgba(74,222,128,0.3)',
-                      fontSize: 13,
-                      fontWeight: 500,
-                    }}
-                  >
-                    {p.name === username ? '👤 ' : '🎮 '}
-                    {p.name}
-                    {p.name === username ? ' (sen)' : ''}
-                    {i === 0 ? ' 👑' : ''}
-                  </div>
-                ))}
+                {players.map(function (p, i) {
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 20,
+                        background: 'rgba(74,222,128,0.15)',
+                        border: '1px solid rgba(74,222,128,0.3)',
+                        fontSize: 13,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {p.name === username ? 'Sen' : p.name}
+                      {i === 0 ? ' (Host)' : ''}
+                    </div>
+                  );
+                })}
                 {players.length < maxP && (
                   <div
                     style={{
@@ -771,16 +798,15 @@ function MultiplayerLobby() {
                       fontSize: 13,
                     }}
                   >
-                    ⏳ Rakip bekleniyor...
+                    Rakip bekleniyor...
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Bekleme durumu */}
-            {roomData.state === 'waiting' && canStart && isHost && (
+            {sock.roomData.state === 'waiting' && canStart && isHost && (
               <button
-                onClick={startGame}
+                onClick={sock.startGame}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 10,
@@ -795,10 +821,10 @@ function MultiplayerLobby() {
                   width: '100%',
                 }}
               >
-                ▶ Oyunu Başlat
+                Oyunu Başlat
               </button>
             )}
-            {roomData.state === 'waiting' && canStart && !isHost && (
+            {sock.roomData.state === 'waiting' && canStart && !isHost && (
               <p
                 style={{
                   fontSize: 13,
@@ -806,10 +832,10 @@ function MultiplayerLobby() {
                   marginBottom: 12,
                 }}
               >
-                ⏳ Host oyunu başlatmasını bekliyor...
+                Host oyunu başlatmasını bekliyor...
               </p>
             )}
-            {roomData.state === 'waiting' && !canStart && (
+            {sock.roomData.state === 'waiting' && !canStart && (
               <p
                 style={{
                   fontSize: 13,
@@ -817,52 +843,40 @@ function MultiplayerLobby() {
                   marginBottom: 12,
                 }}
               >
-                ⏳ Rakip bekleniyor... Oda kodunu arkadaşına gönder!
+                Rakip bekleniyor... Oda kodunu arkadaşına gönder!
               </p>
             )}
 
-            {/* XOX Oyun Tahtası */}
-            {roomData.state === 'playing' &&
-              (console.log(
-                'DEBUG:',
-                roomData.state,
-                roomData.gameId,
-                typeof roomData.gameId
-              ) ||
-                true) &&
-              roomData.gameId === 'xox' && (
+            {sock.roomData.state === 'playing' &&
+              sock.roomData.gameId === 'xox' && (
                 <MultiplayerXOX
-                  gameState={roomData.gameState}
+                  gameState={sock.roomData.gameState}
                   players={players}
                   username={username}
-                  onMove={sendXOXMove}
-                  onRestart={restartGame}
-                  isHost={isHost}
+                  onMove={sock.sendXOXMove}
                 />
               )}
-
-            {/* Diğer oyunlar (henüz yapılmadı) */}
-            {roomData.state === 'playing' && roomData.gameId !== 'xox' && (
-              <div
-                style={{
-                  padding: 16,
-                  borderRadius: 12,
-                  background: 'rgba(42,157,143,0.1)',
-                  border: '1px solid rgba(42,157,143,0.3)',
-                  marginBottom: 12,
-                  textAlign: 'center',
-                }}
-              >
+            {sock.roomData.state === 'playing' &&
+              sock.roomData.gameId !== 'xox' && (
                 <div
-                  style={{ fontSize: 16, fontWeight: 700, color: '#2A9D8F' }}
+                  style={{
+                    padding: 16,
+                    borderRadius: 12,
+                    background: 'rgba(42,157,143,0.1)',
+                    border: '1px solid rgba(42,157,143,0.3)',
+                    marginBottom: 12,
+                    textAlign: 'center',
+                  }}
                 >
-                  🎮 Oyun Devam Ediyor!
+                  <div
+                    style={{ fontSize: 16, fontWeight: 700, color: '#2A9D8F' }}
+                  >
+                    Oyun Devam Ediyor!
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Oyun bitti */}
-            {roomData.state === 'finished' && (
+            {sock.roomData.state === 'finished' && (
               <div
                 style={{
                   padding: 20,
@@ -871,71 +885,29 @@ function MultiplayerLobby() {
                   border: '1px solid var(--border)',
                   marginBottom: 12,
                   textAlign: 'center',
-                  animation: 'bounceIn 0.5s ease',
                 }}
               >
-                <div style={{ fontSize: 40, marginBottom: 8 }}>
-                  {roomData.gameResult?.winner === 'draw'
-                    ? '🤝'
-                    : roomData.gameResult?.winnerName === username
-                    ? '🎉'
-                    : '😤'}
-                </div>
                 <div
                   style={{
                     fontSize: 20,
                     fontWeight: 700,
                     fontFamily: "'Sora', sans-serif",
-                    marginBottom: 4,
+                    marginBottom: 8,
                   }}
                 >
-                  {roomData.gameResult?.winner === 'draw'
+                  {sock.roomData.gameResult &&
+                  sock.roomData.gameResult.winner === 'draw'
                     ? 'Berabere!'
-                    : roomData.gameResult?.winnerName === username
+                    : sock.roomData.gameResult &&
+                      sock.roomData.gameResult.winnerName === username
                     ? 'Kazandın!'
-                    : `${roomData.gameResult?.winnerName} Kazandı!`}
+                    : (sock.roomData.gameResult
+                        ? sock.roomData.gameResult.winnerName
+                        : '') + ' Kazandı!'}
                 </div>
-                {/* Son tahta durumunu göster */}
-                {roomData.gameState && roomData.gameId === 'xox' && (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: 4,
-                      maxWidth: 180,
-                      margin: '12px auto',
-                    }}
-                  >
-                    {roomData.gameState.board.map((cell, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          aspectRatio: '1',
-                          borderRadius: 6,
-                          border: roomData.gameState.winLine?.includes(i)
-                            ? '2px solid #E63946'
-                            : '1px solid var(--border)',
-                          background: roomData.gameState.winLine?.includes(i)
-                            ? cell === 'X'
-                              ? '#FEE2E2'
-                              : '#DBEAFE'
-                            : 'var(--surface-hover)',
-                          fontSize: 20,
-                          fontFamily: "'Sora', sans-serif",
-                          fontWeight: 800,
-                          color: cell === 'X' ? '#E63946' : '#457B9D',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {cell}
-                      </div>
-                    ))}
-                  </div>
-                )}
                 {isHost && players.length >= maxP && (
-                  <button onClick={restartGame}
+                  <button
+                    onClick={sock.restartGame}
                     style={{
                       padding: '10px 24px',
                       borderRadius: 10,
@@ -946,29 +918,16 @@ function MultiplayerLobby() {
                       fontSize: 14,
                       cursor: 'pointer',
                       fontFamily: "'DM Sans', sans-serif",
-                      marginTop: 8,
                     }}
                   >
-                    🔄 Tekrar Oyna
+                    Tekrar Oyna
                   </button>
-                )}
-                {!isHost && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-secondary)',
-                      marginTop: 8,
-                    }}
-                  >
-                    Host yeni oyun başlatabilir
-                  </p>
                 )}
               </div>
             )}
 
-            {/* Masadan ayrıl */}
             <button
-              onClick={leaveRoom}
+              onClick={sock.leaveRoom}
               style={{
                 padding: '10px 24px',
                 borderRadius: 10,
@@ -982,23 +941,20 @@ function MultiplayerLobby() {
                 marginTop: 8,
               }}
             >
-              🚪 Masadan Ayrıl
+              Masadan Ayrıl
             </button>
           </div>
-
-          {/* Sağ: Chat */}
           <div style={{ flex: '0 0 360px' }}>
             <ChatPanel
-              messages={messages}
-              onSend={sendMessage}
+              messages={sock.messages}
+              onSend={sock.sendMessage}
               currentUser={username}
-              isConnected={isRegistered}
+              isConnected={sock.isRegistered}
               playerCount={players.length}
             />
           </div>
         </div>
-
-        {socketError && (
+        {sock.socketError && (
           <div
             style={{
               padding: '10px 16px',
@@ -1010,14 +966,13 @@ function MultiplayerLobby() {
               marginTop: 16,
             }}
           >
-            ⚠️ {socketError}
+            {sock.socketError}
           </div>
         )}
       </div>
     );
   }
 
-  // Ana lobi ekranı
   return (
     <div
       style={{
@@ -1035,18 +990,14 @@ function MultiplayerLobby() {
           gap: 8,
           padding: '8px 16px',
           borderRadius: 10,
-          background: isRegistered
+          background: sock.isRegistered
             ? 'rgba(74,222,128,0.1)'
-            : isConnected
-            ? 'rgba(251,191,36,0.1)'
             : 'rgba(239,68,68,0.1)',
-          border: `1px solid ${
-            isRegistered
+          border:
+            '1px solid ' +
+            (sock.isRegistered
               ? 'rgba(74,222,128,0.3)'
-              : isConnected
-              ? 'rgba(251,191,36,0.3)'
-              : 'rgba(239,68,68,0.3)'
-          }`,
+              : 'rgba(239,68,68,0.3)'),
           fontSize: 13,
           marginBottom: 20,
         }}
@@ -1056,19 +1007,11 @@ function MultiplayerLobby() {
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: isRegistered
-              ? '#4ade80'
-              : isConnected
-              ? '#fbbf24'
-              : '#ef4444',
+            background: sock.isRegistered ? '#4ade80' : '#ef4444',
           }}
         />
         <span>
-          {isRegistered
-            ? `Bağlı — ${username}`
-            : isConnected
-            ? 'Kayıt yapılıyor...'
-            : 'Sunucuya bağlanılıyor...'}
+          {sock.isRegistered ? 'Bagli — ' + username : 'Baglaniliyor...'}
         </span>
       </div>
       <div style={{ marginBottom: 24 }}>
@@ -1080,44 +1023,46 @@ function MultiplayerLobby() {
             marginBottom: 12,
           }}
         >
-          🎮 Oyun Seç
+          Oyun Seç
         </h2>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {MP_GAMES.map((g) => (
-            <div
-              key={g.id}
-              onClick={() => setSelectedMPGame(g.id)}
-              style={{
-                padding: '14px 20px',
-                borderRadius: 12,
-                border: `2px solid ${
-                  selectedMPGame === g.id ? '#6366f1' : 'var(--border)'
-                }`,
-                background:
-                  selectedMPGame === g.id
-                    ? 'rgba(99,102,241,0.15)'
-                    : 'var(--surface)',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                textAlign: 'center',
-                minWidth: 140,
-              }}
-            >
-              <div style={{ fontSize: 24, marginBottom: 4 }}>{g.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{g.name}</div>
-              <div style={{ fontSize: 11, opacity: 0.5 }}>
-                {g.players} oyuncu
+          {MP_GAMES.map(function (g) {
+            return (
+              <div
+                key={g.id}
+                onClick={function () {
+                  setSelectedMPGame(g.id);
+                }}
+                style={{
+                  padding: '14px 20px',
+                  borderRadius: 12,
+                  border:
+                    '2px solid ' +
+                    (selectedMPGame === g.id ? '#6366f1' : 'var(--border)'),
+                  background:
+                    selectedMPGame === g.id
+                      ? 'rgba(99,102,241,0.15)'
+                      : 'var(--surface)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  minWidth: 140,
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{g.name}</div>
+                <div style={{ fontSize: 11, opacity: 0.5 }}>
+                  {g.players} oyuncu
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {selectedMPGame && (
           <button
-            onClick={() => {
-              setSocketError(null);
-              createRoom(selectedMPGame);
+            onClick={function () {
+              sock.setSocketError(null);
+              sock.createRoom(selectedMPGame);
             }}
-            disabled={!isRegistered}
+            disabled={!sock.isRegistered}
             style={{
               marginTop: 16,
               padding: '10px 24px',
@@ -1127,12 +1072,12 @@ function MultiplayerLobby() {
               color: '#fff',
               fontWeight: 600,
               fontSize: 14,
-              cursor: isRegistered ? 'pointer' : 'not-allowed',
-              opacity: isRegistered ? 1 : 0.5,
+              cursor: sock.isRegistered ? 'pointer' : 'not-allowed',
+              opacity: sock.isRegistered ? 1 : 0.5,
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            🏠 Masa Oluştur
+            Masa Oluştur
           </button>
         )}
       </div>
@@ -1145,7 +1090,7 @@ function MultiplayerLobby() {
             marginBottom: 12,
           }}
         >
-          🔗 Masaya Katıl
+          Masaya Katıl
         </h2>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <input
@@ -1165,16 +1110,19 @@ function MultiplayerLobby() {
             }}
             placeholder="ABCD"
             value={joinCode}
-            onChange={(e) =>
-              setJoinCode(e.target.value.toUpperCase().slice(0, 6))
-            }
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && joinCode.length >= 4) joinRoom(joinCode);
+            onChange={function (e) {
+              setJoinCode(e.target.value.toUpperCase().slice(0, 6));
+            }}
+            onKeyDown={function (e) {
+              if (e.key === 'Enter' && joinCode.length >= 4)
+                sock.joinRoom(joinCode);
             }}
           />
           <button
-            onClick={() => joinRoom(joinCode)}
-            disabled={joinCode.length < 4 || !isRegistered}
+            onClick={function () {
+              sock.joinRoom(joinCode);
+            }}
+            disabled={joinCode.length < 4 || !sock.isRegistered}
             style={{
               padding: '10px 24px',
               borderRadius: 10,
@@ -1184,18 +1132,18 @@ function MultiplayerLobby() {
               fontWeight: 600,
               fontSize: 14,
               cursor:
-                joinCode.length >= 4 && isRegistered
+                joinCode.length >= 4 && sock.isRegistered
                   ? 'pointer'
                   : 'not-allowed',
-              opacity: joinCode.length >= 4 && isRegistered ? 1 : 0.5,
+              opacity: joinCode.length >= 4 && sock.isRegistered ? 1 : 0.5,
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            Katıl →
+            Katıl
           </button>
         </div>
       </div>
-      {socketError && (
+      {sock.socketError && (
         <div
           style={{
             padding: '10px 16px',
@@ -1206,7 +1154,7 @@ function MultiplayerLobby() {
             fontSize: 13,
           }}
         >
-          ⚠️ {socketError}
+          {sock.socketError}
         </div>
       )}
     </div>
