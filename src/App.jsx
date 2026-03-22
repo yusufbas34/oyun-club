@@ -69,8 +69,9 @@ function useSocket(username) {
         });
         socket.on('game_started', (data) => {
           console.log('▶ Oyun başladı:', data);
-          setRoomData(data);
+          setRoomData((prev) => ({ ...prev, ...data }));
         });
+
         socket.on('game_state_updated', (data) => {
           console.log('🎮 Oyun durumu:', data);
           setRoomData((prev) =>
