@@ -950,7 +950,7 @@ var MP_GAMES = [
   { id: 'rps', name: 'Taş Kağıt Makas', icon: '✊✋✌️', players: 2 },
 ];
 
-function MultiplayerLobby() {
+function MultiplayerLobby(props) {
   var s1 = useState('');
   var username = s1[0];
   var setUsername = s1[1];
@@ -960,7 +960,7 @@ function MultiplayerLobby() {
   var s3 = useState(null);
   var selectedMPGame = s3[0];
   var setSelectedMPGame = s3[1];
-  var s4 = useState('');
+  var s4 = useState(props && props.initialCode ? props.initialCode : '');
   var joinCode = s4[0];
   var setJoinCode = s4[1];
 
@@ -1462,6 +1462,7 @@ function MultiplayerLobby() {
                   minWidth: 140,
                 }}
               >
+                <div style={{ fontSize: 24, marginBottom: 4 }}>{g.icon}</div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{g.name}</div>
                 <div style={{ fontSize: 11, opacity: 0.5 }}>
                   {g.players} oyuncu
@@ -4983,6 +4984,7 @@ export default function App() {
   };
   const handleJoinRoom = (code) => {
     setPage('multiplayer');
+    setRoomId(code);
   };
   const handleBack = () => {
     if (page === 'game') {
@@ -5108,7 +5110,7 @@ export default function App() {
         {page === 'leaderboard' && (
           <LeaderboardPage user={user} stats={stats} />
         )}
-        {page === 'multiplayer' && <MultiplayerLobby />}
+        {page === 'multiplayer' && <MultiplayerLobby initialCode={roomId} />}
         {page === 'room' && selectedGame && (
           <RoomLobby
             game={selectedGame}
