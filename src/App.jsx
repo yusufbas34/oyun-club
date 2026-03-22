@@ -19,7 +19,7 @@ function useSocket(username) {
   var s5 = useState(null);
   var socketError = s5[0];
   var setSocketError = s5[1];
-
+ 
   useEffect(
     function () {
       if (!username) return;
