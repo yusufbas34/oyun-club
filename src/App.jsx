@@ -55,11 +55,7 @@ function useSocket(username) {
           console.log('🏠 Oda güncellendi:', data);
           setRoomData(data);
         });
-        socket.on('player_left', (data) => {
-          setMessages((prev) => [
-            ...prev,
-            { type: 'system', text: `${data.name} masadan ayrıldı` },
-          ]);
+        socket.on('player_left', (data) => { setMessages((prev) => [...prev, { type: 'system', text: `${data.name} masadan ayrıldı` }]); });
         });
         socket.on('chat_new_message', (msg) => {
           setMessages((prev) => [
@@ -938,9 +934,8 @@ function MultiplayerLobby() {
                     ))}
                   </div>
                 )}
-                {isHost && (
-                  <button
-                    onClick={restartGame}
+            {isHost && players.length >= maxP && (
+                <button onClick={restartGame}
                     style={{
                       padding: '10px 24px',
                       borderRadius: 10,
