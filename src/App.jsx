@@ -535,6 +535,7 @@ function MultiplayerXOX(props) {
   var gs = props.gameState;
   var players = props.players;
   var username = props.username;
+  console.log("DEBUG-USER:", username);
   var onMove = props.onMove;
   if (!gs) return null;
   var myIndex = -1;
