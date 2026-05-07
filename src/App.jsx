@@ -26,7 +26,9 @@ function useSocket(username) {
       var socket;
       import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
         .then(function (mod) {
-          socket = mod.io(BACKEND_URL, {
+          console.log("SOCKET-IO MOD:", mod, typeof mod.io);
+          var ioFunc = mod.io || mod.default;
+          socket = ioFunc(BACKEND_URL, {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: 5,
