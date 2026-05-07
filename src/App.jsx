@@ -964,6 +964,7 @@ function MultiplayerLobby(props) {
   var username = s5[0];
   var setUsername = s5[1];
   var isNameSet = true;
+  var s6 = useState(false);
   var autoJoined = s6[0];
   var setAutoJoined = s6[1];
 
