@@ -952,21 +952,18 @@ var MP_GAMES = [
 ];
 
 function MultiplayerLobby(props) {
-  var s1 = useState('');
-  var username = s1[0];
-  var setUsername = s1[1];
-  var s2 = useState(false);
-  var isNameSet = s2[0];
-  var setIsNameSet = s2[1];
+  var initialCode = props && props.initialCode ? props.initialCode : "";
+  var passedName = props && props.userName ? props.userName : "";
   var s3 = useState(null);
   var selectedMPGame = s3[0];
   var setSelectedMPGame = s3[1];
-  var s4 = useState(props && props.initialCode ? props.initialCode : '');
+  var s4 = useState(initialCode);
   var joinCode = s4[0];
   var setJoinCode = s4[1];
-  console.log("MP-DEBUG:", username, isNameSet);
-  var sock = useSocket(username);
-  var s6 = useState(false);
+  var s5 = useState(passedName || "Oyuncu");
+  var username = s5[0];
+  var setUsername = s5[1];
+  var isNameSet = true;
   var autoJoined = s6[0];
   var setAutoJoined = s6[1];
 
