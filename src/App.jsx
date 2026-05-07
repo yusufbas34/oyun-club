@@ -964,20 +964,18 @@ function MultiplayerLobby(props) {
   var username = s5[0];
   var setUsername = s5[1];
   var isNameSet = true;
+
+  var sock = useSocket(username);
+
   var s6 = useState(false);
   var autoJoined = s6[0];
   var setAutoJoined = s6[1];
-
- 
-  useEffect(
-    function () {
-      if (joinCode && sock.isRegistered && !autoJoined && !sock.roomData) {
-        setAutoJoined(true);
-        sock.joinRoom(joinCode);
-      }
-    },
-    [sock.isRegistered]
-  );
+  useEffect(function () {
+    if (joinCode && sock.isRegistered && !autoJoined && !sock.roomData) {
+      setAutoJoined(true);
+      sock.joinRoom(joinCode);
+    }
+  }, [sock.isRegistered]);
 
   if (sock.roomData) {
     var players = sock.roomData.players || [];
