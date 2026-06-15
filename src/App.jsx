@@ -1626,9 +1626,9 @@ function Game2048({ game, onGameEnd, soundOn }) {
   const [won, setWon] = useState(false);
   const [over, setOver] = useState(false);
   const [wonDismissed, setWonDismissed] = useState(false);
-  const touchStartRef = React.useRef(null);
+  const touchStartRef = useRef(null);
 
-  const handleMove = React.useCallback((dir) => {
+  const handleMove = useCallback((dir) => {
     if (over || (won && !wonDismissed)) return;
     setGrid(prev => {
       const { grid: ng, score: s, changed } = move2048(prev, dir);
@@ -1785,7 +1785,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
     setTimeout(() => setMessage(''), dur);
   };
 
-  const submitGuess = React.useCallback(() => {
+  const submitGuess = useCallback(() => {
     if (current.length !== 5) { showMsg('5 harf gir!'); return; }
     if (gameOver) return;
     const newGuess = current.toUpperCase();
@@ -1938,7 +1938,7 @@ function DartGame({ game, onGameEnd, soundOn }) {
   const [lastScore, setLastScore] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
-  const boardRef = React.useRef(null);
+  const boardRef = useRef(null);
   const MAX_THROWS = 10;
   const TARGET_SCORE = 100;
 
@@ -3092,9 +3092,9 @@ const Header = ({
 // ============================================================
 const LoginPage = ({ onLogin, dark, onToggleDark }) => {
   const [nickname, setNickname] = useState('');
-  const googleBtnRef = React.useRef(null);
+  const googleBtnRef = useRef(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const scriptId = 'gsi-script';
     const initGoogle = () => {
       if (!window.google) return;
