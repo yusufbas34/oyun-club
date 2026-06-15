@@ -26,6 +26,7 @@ function useSocket(username) {
       var socket;
       import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
         .then(function (mod) {
+          console.log("SOCKET-IO MOD:", mod, typeof mod.io);
           var ioFunc = mod.io || mod.default;
           socket = ioFunc(BACKEND_URL, {
             transports: ['websocket', 'polling'],
@@ -36,10 +37,12 @@ function useSocket(username) {
           socketRef.current = socket;
 
           socket.on('connect', function () {
+            console.log('Socket baglandi:', socket.id);
             setIsConnected(true);
             setSocketError(null);
             socket.emit('register', { name: username }, function (res) {
               if (res && res.success) {
+                console.log('Kayit basarili:', res.user);
                 setIsRegistered(true);
               } else {
                 setSocketError(res ? res.error : 'Kayit basarisiz');
@@ -58,6 +61,7 @@ function useSocket(username) {
           });
 
           socket.on('room_updated', function (data) {
+            console.log('Oda guncellendi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
               if (
@@ -106,6 +110,7 @@ function useSocket(username) {
           });
 
           socket.on('game_started', function (data) {
+            console.log('Oyun basladi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
               return Object.assign({}, prev, data, {
@@ -126,6 +131,7 @@ function useSocket(username) {
           });
 
           socket.on('game_finished', function (data) {
+            console.log('Oyun bitti:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -141,9 +147,12 @@ function useSocket(username) {
             });
           });
 
-          socket.on('rps_opponent_chose', function () {});
+          socket.on('rps_opponent_chose', function () {
+            console.log('Rakip secim yapti');
+          });
 
           socket.on('rps_reveal', function (data) {
+            console.log('RPS sonuc:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -164,6 +173,7 @@ function useSocket(username) {
           });
 
           socket.on('rps_new_round', function (data) {
+            console.log('Yeni raund:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -248,20 +258,34 @@ function useSocket(username) {
   var sendXOXMove = useCallback(function (cellIndex) {
     if (!socketRef.current) return;
     setSocketError(null);
-    socketRef.current.emit('xox_move', { cellIndex: cellIndex }, function () {});
+    socketRef.current.emit(
+      'xox_move',
+      { cellIndex: cellIndex },
+      function (res) {
+        if (res && res.error) {
+          console.log('Hamle:', res.error);
+        }
+      }
+    );
   }, []);
 
   var sendRPSChoice = useCallback(function (choice) {
     if (!socketRef.current) return;
     setSocketError(null);
-    socketRef.current.emit('rps_choice', { choice: choice }, function () {});
+    socketRef.current.emit('rps_choice', { choice: choice }, function (res) {
+      if (res && res.error) {
+        console.log('RPS:', res.error);
+      }
+    });
   }, []);
 
   var restartGame = useCallback(function () {
     if (!socketRef.current) return;
     setSocketError(null);
     socketRef.current.emit('restart_game', null, function (res) {
-      if (!res || !res.error) {
+      if (res && res.error) {
+        console.log('Restart:', res.error);
+      } else {
         setRoomData(function (prev) {
           if (!prev) return prev;
           return Object.assign({}, prev, {
@@ -513,6 +537,7 @@ function MultiplayerXOX(props) {
   var gs = props.gameState;
   var players = props.players;
   var username = props.username;
+  console.log("DEBUG-USER:", username);
   var onMove = props.onMove;
   if (!gs) return null;
   var myIndex = -1;
@@ -940,6 +965,8 @@ function MultiplayerLobby(props) {
   var s5 = useState(passedName || "Oyuncu");
   var username = s5[0];
   var setUsername = s5[1];
+  var isNameSet = true;
+
   var sock = useSocket(username);
 
   var s6 = useState(false);
@@ -1487,6 +1514,915 @@ function MultiplayerLobby(props) {
   );
 }
 // ============================================================
+// GAME: 2048
+// ============================================================
+const TILE_COLORS = {
+  2: { bg: '#EEE4DA', color: '#776E65' },
+  4: { bg: '#EDE0C8', color: '#776E65' },
+  8: { bg: '#F2B179', color: '#F9F6F2' },
+  16: { bg: '#F59563', color: '#F9F6F2' },
+  32: { bg: '#F67C5F', color: '#F9F6F2' },
+  64: { bg: '#F65E3B', color: '#F9F6F2' },
+  128: { bg: '#EDCF72', color: '#F9F6F2' },
+  256: { bg: '#EDCC61', color: '#F9F6F2' },
+  512: { bg: '#EDC850', color: '#F9F6F2' },
+  1024: { bg: '#EDC53F', color: '#F9F6F2' },
+  2048: { bg: '#EDC22E', color: '#F9F6F2' },
+};
+
+function init2048Grid() {
+  const g = Array(16).fill(0);
+  return addRandom2048(addRandom2048(g));
+}
+
+function addRandom2048(grid) {
+  const empty = grid.map((v, i) => v === 0 ? i : -1).filter(i => i >= 0);
+  if (!empty.length) return grid;
+  const idx = empty[Math.floor(Math.random() * empty.length)];
+  const ng = [...grid];
+  ng[idx] = Math.random() < 0.9 ? 2 : 4;
+  return ng;
+}
+
+function slide2048Row(row) {
+  const nonZero = row.filter(v => v !== 0);
+  const merged = [];
+  let score = 0;
+  let i = 0;
+  while (i < nonZero.length) {
+    if (i + 1 < nonZero.length && nonZero[i] === nonZero[i + 1]) {
+      merged.push(nonZero[i] * 2);
+      score += nonZero[i] * 2;
+      i += 2;
+    } else {
+      merged.push(nonZero[i]);
+      i++;
+    }
+  }
+  while (merged.length < 4) merged.push(0);
+  return { row: merged, score };
+}
+
+function move2048(grid, dir) {
+  const flat = [...grid];
+  let totalScore = 0;
+  let changed = false;
+
+  const getRow = (r) => [flat[r*4], flat[r*4+1], flat[r*4+2], flat[r*4+3]];
+  const getCol = (c) => [flat[c], flat[4+c], flat[8+c], flat[12+c]];
+  const setRow = (r, row) => { row.forEach((v,i) => { flat[r*4+i] = v; }); };
+  const setCol = (c, col) => { col.forEach((v,i) => { flat[i*4+c] = v; }); };
+
+  if (dir === 'left') {
+    for (let r = 0; r < 4; r++) {
+      const orig = getRow(r).join();
+      const { row, score } = slide2048Row(getRow(r));
+      if (row.join() !== orig) changed = true;
+      setRow(r, row); totalScore += score;
+    }
+  } else if (dir === 'right') {
+    for (let r = 0; r < 4; r++) {
+      const orig = getRow(r).join();
+      const { row, score } = slide2048Row(getRow(r).reverse());
+      if (row.reverse().join() !== orig) changed = true;
+      setRow(r, row.reverse()); totalScore += score;
+    }
+  } else if (dir === 'up') {
+    for (let c = 0; c < 4; c++) {
+      const orig = getCol(c).join();
+      const { row, score } = slide2048Row(getCol(c));
+      if (row.join() !== orig) changed = true;
+      setCol(c, row); totalScore += score;
+    }
+  } else if (dir === 'down') {
+    for (let c = 0; c < 4; c++) {
+      const orig = getCol(c).join();
+      const { row, score } = slide2048Row(getCol(c).reverse());
+      if (row.reverse().join() !== orig) changed = true;
+      setCol(c, row.reverse()); totalScore += score;
+    }
+  }
+  return { grid: flat, score: totalScore, changed };
+}
+
+function hasNoMoves2048(grid) {
+  if (grid.includes(0)) return false;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const v = grid[r*4+c];
+      if (c < 3 && grid[r*4+c+1] === v) return false;
+      if (r < 3 && grid[(r+1)*4+c] === v) return false;
+    }
+  }
+  return true;
+}
+
+function Game2048({ game, onGameEnd, soundOn }) {
+  const [grid, setGrid] = useState(init2048Grid);
+  const [score, setScore] = useState(0);
+  const [best, setBest] = useState(() => {
+    try { return parseInt(localStorage.getItem('oyunclub_2048_best') || '0'); } catch { return 0; }
+  });
+  const [won, setWon] = useState(false);
+  const [over, setOver] = useState(false);
+  const [wonDismissed, setWonDismissed] = useState(false);
+  const touchStartRef = React.useRef(null);
+
+  const handleMove = React.useCallback((dir) => {
+    if (over || (won && !wonDismissed)) return;
+    setGrid(prev => {
+      const { grid: ng, score: s, changed } = move2048(prev, dir);
+      if (!changed) return prev;
+      if (soundOn) playSound('place');
+      const withNew = addRandom2048(ng);
+      setScore(sc => {
+        const ns = sc + s;
+        setBest(b => {
+          const nb = Math.max(b, ns);
+          try { localStorage.setItem('oyunclub_2048_best', String(nb)); } catch {}
+          return nb;
+        });
+        return ns;
+      });
+      if (withNew.includes(2048) && !won) {
+        setWon(true);
+        if (soundOn) playSound('win');
+        onGameEnd('win');
+      } else if (hasNoMoves2048(withNew)) {
+        setOver(true);
+        if (soundOn) playSound('lose');
+        onGameEnd('loss');
+      }
+      return withNew;
+    });
+  }, [over, won, wonDismissed, soundOn, onGameEnd]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const map = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down',
+        a:'left', d:'right', w:'up', s:'down', A:'left', D:'right', W:'up', S:'down' };
+      if (map[e.key]) { e.preventDefault(); handleMove(map[e.key]); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleMove]);
+
+  const handleTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleTouchEnd = (e) => {
+    if (!touchStartRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartRef.current.x;
+    const dy = t.clientY - touchStartRef.current.y;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+    if (Math.abs(dx) > Math.abs(dy)) handleMove(dx > 0 ? 'right' : 'left');
+    else handleMove(dy > 0 ? 'down' : 'up');
+    touchStartRef.current = null;
+  };
+
+  const restart = () => {
+    setGrid(init2048Grid());
+    setScore(0);
+    setWon(false);
+    setOver(false);
+    setWonDismissed(false);
+  };
+
+  return (
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 32, letterSpacing: -2 }}>2048</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[['PUAN', score], ['EN İYİ', best]].map(([label, val]) => (
+            <div key={label} style={{ background: '#BBADA0', borderRadius: 6, padding: '6px 14px', color: '#F9F6F2', fontWeight: 700, minWidth: 70 }}>
+              <div style={{ fontSize: 11, opacity: 0.8 }}>{label}</div>
+              <div style={{ fontSize: 18 }}>{val}</div>
+            </div>
+          ))}
+          <Button onClick={restart} style={{ padding: '6px 12px', fontSize: 13 }}>Yeni</Button>
+        </div>
+      </div>
+
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ background: '#BBADA0', borderRadius: 12, padding: 8, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, userSelect: 'none', touchAction: 'none' }}
+      >
+        {grid.map((v, i) => {
+          const tc = TILE_COLORS[v] || { bg: '#3C3A32', color: '#F9F6F2' };
+          return (
+            <div key={i} style={{
+              background: v ? tc.bg : '#CDC1B4',
+              color: tc.color,
+              borderRadius: 6,
+              aspectRatio: '1',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: v >= 1024 ? 18 : v >= 128 ? 22 : v >= 16 ? 26 : 30,
+              fontFamily: "'Sora',sans-serif",
+              transition: 'background 0.1s',
+            }}>
+              {v || ''}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16 }}>
+        {[['↑','up'],['↓','down'],['←','left'],['→','right']].map(([label, dir]) => (
+          <button key={dir} onClick={() => handleMove(dir)} style={{
+            width: 48, height: 48, borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--surface)', color: 'var(--text)', fontSize: 20, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {won && !wonDismissed && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>🎉</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>2048!</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Tebrikler! Devam edebilirsin.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <Button onClick={restart}>Yeni Oyun</Button>
+              <Button variant="secondary" onClick={() => setWonDismissed(true)}>Devam Et</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+      {over && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>😔</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Oyun Bitti</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Puan: {score}</p>
+            <Button onClick={restart}>Tekrar Oyna</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: WORDLE (Turkish)
+// ============================================================
+const WORDLE_WORDS = ['ALTIN','ARABA','ASLAN','AYRAN','BADEM','BALIK','BANKA','BEBEK','BEYAZ','BILGI','BORSA','BULUT','CEVAP','DERIN','DEVAM','DILEK','DUMAN','DURUM','EKMEK','ELMAS','ERKEN','FENER','GUNES','HABER','HAFIF','INSAN','KALEM','KANAT','KARAR','KAYAK','KENAR','KILIM','KITAP','KOPEK','KURUL','LAKIN','LIMON','MAKAS','MASAL','MERAK','MISIR','NEDEN','NEFES','NIYET','OKUMA','PAZAR','RESIM','SANAT','SIMIT','TARAF','TABAK','UZMAN','VAKIT','VATAN','YAZAR','YILAN','YOLCU','YORUM','ZAMAN','ZEMIN','ALACA','DAIRE','EKRAN','FIYAT','MOTOR','OLGUN','PANEL','RADAR','TAKIM'];
+
+function WordleGame({ game, onGameEnd, soundOn }) {
+  const [target, setTarget] = useState(() => WORDLE_WORDS[Math.floor(Math.random() * WORDLE_WORDS.length)]);
+  const [guesses, setGuesses] = useState([]);
+  const [current, setCurrent] = useState('');
+  const [gameOver, setGameOver] = useState(false);
+  const [message, setMessage] = useState('');
+  const [usedKeys, setUsedKeys] = useState({});
+
+  const showMsg = (msg, dur = 2000) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(''), dur);
+  };
+
+  const submitGuess = React.useCallback(() => {
+    if (current.length !== 5) { showMsg('5 harf gir!'); return; }
+    if (gameOver) return;
+    const newGuess = current.toUpperCase();
+    const result = Array(5).fill('absent');
+    const targetArr = target.split('');
+    const guessArr = newGuess.split('');
+    const used = [...targetArr];
+    for (let i = 0; i < 5; i++) {
+      if (guessArr[i] === targetArr[i]) { result[i] = 'correct'; used[i] = null; }
+    }
+    for (let i = 0; i < 5; i++) {
+      if (result[i] === 'correct') continue;
+      const idx = used.indexOf(guessArr[i]);
+      if (idx !== -1) { result[i] = 'present'; used[idx] = null; }
+    }
+    const newUsedKeys = { ...usedKeys };
+    const priority = { correct: 3, present: 2, absent: 1 };
+    for (let i = 0; i < 5; i++) {
+      const k = guessArr[i];
+      if (!newUsedKeys[k] || priority[result[i]] > priority[newUsedKeys[k]]) {
+        newUsedKeys[k] = result[i];
+      }
+    }
+    setUsedKeys(newUsedKeys);
+    const newGuesses = [...guesses, { word: newGuess, result }];
+    setGuesses(newGuesses);
+    setCurrent('');
+    if (newGuess === target) {
+      setGameOver(true);
+      if (soundOn) playSound('win');
+      onGameEnd('win');
+      showMsg('Tebrikler! 🎉', 3000);
+    } else if (newGuesses.length >= 6) {
+      setGameOver(true);
+      if (soundOn) playSound('lose');
+      onGameEnd('loss');
+      showMsg('Kelime: ' + target, 4000);
+    }
+  }, [current, guesses, gameOver, target, usedKeys, soundOn, onGameEnd]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (gameOver) return;
+      if (e.key === 'Enter') { submitGuess(); return; }
+      if (e.key === 'Backspace') { setCurrent(c => c.slice(0, -1)); return; }
+      const ch = e.key.toUpperCase();
+      if (/^[A-ZÇĞIİÖŞÜ]$/.test(ch) && current.length < 5) setCurrent(c => c + ch);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [submitGuess, gameOver, current]);
+
+  const reset = () => {
+    setTarget(WORDLE_WORDS[Math.floor(Math.random() * WORDLE_WORDS.length)]);
+    setGuesses([]); setCurrent(''); setGameOver(false); setMessage(''); setUsedKeys({});
+  };
+
+  const colorMap = { correct: '#538D4E', present: '#B59F3B', absent: '#3A3A3C' };
+  const rows = [...guesses];
+  while (rows.length < 6) rows.push(null);
+
+  const KB_ROWS = [
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['ENTER','Z','X','C','V','B','N','M','⌫'],
+  ];
+
+  const keyColor = (k) => {
+    const s = usedKeys[k];
+    if (s === 'correct') return '#538D4E';
+    if (s === 'present') return '#B59F3B';
+    if (s === 'absent') return '#3A3A3C';
+    return 'var(--surface)';
+  };
+
+  const handleKbKey = (k) => {
+    if (gameOver) return;
+    if (k === 'ENTER') { submitGuess(); return; }
+    if (k === '⌫') { setCurrent(c => c.slice(0, -1)); return; }
+    if (current.length < 5) setCurrent(c => c + k);
+  };
+
+  return (
+    <div style={{ maxWidth: 380, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24, letterSpacing: -1 }}>Wordle TR</h2>
+        <Button onClick={reset} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni Kelime</Button>
+      </div>
+
+      {message && (
+        <div style={{ background: 'var(--text)', color: 'var(--bg)', borderRadius: 8, padding: '8px 16px', marginBottom: 12, fontWeight: 600, animation: 'fadeUp 0.3s ease' }}>
+          {message}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateRows: 'repeat(6,1fr)', gap: 6, marginBottom: 16 }}>
+        {rows.map((row, ri) => {
+          const isCurrentRow = !row && ri === guesses.length && !gameOver;
+          return (
+            <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6 }}>
+              {Array(5).fill(0).map((_, ci) => {
+                const letter = row ? row.word[ci] : (isCurrentRow ? current[ci] || '' : '');
+                const status = row ? row.result[ci] : null;
+                return (
+                  <div key={ci} style={{
+                    aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: `2px solid ${status ? 'transparent' : letter ? '#999' : 'var(--border)'}`,
+                    background: status ? colorMap[status] : 'var(--surface)',
+                    color: status ? '#FFF' : 'var(--text)',
+                    fontWeight: 800, fontSize: 22, borderRadius: 4,
+                    fontFamily: "'Sora',sans-serif",
+                    transition: 'background 0.3s',
+                  }}>
+                    {letter}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+        {KB_ROWS.map((row, ri) => (
+          <div key={ri} style={{ display: 'flex', gap: 5 }}>
+            {row.map(k => (
+              <button key={k} onClick={() => handleKbKey(k)} style={{
+                minWidth: k.length > 1 ? 54 : 34, height: 52, borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: usedKeys[k] ? keyColor(k) : 'var(--surface)',
+                color: usedKeys[k] ? '#FFF' : 'var(--text)',
+                fontWeight: 700, fontSize: k.length > 1 ? 11 : 14, cursor: 'pointer',
+                fontFamily: "'DM Sans',sans-serif",
+              }}>
+                {k}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: DART
+// ============================================================
+function DartGame({ game, onGameEnd, soundOn }) {
+  const [throws, setThrows] = useState([]);
+  const [lastScore, setLastScore] = useState(null);
+  const [gameOver, setGameOver] = useState(false);
+  const [won, setWon] = useState(false);
+  const boardRef = React.useRef(null);
+  const MAX_THROWS = 10;
+  const TARGET_SCORE = 100;
+
+  const totalScore = throws.reduce((s, t) => s + t.pts, 0);
+
+  const calcPts = (dist) => {
+    if (dist <= 0.07) return 50;
+    if (dist <= 0.15) return 25;
+    if (dist <= 0.30) return 15;
+    if (dist <= 0.45) return 10;
+    if (dist <= 0.60) return 5;
+    if (dist <= 0.80) return 2;
+    if (dist <= 1.00) return 1;
+    return 0;
+  };
+
+  const handleBoardClick = (e) => {
+    if (gameOver) return;
+    const rect = boardRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const r = rect.width / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy) / r;
+    const pts = calcPts(dist);
+    const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
+    if (soundOn) playSound('place');
+    const newThrows = [...throws, { x: relX, y: relY, pts }];
+    setThrows(newThrows);
+    setLastScore(pts);
+    const newTotal = newThrows.reduce((s, t) => s + t.pts, 0);
+    if (newThrows.length >= MAX_THROWS) {
+      setGameOver(true);
+      if (newTotal >= TARGET_SCORE) {
+        setWon(true);
+        if (soundOn) playSound('win');
+        onGameEnd('win');
+      } else {
+        if (soundOn) playSound('lose');
+        onGameEnd('loss');
+      }
+    }
+  };
+
+  const restart = () => {
+    setThrows([]); setLastScore(null); setGameOver(false); setWon(false);
+  };
+
+  const ringColors = ['#1A7431','#FFFFFF','#E63946','#FFFFFF','#000000','#FFFFFF','#000000','#E63946'];
+
+  return (
+    <div style={{ maxWidth: 400, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24 }}>🎯 Dart</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 18 }}>{totalScore} puan</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{throws.length}/{MAX_THROWS}</span>
+          <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+        </div>
+      </div>
+
+      {lastScore !== null && (
+        <div style={{ marginBottom: 8, fontWeight: 700, fontSize: 16, color: lastScore >= 25 ? '#538D4E' : lastScore >= 10 ? '#B59F3B' : 'var(--text-secondary)' }}>
+          {lastScore === 50 ? '🎯 Tam Merkez! +50' : lastScore === 0 ? 'Kaçırdın! +0' : '+' + lastScore + ' puan'}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div
+          ref={boardRef}
+          onClick={handleBoardClick}
+          style={{ position: 'relative', width: '80vw', maxWidth: 320, height: '80vw', maxHeight: 320, borderRadius: '50%', overflow: 'hidden', cursor: gameOver ? 'default' : 'crosshair', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+        >
+          {[100,87,80,65,50,35,22,7].map((pct, i) => (
+            <div key={i} style={{
+              position: 'absolute',
+              top: `${(100-pct)/2}%`, left: `${(100-pct)/2}%`,
+              width: `${pct}%`, height: `${pct}%`,
+              borderRadius: '50%',
+              background: ringColors[i] || '#1A7431',
+              border: '1px solid rgba(0,0,0,0.2)',
+            }} />
+          ))}
+          {throws.map((t, i) => (
+            <div key={i} style={{
+              position: 'absolute',
+              left: `calc(${t.x * 100}% - 6px)`,
+              top: `calc(${t.y * 100}% - 6px)`,
+              width: 12, height: 12, borderRadius: '50%',
+              background: '#FFD700',
+              border: '2px solid #333',
+              zIndex: 10,
+              boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+            }} />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
+        Hedef: {TARGET_SCORE} puan | Kalan: {MAX_THROWS - throws.length} atış
+      </div>
+
+      {gameOver && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{won ? '🏆' : '😔'}</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
+              {won ? 'Tebrikler!' : 'Oyun Bitti'}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Toplam: {totalScore} puan</p>
+            <Button onClick={restart}>Tekrar Oyna</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: DAMA (Turkish Checkers vs Bot)
+// ============================================================
+function initDamaBoard() {
+  const board = Array(64).fill(null);
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 8; c++) {
+      if ((r + c) % 2 === 1) board[r*8+c] = { color: 'black', king: false };
+    }
+  }
+  for (let r = 5; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if ((r + c) % 2 === 1) board[r*8+c] = { color: 'white', king: false };
+    }
+  }
+  return board;
+}
+
+function getDamaMoves(board, r, c) {
+  const piece = board[r*8+c];
+  if (!piece) return [];
+  const moves = [];
+  const dirs = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] :
+    piece.color === 'white' ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+
+  for (const [dr, dc] of dirs) {
+    const nr = r + dr, nc = c + dc;
+    if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
+    const target = board[nr*8+nc];
+    if (!target) {
+      moves.push({ from: [r,c], to: [nr,nc], capture: null });
+    } else if (target.color !== piece.color) {
+      const jr = nr + dr, jc = nc + dc;
+      if (jr >= 0 && jr <= 7 && jc >= 0 && jc <= 7 && !board[jr*8+jc]) {
+        moves.push({ from: [r,c], to: [jr,jc], capture: [nr,nc] });
+      }
+    }
+  }
+  return moves;
+}
+
+function getAllDamaMoves(board, color) {
+  const moves = [];
+  const captures = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r*8+c];
+      if (!p || p.color !== color) continue;
+      const ms = getDamaMoves(board, r, c);
+      for (const m of ms) {
+        if (m.capture) captures.push(m);
+        else moves.push(m);
+      }
+    }
+  }
+  return captures.length > 0 ? captures : moves;
+}
+
+function applyDamaMove(board, move) {
+  const nb = [...board];
+  const piece = { ...nb[move.from[0]*8+move.from[1]] };
+  nb[move.from[0]*8+move.from[1]] = null;
+  if (move.capture) nb[move.capture[0]*8+move.capture[1]] = null;
+  const [tr, tc] = move.to;
+  if ((piece.color === 'white' && tr === 0) || (piece.color === 'black' && tr === 7)) piece.king = true;
+  nb[tr*8+tc] = piece;
+  return nb;
+}
+
+function DamaGame({ game, onGameEnd, soundOn }) {
+  const [board, setBoard] = useState(initDamaBoard);
+  const [selected, setSelected] = useState(null);
+  const [turn, setTurn] = useState('white');
+  const [gameOver, setGameOver] = useState(false);
+  const [won, setWon] = useState(false);
+  const [botThinking, setBotThinking] = useState(false);
+  const [validMoves, setValidMoves] = useState([]);
+
+  const checkWin = (b, nextTurn) => {
+    const blacks = b.filter(p => p?.color === 'black').length;
+    const whites = b.filter(p => p?.color === 'white').length;
+    if (blacks === 0) return 'white';
+    if (whites === 0) return 'black';
+    if (getAllDamaMoves(b, nextTurn).length === 0) return nextTurn === 'white' ? 'black' : 'white';
+    return null;
+  };
+
+  const handleCellClick = (r, c) => {
+    if (gameOver || turn !== 'white' || botThinking) return;
+    const piece = board[r*8+c];
+
+    if (selected) {
+      const move = validMoves.find(m => m.to[0] === r && m.to[1] === c);
+      if (move) {
+        const nb = applyDamaMove(board, move);
+        if (soundOn) playSound('place');
+        setBoard(nb);
+        setSelected(null);
+        setValidMoves([]);
+        const winner = checkWin(nb, 'black');
+        if (winner) {
+          setGameOver(true);
+          setWon(winner === 'white');
+          onGameEnd(winner === 'white' ? 'win' : 'loss');
+          if (soundOn) playSound(winner === 'white' ? 'win' : 'lose');
+          return;
+        }
+        setTurn('black');
+        setBotThinking(true);
+        setTimeout(() => {
+          const botMoves = getAllDamaMoves(nb, 'black');
+          if (botMoves.length > 0) {
+            const botMove = botMoves[Math.floor(Math.random() * botMoves.length)];
+            const nb2 = applyDamaMove(nb, botMove);
+            if (soundOn) playSound('place');
+            setBoard(nb2);
+            const winner2 = checkWin(nb2, 'white');
+            if (winner2) {
+              setGameOver(true);
+              setWon(winner2 === 'white');
+              onGameEnd(winner2 === 'white' ? 'win' : 'loss');
+              if (soundOn) playSound(winner2 === 'white' ? 'win' : 'lose');
+            } else {
+              setTurn('white');
+            }
+          } else {
+            setTurn('white');
+          }
+          setBotThinking(false);
+        }, 500);
+        return;
+      }
+      if (piece?.color === 'white') {
+        setSelected([r, c]);
+        const allMoves = getAllDamaMoves(board, 'white');
+        const hasCaptures = allMoves.some(m => m.capture);
+        const pieceMoves = getDamaMoves(board, r, c);
+        setValidMoves(hasCaptures ? pieceMoves.filter(m => m.capture) : pieceMoves);
+        return;
+      }
+      setSelected(null);
+      setValidMoves([]);
+      return;
+    }
+
+    if (piece?.color === 'white') {
+      setSelected([r, c]);
+      const allMoves = getAllDamaMoves(board, 'white');
+      const hasCaptures = allMoves.some(m => m.capture);
+      const pieceMoves = getDamaMoves(board, r, c);
+      setValidMoves(hasCaptures ? pieceMoves.filter(m => m.capture) : pieceMoves);
+    }
+  };
+
+  const restart = () => {
+    setBoard(initDamaBoard());
+    setSelected(null);
+    setTurn('white');
+    setGameOver(false);
+    setWon(false);
+    setBotThinking(false);
+    setValidMoves([]);
+  };
+
+  const whites = board.filter(p => p?.color === 'white').length;
+  const blacks = board.filter(p => p?.color === 'black').length;
+
+  return (
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24 }}>⚫ Dama</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 14 }}>⚪{whites} ⚫{blacks}</span>
+          <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 8, fontSize: 14, color: 'var(--text-secondary)' }}>
+        {botThinking ? '🤖 Bot düşünüyor...' : turn === 'white' ? '⚪ Senin sıran' : '⚫ Botun sırası'}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 0, border: '2px solid var(--border)', borderRadius: 8, overflow: 'hidden', aspectRatio: '1' }}>
+        {Array(64).fill(0).map((_, i) => {
+          const r = Math.floor(i / 8), c = i % 8;
+          const isDark = (r + c) % 2 === 1;
+          const piece = board[i];
+          const isSel = selected && selected[0] === r && selected[1] === c;
+          const isValid = validMoves.some(m => m.to[0] === r && m.to[1] === c);
+          return (
+            <div
+              key={i}
+              onClick={() => handleCellClick(r, c)}
+              style={{
+                background: isDark ? '#8B4513' : '#F4A460',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: isDark ? 'pointer' : 'default',
+                position: 'relative',
+                outline: isSel ? '3px solid #FFD700' : isValid ? '3px solid #7FFF00' : 'none',
+                outlineOffset: -3,
+              }}
+            >
+              {isValid && !piece && <div style={{ width: '30%', height: '30%', borderRadius: '50%', background: 'rgba(127,255,0,0.5)' }} />}
+              {piece && (
+                <div style={{
+                  width: '75%', height: '75%', borderRadius: '50%',
+                  background: piece.color === 'white' ? '#F0F0F0' : '#1A1A1A',
+                  border: '2px solid ' + (piece.color === 'white' ? '#CCC' : '#444'),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: piece.king ? 12 : 0,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                }}>
+                  {piece.king ? '♛' : ''}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {gameOver && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{won ? '🏆' : '😔'}</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
+              {won ? 'Kazandın!' : 'Kaybettin!'}
+            </h2>
+            <Button onClick={restart}>Tekrar Oyna</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: SUDOKU
+// ============================================================
+const SUDOKU_PUZZLES = [
+  { puzzle: '530070000600195000098000060800060003400803001700020006060000280000419005000080079', solution: '534678912672195348198342567859761423426853791713924856961537284287419635345286179' },
+  { puzzle: '010020300004005060070000008006900070000304000050007200700000030080200100005040020', solution: '619823745284915367375467918436958271521374896857621439768149523943286157195742386' },
+  { puzzle: '200070038000006070300040600008020700100000006007030400004080009060700000930060002', solution: '214976538589136274367548619648329751153784926927651483731865492896412357935267142' },
+];
+
+function SudokuGame({ game, onGameEnd, soundOn }) {
+  const [puzzleIdx] = useState(() => Math.floor(Math.random() * SUDOKU_PUZZLES.length));
+  const { puzzle, solution } = SUDOKU_PUZZLES[puzzleIdx];
+  const initial = puzzle.split('').map(Number);
+  const sol = solution.split('').map(Number);
+
+  const [values, setValues] = useState(() => [...initial]);
+  const [selected, setSelected] = useState(null);
+  const [errors, setErrors] = useState(new Set());
+  const [won, setWon] = useState(false);
+
+  const getBoxIdx = (r, c) => Math.floor(r/3)*3 + Math.floor(c/3);
+
+  const checkErrors = (vals) => {
+    const errs = new Set();
+    for (let i = 0; i < 81; i++) {
+      if (vals[i] === 0) continue;
+      const r = Math.floor(i/9), c = i%9, b = getBoxIdx(r,c);
+      for (let j = 0; j < 81; j++) {
+        if (j === i || vals[j] !== vals[i]) continue;
+        const rj = Math.floor(j/9), cj = j%9, bj = getBoxIdx(rj,cj);
+        if (rj === r || cj === c || bj === b) { errs.add(i); errs.add(j); }
+      }
+    }
+    return errs;
+  };
+
+  const handleInput = (num) => {
+    if (selected === null || won) return;
+    const idx = selected;
+    if (initial[idx] !== 0) return;
+    const nv = [...values];
+    nv[idx] = num;
+    if (soundOn) playSound('place');
+    setValues(nv);
+    const errs = checkErrors(nv);
+    setErrors(errs);
+    if (nv.every((v, i) => v === sol[i])) {
+      setWon(true);
+      if (soundOn) playSound('win');
+      onGameEnd('win');
+    }
+  };
+
+  const restart = () => {
+    setValues([...initial]);
+    setSelected(null);
+    setErrors(new Set());
+    setWon(false);
+  };
+
+  const selR = selected !== null ? Math.floor(selected/9) : -1;
+  const selC = selected !== null ? selected%9 : -1;
+  const selB = selected !== null ? getBoxIdx(selR, selC) : -1;
+
+  return (
+    <div style={{ maxWidth: 380, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24 }}>🔲 Sudoku</h2>
+        <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 1, background: 'var(--border)', border: '2px solid var(--text)', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
+        {values.map((v, i) => {
+          const r = Math.floor(i/9), c = i%9;
+          const isFixed = initial[i] !== 0;
+          const isSel = i === selected;
+          const isHighlight = r === selR || c === selC || getBoxIdx(r,c) === selB;
+          const isErr = errors.has(i);
+          return (
+            <div
+              key={i}
+              onClick={() => setSelected(i)}
+              style={{
+                aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: isSel ? '#4285F4' : isErr ? '#FFCCCC' : isHighlight ? 'rgba(66,133,244,0.1)' : 'var(--surface)',
+                color: isSel ? '#FFF' : isErr ? '#E63946' : isFixed ? 'var(--text)' : '#4285F4',
+                fontWeight: isFixed ? 700 : 600,
+                fontSize: 14,
+                cursor: 'pointer',
+                fontFamily: "'DM Sans',sans-serif",
+                borderRight: (c+1) % 3 === 0 && c !== 8 ? '2px solid var(--text)' : '1px solid var(--border)',
+                borderBottom: (r+1) % 3 === 0 && r !== 8 ? '2px solid var(--text)' : '1px solid var(--border)',
+              }}
+            >
+              {v || ''}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, maxWidth: 260, margin: '0 auto' }}>
+        {[1,2,3,4,5,6,7,8,9].map(n => (
+          <button key={n} onClick={() => handleInput(n)} style={{
+            aspectRatio: '1', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--surface)', color: 'var(--text)', fontSize: 18, fontWeight: 700,
+            cursor: 'pointer', fontFamily: "'Sora',sans-serif",
+          }}>{n}</button>
+        ))}
+        <button onClick={() => handleInput(0)} style={{
+          aspectRatio: '1', borderRadius: 8, border: '1px solid var(--border)',
+          background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 16, fontWeight: 700,
+          cursor: 'pointer',
+        }}>✕</button>
+      </div>
+
+      {won && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>🎉</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Tebrikler!</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Sudoku'yu çözdün!</p>
+            <Button onClick={restart}>Yeni Bulmaca</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // CONSTANTS & HELPERS
 // ============================================================
 const GAMES = [
@@ -1534,6 +2470,51 @@ const GAMES = [
     players: 1,
     color: '#059669',
     bg: 'linear-gradient(135deg, #059669 0%, #34D399 100%)',
+  },
+  {
+    id: '2048',
+    name: '2048',
+    desc: "Sayıları birleştir, 2048'e ulaş",
+    icon: '🔢',
+    players: 1,
+    color: '#F59563',
+    bg: 'linear-gradient(135deg, #F59563 0%, #F2B179 100%)',
+  },
+  {
+    id: 'wordle',
+    name: 'Wordle TR',
+    desc: 'Türkçe kelime tahmin oyunu',
+    icon: '🔤',
+    players: 1,
+    color: '#538D4E',
+    bg: 'linear-gradient(135deg, #538D4E 0%, #6AAF5E 100%)',
+  },
+  {
+    id: 'dart',
+    name: 'Dart',
+    desc: 'Hedefi vur, puan topla',
+    icon: '🎯',
+    players: 1,
+    color: '#E63946',
+    bg: 'linear-gradient(135deg, #E63946 0%, #FF6B6B 100%)',
+  },
+  {
+    id: 'dama',
+    name: 'Dama',
+    desc: 'Türk Dama - Bota karşı oyna',
+    icon: '⚫',
+    players: 1,
+    color: '#457B9D',
+    bg: 'linear-gradient(135deg, #457B9D 0%, #1D3557 100%)',
+  },
+  {
+    id: 'sudoku',
+    name: 'Sudoku',
+    desc: 'Rakamları yerleştir',
+    icon: '🔲',
+    players: 1,
+    color: '#7C3AED',
+    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
 ];
 
@@ -2111,6 +3092,46 @@ const Header = ({
 // ============================================================
 const LoginPage = ({ onLogin, dark, onToggleDark }) => {
   const [nickname, setNickname] = useState('');
+  const googleBtnRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const scriptId = 'gsi-script';
+    const initGoogle = () => {
+      if (!window.google) return;
+      window.google.accounts.id.initialize({
+        client_id: '954115826954-fro3u7nt424dm73bgh3mg6g68600s633.apps.googleusercontent.com',
+        callback: (response) => {
+          try {
+            const payload = JSON.parse(atob(response.credential.split('.')[1]));
+            onLogin({ name: payload.name, email: payload.email, picture: payload.picture });
+          } catch (e) {
+            console.error('Google login error', e);
+          }
+        },
+      });
+      if (googleBtnRef.current) {
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: dark ? 'filled_black' : 'outline',
+          size: 'large',
+          width: 356,
+          text: 'signin_with',
+          locale: 'tr',
+        });
+      }
+    };
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = initGoogle;
+      document.head.appendChild(script);
+    } else if (window.google) {
+      initGoogle();
+    }
+  }, [dark, onLogin]);
+
   return (
     <div
       style={{
@@ -2175,54 +3196,7 @@ const LoginPage = ({ onLogin, dark, onToggleDark }) => {
           </p>
         </div>
         <Card style={{ padding: 32 }}>
-          <button
-            onClick={() =>
-              onLogin({ name: 'Google Kullanıcı', email: 'user@gmail.com' })
-            }
-            style={{
-              width: '100%',
-              padding: '14px 20px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              fontSize: 15,
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-              fontFamily: "'DM Sans', sans-serif",
-              transition: 'var(--transition)',
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = 'var(--surface-hover)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = 'var(--surface)')
-            }
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.43 3.44 1.18 4.93l3.66-2.84z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            Google ile Giriş Yap
-          </button>
+          <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />
           <div
             style={{
               display: 'flex',
@@ -2610,6 +3584,46 @@ const FAKE_LB = {
     { name: 'MelikeS', played: 22, wins: 15, avatar: 5 },
     { name: 'EceGamer', played: 18, wins: 11, avatar: 1 },
     { name: 'ZeynepM', played: 14, wins: 8, avatar: 3 },
+  ],
+  '2048': [
+    { name: 'AhmetPro', played: 25, wins: 20, avatar: 0 },
+    { name: 'EceGamer', played: 22, wins: 17, avatar: 1 },
+    { name: 'EmreK', played: 18, wins: 14, avatar: 0 },
+    { name: 'ZeynepM', played: 15, wins: 10, avatar: 3 },
+    { name: 'CanTR', played: 12, wins: 8, avatar: 4 },
+    { name: 'MelikeS', played: 10, wins: 5, avatar: 5 },
+  ],
+  wordle: [
+    { name: 'ZeynepM', played: 30, wins: 26, avatar: 3 },
+    { name: 'AsliBot', played: 25, wins: 21, avatar: 1 },
+    { name: 'MelikeS', played: 20, wins: 15, avatar: 5 },
+    { name: 'BurakXOX', played: 18, wins: 13, avatar: 2 },
+    { name: 'CanTR', played: 14, wins: 9, avatar: 4 },
+    { name: 'EceGamer', played: 12, wins: 7, avatar: 1 },
+  ],
+  dart: [
+    { name: 'BurakXOX', played: 28, wins: 22, avatar: 2 },
+    { name: 'CanTR', played: 24, wins: 18, avatar: 4 },
+    { name: 'AhmetPro', played: 20, wins: 14, avatar: 0 },
+    { name: 'EmreK', played: 16, wins: 11, avatar: 0 },
+    { name: 'AsliBot', played: 14, wins: 8, avatar: 1 },
+    { name: 'ZeynepM', played: 10, wins: 5, avatar: 3 },
+  ],
+  dama: [
+    { name: 'EmreK', played: 32, wins: 25, avatar: 0 },
+    { name: 'AhmetPro', played: 28, wins: 21, avatar: 0 },
+    { name: 'CanTR', played: 22, wins: 16, avatar: 4 },
+    { name: 'BurakXOX', played: 18, wins: 12, avatar: 2 },
+    { name: 'EceGamer', played: 15, wins: 9, avatar: 1 },
+    { name: 'MelikeS', played: 12, wins: 6, avatar: 5 },
+  ],
+  sudoku: [
+    { name: 'MelikeS', played: 20, wins: 18, avatar: 5 },
+    { name: 'ZeynepM', played: 18, wins: 15, avatar: 3 },
+    { name: 'AsliBot', played: 15, wins: 12, avatar: 1 },
+    { name: 'EceGamer', played: 14, wins: 10, avatar: 1 },
+    { name: 'AhmetPro', played: 12, wins: 8, avatar: 0 },
+    { name: 'CanTR', played: 10, wins: 6, avatar: 4 },
   ],
 };
 
@@ -4827,65 +5841,35 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('oyunclub_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
-  const [page, setPage] = useState(() => {
-    try {
-      return localStorage.getItem('oyunclub_user') ? 'lobby' : 'login';
-    } catch { return 'login'; }
-  });
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('login');
   const [selectedGame, setSelectedGame] = useState(null);
   const [roomId, setRoomId] = useState(null);
   const [players, setPlayers] = useState([]);
   const [toast, setToast] = useState({ message: '', visible: false });
-  const [soundOn, setSoundOn] = useState(() => {
-    try {
-      const saved = localStorage.getItem('oyunclub_sound');
-      return saved !== null ? saved === 'true' : true;
-    } catch { return true; }
+  const [soundOn, setSoundOn] = useState(true);
+  const [dark, setDark] = useState(false);
+  const [stats, setStats] = useState({
+    games: {
+      xox: { played: 3, wins: 2, losses: 1 },
+      minesweeper: { played: 5, wins: 3, losses: 2 },
+      rps: { played: 4, wins: 1, losses: 3 },
+      memory: { played: 0, wins: 0, losses: 0 },
+      snake: { played: 0, wins: 0, losses: 0 },
+      '2048': { played: 0, wins: 0, losses: 0 },
+      wordle: { played: 0, wins: 0, losses: 0 },
+      dart: { played: 0, wins: 0, losses: 0 },
+      dama: { played: 0, wins: 0, losses: 0 },
+      sudoku: { played: 0, wins: 0, losses: 0 },
+    },
+    history: [
+      { gameId: 'xox', result: 'win' },
+      { gameId: 'minesweeper', result: 'loss' },
+      { gameId: 'rps', result: 'loss' },
+      { gameId: 'xox', result: 'win' },
+      { gameId: 'minesweeper', result: 'win' },
+    ],
   });
-  const [dark, setDark] = useState(() => {
-    try {
-      return localStorage.getItem('oyunclub_dark') === 'true';
-    } catch { return false; }
-  });
-  const [stats, setStats] = useState(() => {
-    try {
-      const saved = localStorage.getItem('oyunclub_stats');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
-      games: {
-        xox: { played: 0, wins: 0, losses: 0 },
-        minesweeper: { played: 0, wins: 0, losses: 0 },
-        rps: { played: 0, wins: 0, losses: 0 },
-        memory: { played: 0, wins: 0, losses: 0 },
-        snake: { played: 0, wins: 0, losses: 0 },
-      },
-      history: [],
-    };
-  });
-
-  useEffect(() => {
-    if (user) localStorage.setItem('oyunclub_user', JSON.stringify(user));
-    else localStorage.removeItem('oyunclub_user');
-  }, [user]);
-
-  useEffect(() => {
-    localStorage.setItem('oyunclub_stats', JSON.stringify(stats));
-  }, [stats]);
-
-  useEffect(() => {
-    localStorage.setItem('oyunclub_dark', dark);
-  }, [dark]);
-
-  useEffect(() => {
-    localStorage.setItem('oyunclub_sound', soundOn);
-  }, [soundOn]);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -4924,8 +5908,9 @@ export default function App() {
     setPage('game');
   };
   const handleCopyLink = () => {
-    if (navigator.clipboard) navigator.clipboard.writeText(roomId);
-    showToast(`Oda kodu kopyalandı: ${roomId}`);
+    const link = `oyun.club/room/${roomId}`;
+    if (navigator.clipboard) navigator.clipboard.writeText(link);
+    showToast(`Link kopyalandı: ${link}`);
   };
   const handleJoinRoom = (code) => {
     setPage('multiplayer');
@@ -4941,15 +5926,11 @@ export default function App() {
     } else if (page === 'room') {
       setPage('lobby');
       setSelectedGame(null);
-    } else {
-      setPage('lobby');
-      setRoomId(null);
-    }
+    } else setPage('lobby');
   };
   const handleHome = () => {
     setPage('lobby');
     setSelectedGame(null);
-    setRoomId(null);
   };
 
   if (page === 'login' || !user)
@@ -5010,6 +5991,46 @@ export default function App() {
             dark={dark}
           />
         );
+      case '2048':
+        return (
+          <Game2048
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'wordle':
+        return (
+          <WordleGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'dart':
+        return (
+          <DartGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'dama':
+        return (
+          <DamaGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'sudoku':
+        return (
+          <SudokuGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
       default:
         return null;
     }
@@ -5053,8 +6074,6 @@ export default function App() {
             onLogout={() => {
               setUser(null);
               setPage('login');
-              setSelectedGame(null);
-              setRoomId(null);
             }}
           />
         )}
