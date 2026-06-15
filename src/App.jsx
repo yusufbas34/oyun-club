@@ -26,7 +26,6 @@ function useSocket(username) {
       var socket;
       import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
         .then(function (mod) {
-          console.log("SOCKET-IO MOD:", mod, typeof mod.io);
           var ioFunc = mod.io || mod.default;
           socket = ioFunc(BACKEND_URL, {
             transports: ['websocket', 'polling'],
@@ -37,12 +36,10 @@ function useSocket(username) {
           socketRef.current = socket;
 
           socket.on('connect', function () {
-            console.log('Socket baglandi:', socket.id);
             setIsConnected(true);
             setSocketError(null);
             socket.emit('register', { name: username }, function (res) {
               if (res && res.success) {
-                console.log('Kayit basarili:', res.user);
                 setIsRegistered(true);
               } else {
                 setSocketError(res ? res.error : 'Kayit basarisiz');
@@ -61,7 +58,6 @@ function useSocket(username) {
           });
 
           socket.on('room_updated', function (data) {
-            console.log('Oda guncellendi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
               if (
@@ -110,7 +106,6 @@ function useSocket(username) {
           });
 
           socket.on('game_started', function (data) {
-            console.log('Oyun basladi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
               return Object.assign({}, prev, data, {
@@ -131,7 +126,6 @@ function useSocket(username) {
           });
 
           socket.on('game_finished', function (data) {
-            console.log('Oyun bitti:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -147,12 +141,9 @@ function useSocket(username) {
             });
           });
 
-          socket.on('rps_opponent_chose', function () {
-            console.log('Rakip secim yapti');
-          });
+          socket.on('rps_opponent_chose', function () {});
 
           socket.on('rps_reveal', function (data) {
-            console.log('RPS sonuc:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -173,7 +164,6 @@ function useSocket(username) {
           });
 
           socket.on('rps_new_round', function (data) {
-            console.log('Yeni raund:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -258,34 +248,20 @@ function useSocket(username) {
   var sendXOXMove = useCallback(function (cellIndex) {
     if (!socketRef.current) return;
     setSocketError(null);
-    socketRef.current.emit(
-      'xox_move',
-      { cellIndex: cellIndex },
-      function (res) {
-        if (res && res.error) {
-          console.log('Hamle:', res.error);
-        }
-      }
-    );
+    socketRef.current.emit('xox_move', { cellIndex: cellIndex }, function () {});
   }, []);
 
   var sendRPSChoice = useCallback(function (choice) {
     if (!socketRef.current) return;
     setSocketError(null);
-    socketRef.current.emit('rps_choice', { choice: choice }, function (res) {
-      if (res && res.error) {
-        console.log('RPS:', res.error);
-      }
-    });
+    socketRef.current.emit('rps_choice', { choice: choice }, function () {});
   }, []);
 
   var restartGame = useCallback(function () {
     if (!socketRef.current) return;
     setSocketError(null);
     socketRef.current.emit('restart_game', null, function (res) {
-      if (res && res.error) {
-        console.log('Restart:', res.error);
-      } else {
+      if (!res || !res.error) {
         setRoomData(function (prev) {
           if (!prev) return prev;
           return Object.assign({}, prev, {
@@ -537,7 +513,6 @@ function MultiplayerXOX(props) {
   var gs = props.gameState;
   var players = props.players;
   var username = props.username;
-  console.log("DEBUG-USER:", username);
   var onMove = props.onMove;
   if (!gs) return null;
   var myIndex = -1;
@@ -965,8 +940,6 @@ function MultiplayerLobby(props) {
   var s5 = useState(passedName || "Oyuncu");
   var username = s5[0];
   var setUsername = s5[1];
-  var isNameSet = true;
-
   var sock = useSocket(username);
 
   var s6 = useState(false);
@@ -4854,30 +4827,65 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [page, setPage] = useState('login');
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('oyunclub_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [page, setPage] = useState(() => {
+    try {
+      return localStorage.getItem('oyunclub_user') ? 'lobby' : 'login';
+    } catch { return 'login'; }
+  });
   const [selectedGame, setSelectedGame] = useState(null);
   const [roomId, setRoomId] = useState(null);
   const [players, setPlayers] = useState([]);
   const [toast, setToast] = useState({ message: '', visible: false });
-  const [soundOn, setSoundOn] = useState(true);
-  const [dark, setDark] = useState(false);
-  const [stats, setStats] = useState({
-    games: {
-      xox: { played: 3, wins: 2, losses: 1 },
-      minesweeper: { played: 5, wins: 3, losses: 2 },
-      rps: { played: 4, wins: 1, losses: 3 },
-      memory: { played: 0, wins: 0, losses: 0 },
-      snake: { played: 0, wins: 0, losses: 0 },
-    },
-    history: [
-      { gameId: 'xox', result: 'win' },
-      { gameId: 'minesweeper', result: 'loss' },
-      { gameId: 'rps', result: 'loss' },
-      { gameId: 'xox', result: 'win' },
-      { gameId: 'minesweeper', result: 'win' },
-    ],
+  const [soundOn, setSoundOn] = useState(() => {
+    try {
+      const saved = localStorage.getItem('oyunclub_sound');
+      return saved !== null ? saved === 'true' : true;
+    } catch { return true; }
   });
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem('oyunclub_dark') === 'true';
+    } catch { return false; }
+  });
+  const [stats, setStats] = useState(() => {
+    try {
+      const saved = localStorage.getItem('oyunclub_stats');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      games: {
+        xox: { played: 0, wins: 0, losses: 0 },
+        minesweeper: { played: 0, wins: 0, losses: 0 },
+        rps: { played: 0, wins: 0, losses: 0 },
+        memory: { played: 0, wins: 0, losses: 0 },
+        snake: { played: 0, wins: 0, losses: 0 },
+      },
+      history: [],
+    };
+  });
+
+  useEffect(() => {
+    if (user) localStorage.setItem('oyunclub_user', JSON.stringify(user));
+    else localStorage.removeItem('oyunclub_user');
+  }, [user]);
+
+  useEffect(() => {
+    localStorage.setItem('oyunclub_stats', JSON.stringify(stats));
+  }, [stats]);
+
+  useEffect(() => {
+    localStorage.setItem('oyunclub_dark', dark);
+  }, [dark]);
+
+  useEffect(() => {
+    localStorage.setItem('oyunclub_sound', soundOn);
+  }, [soundOn]);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -4916,9 +4924,8 @@ export default function App() {
     setPage('game');
   };
   const handleCopyLink = () => {
-    const link = `oyun.club/room/${roomId}`;
-    if (navigator.clipboard) navigator.clipboard.writeText(link);
-    showToast(`Link kopyalandı: ${link}`);
+    if (navigator.clipboard) navigator.clipboard.writeText(roomId);
+    showToast(`Oda kodu kopyalandı: ${roomId}`);
   };
   const handleJoinRoom = (code) => {
     setPage('multiplayer');
@@ -4934,11 +4941,15 @@ export default function App() {
     } else if (page === 'room') {
       setPage('lobby');
       setSelectedGame(null);
-    } else setPage('lobby');
+    } else {
+      setPage('lobby');
+      setRoomId(null);
+    }
   };
   const handleHome = () => {
     setPage('lobby');
     setSelectedGame(null);
+    setRoomId(null);
   };
 
   if (page === 'login' || !user)
@@ -5042,6 +5053,8 @@ export default function App() {
             onLogout={() => {
               setUser(null);
               setPage('login');
+              setSelectedGame(null);
+              setRoomId(null);
             }}
           />
         )}
