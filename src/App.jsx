@@ -3131,7 +3131,8 @@ const LoginPage = ({ onLogin, dark, onToggleDark }) => {
         client_id: '954115826954-fro3u7nt424dm73bgh3mg6g68600s633.apps.googleusercontent.com',
         callback: (response) => {
           try {
-            const payload = JSON.parse(atob(response.credential.split('.')[1]));
+            const b64 = response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+            const payload = JSON.parse(decodeURIComponent(atob(b64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
             onLogin({ name: payload.name, email: payload.email, picture: payload.picture });
           } catch (e) {
             console.error('Google login error', e);
@@ -3573,87 +3574,7 @@ const ProfilePage = ({ user, stats, onLogout }) => {
 // ============================================================
 // LEADERBOARD PAGE (per-game)
 // ============================================================
-const FAKE_LB = {
-  xox: [
-    { name: 'AhmetPro', played: 22, wins: 19, avatar: 0 },
-    { name: 'BurakXOX', played: 31, wins: 24, avatar: 2 },
-    { name: 'EceGamer', played: 18, wins: 14, avatar: 1 },
-    { name: 'ZeynepM', played: 15, wins: 10, avatar: 3 },
-    { name: 'CanTR', played: 12, wins: 8, avatar: 4 },
-    { name: 'MelikeS', played: 10, wins: 5, avatar: 5 },
-  ],
-  minesweeper: [
-    { name: 'EceGamer', played: 40, wins: 32, avatar: 1 },
-    { name: 'MelikeS', played: 35, wins: 28, avatar: 5 },
-    { name: 'EmreK', played: 22, wins: 18, avatar: 0 },
-    { name: 'ZeynepM', played: 20, wins: 14, avatar: 3 },
-    { name: 'AsliBot', played: 19, wins: 11, avatar: 1 },
-    { name: 'CanTR', played: 14, wins: 7, avatar: 4 },
-  ],
-  rps: [
-    { name: 'CanTR', played: 28, wins: 21, avatar: 4 },
-    { name: 'AhmetPro', played: 25, wins: 19, avatar: 0 },
-    { name: 'ZeynepM', played: 20, wins: 12, avatar: 3 },
-    { name: 'AsliBot', played: 16, wins: 10, avatar: 1 },
-    { name: 'EmreK', played: 12, wins: 6, avatar: 0 },
-    { name: 'BurakXOX', played: 8, wins: 3, avatar: 2 },
-  ],
-  memory: [
-    { name: 'ZeynepM', played: 30, wins: 25, avatar: 3 },
-    { name: 'EceGamer', played: 24, wins: 20, avatar: 1 },
-    { name: 'AsliBot', played: 18, wins: 14, avatar: 1 },
-    { name: 'AhmetPro', played: 15, wins: 10, avatar: 0 },
-    { name: 'MelikeS', played: 12, wins: 7, avatar: 5 },
-    { name: 'CanTR', played: 10, wins: 5, avatar: 4 },
-  ],
-  snake: [
-    { name: 'EmreK', played: 35, wins: 28, avatar: 0 },
-    { name: 'BurakXOX', played: 28, wins: 22, avatar: 2 },
-    { name: 'AhmetPro', played: 20, wins: 16, avatar: 0 },
-    { name: 'MelikeS', played: 22, wins: 15, avatar: 5 },
-    { name: 'EceGamer', played: 18, wins: 11, avatar: 1 },
-    { name: 'ZeynepM', played: 14, wins: 8, avatar: 3 },
-  ],
-  '2048': [
-    { name: 'AhmetPro', played: 25, wins: 20, avatar: 0 },
-    { name: 'EceGamer', played: 22, wins: 17, avatar: 1 },
-    { name: 'EmreK', played: 18, wins: 14, avatar: 0 },
-    { name: 'ZeynepM', played: 15, wins: 10, avatar: 3 },
-    { name: 'CanTR', played: 12, wins: 8, avatar: 4 },
-    { name: 'MelikeS', played: 10, wins: 5, avatar: 5 },
-  ],
-  wordle: [
-    { name: 'ZeynepM', played: 30, wins: 26, avatar: 3 },
-    { name: 'AsliBot', played: 25, wins: 21, avatar: 1 },
-    { name: 'MelikeS', played: 20, wins: 15, avatar: 5 },
-    { name: 'BurakXOX', played: 18, wins: 13, avatar: 2 },
-    { name: 'CanTR', played: 14, wins: 9, avatar: 4 },
-    { name: 'EceGamer', played: 12, wins: 7, avatar: 1 },
-  ],
-  connectfour: [
-    { name: 'AlparslanK', played: 30, wins: 25, avatar: 0 },
-    { name: 'ZeynepM', played: 22, wins: 18, avatar: 3 },
-    { name: 'EmreK', played: 18, wins: 14, avatar: 2 },
-    { name: 'BurakXOX', played: 15, wins: 11, avatar: 1 },
-    { name: 'EceGamer', played: 12, wins: 8, avatar: 5 },
-  ],
-  dama: [
-    { name: 'EmreK', played: 32, wins: 25, avatar: 0 },
-    { name: 'AhmetPro', played: 28, wins: 21, avatar: 0 },
-    { name: 'CanTR', played: 22, wins: 16, avatar: 4 },
-    { name: 'BurakXOX', played: 18, wins: 12, avatar: 2 },
-    { name: 'EceGamer', played: 15, wins: 9, avatar: 1 },
-    { name: 'MelikeS', played: 12, wins: 6, avatar: 5 },
-  ],
-  sudoku: [
-    { name: 'MelikeS', played: 20, wins: 18, avatar: 5 },
-    { name: 'ZeynepM', played: 18, wins: 15, avatar: 3 },
-    { name: 'AsliBot', played: 15, wins: 12, avatar: 1 },
-    { name: 'EceGamer', played: 14, wins: 10, avatar: 1 },
-    { name: 'AhmetPro', played: 12, wins: 8, avatar: 0 },
-    { name: 'CanTR', played: 10, wins: 6, avatar: 4 },
-  ],
-};
+const FAKE_LB = {};
 
 const LeaderboardPage = ({ user, stats }) => {
   const [activeTab, setActiveTab] = useState(GAMES[0].id);
@@ -5869,35 +5790,21 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [page, setPage] = useState('login');
+  const [user, setUser] = useState(() => { try { const s = localStorage.getItem('oyunclub_user'); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [page, setPage] = useState(() => { try { return localStorage.getItem('oyunclub_user') ? 'lobby' : 'login'; } catch { return 'login'; } });
   const [selectedGame, setSelectedGame] = useState(null);
   const [roomId, setRoomId] = useState(null);
   const [players, setPlayers] = useState([]);
   const [toast, setToast] = useState({ message: '', visible: false });
-  const [soundOn, setSoundOn] = useState(true);
-  const [dark, setDark] = useState(false);
-  const [stats, setStats] = useState({
-    games: {
-      xox: { played: 3, wins: 2, losses: 1 },
-      minesweeper: { played: 5, wins: 3, losses: 2 },
-      rps: { played: 4, wins: 1, losses: 3 },
-      memory: { played: 0, wins: 0, losses: 0 },
-      snake: { played: 0, wins: 0, losses: 0 },
-      '2048': { played: 0, wins: 0, losses: 0 },
-      wordle: { played: 0, wins: 0, losses: 0 },
-      connectfour: { played: 0, wins: 0, losses: 0 },
-      dama: { played: 0, wins: 0, losses: 0 },
-      sudoku: { played: 0, wins: 0, losses: 0 },
-    },
-    history: [
-      { gameId: 'xox', result: 'win' },
-      { gameId: 'minesweeper', result: 'loss' },
-      { gameId: 'rps', result: 'loss' },
-      { gameId: 'xox', result: 'win' },
-      { gameId: 'minesweeper', result: 'win' },
-    ],
-  });
+  const [soundOn, setSoundOn] = useState(() => { try { const s = localStorage.getItem('oyunclub_sound'); return s !== null ? s === 'true' : true; } catch { return true; } });
+  const [dark, setDark] = useState(() => { try { return localStorage.getItem('oyunclub_dark') === 'true'; } catch { return false; } });
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0} };
+  const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) return JSON.parse(s); } catch {} return { games: EMPTY_STATS, history: [] }; });
+
+  useEffect(() => { if (user) localStorage.setItem('oyunclub_user', JSON.stringify(user)); else localStorage.removeItem('oyunclub_user'); }, [user]);
+  useEffect(() => { localStorage.setItem('oyunclub_stats', JSON.stringify(stats)); }, [stats]);
+  useEffect(() => { localStorage.setItem('oyunclub_dark', dark); }, [dark]);
+  useEffect(() => { localStorage.setItem('oyunclub_sound', soundOn); }, [soundOn]);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -5924,11 +5831,12 @@ export default function App() {
     setPage('lobby');
   };
   const handleSelectGame = (game) => {
-    setSelectedGame(game);
+    const fullGame = GAMES.find(g => g.id === game.id) || game;
+    setSelectedGame(fullGame);
     const id = generateRoomId();
     setRoomId(id);
     setPlayers([user.name]);
-    setPage(game.players === 1 || game.local ? 'game' : 'room');
+    setPage(fullGame.players === 1 || fullGame.local ? 'game' : 'room');
   };
   const handleStartGame = () => {
     if (selectedGame.players > 1 && players.length < selectedGame.players)
@@ -6102,6 +6010,9 @@ export default function App() {
             onLogout={() => {
               setUser(null);
               setPage('login');
+              setSelectedGame(null);
+              setRoomId(null);
+              localStorage.removeItem('oyunclub_user');
             }}
           />
         )}
