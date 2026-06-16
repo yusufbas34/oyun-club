@@ -1831,8 +1831,9 @@ function WordleGame({ game, onGameEnd, soundOn }) {
       if (gameOver) return;
       if (e.key === 'Enter') { submitGuess(); return; }
       if (e.key === 'Backspace') { setCurrent(c => c.slice(0, -1)); return; }
-      const ch = e.key.toUpperCase();
-      if (/^[A-ZÇĞIİÖŞÜ]$/.test(ch) && current.length < 5) setCurrent(c => c + ch);
+      let ch = e.key.toUpperCase();
+      if (ch === 'I') ch = 'İ';
+      if (/^[A-ZÇĞİÖŞÜ]$/.test(ch) && current.length < 5) setCurrent(c => c + ch);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1848,9 +1849,9 @@ function WordleGame({ game, onGameEnd, soundOn }) {
   while (rows.length < 6) rows.push(null);
 
   const KB_ROWS = [
-    ['Q','W','E','R','T','Y','U','I','O','P'],
-    ['A','S','D','F','G','H','J','K','L'],
-    ['ENTER','Z','X','C','V','B','N','M','⌫'],
+    ['E','R','T','Y','U','I','O','P','Ğ','Ü'],
+    ['A','S','D','F','G','H','J','K','L','Ş','İ'],
+    ['ENTER','Z','X','C','V','B','N','M','Ö','Ç','⌫'],
   ];
 
   const keyColor = (k) => {
@@ -1926,135 +1927,6 @@ function WordleGame({ game, onGameEnd, soundOn }) {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ============================================================
-// GAME: DART
-// ============================================================
-function DartGame({ game, onGameEnd, soundOn }) {
-  const [throws, setThrows] = useState([]);
-  const [lastScore, setLastScore] = useState(null);
-  const [gameOver, setGameOver] = useState(false);
-  const [won, setWon] = useState(false);
-  const boardRef = useRef(null);
-  const MAX_THROWS = 10;
-  const TARGET_SCORE = 100;
-
-  const totalScore = throws.reduce((s, t) => s + t.pts, 0);
-
-  const calcPts = (dist) => {
-    if (dist <= 0.07) return 50;
-    if (dist <= 0.15) return 25;
-    if (dist <= 0.30) return 15;
-    if (dist <= 0.45) return 10;
-    if (dist <= 0.60) return 5;
-    if (dist <= 0.80) return 2;
-    if (dist <= 1.00) return 1;
-    return 0;
-  };
-
-  const handleBoardClick = (e) => {
-    if (gameOver) return;
-    const rect = boardRef.current.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const r = rect.width / 2;
-    const dx = e.clientX - cx;
-    const dy = e.clientY - cy;
-    const dist = Math.sqrt(dx*dx + dy*dy) / r;
-    const pts = calcPts(dist);
-    const relX = (e.clientX - rect.left) / rect.width;
-    const relY = (e.clientY - rect.top) / rect.height;
-    if (soundOn) playSound('place');
-    const newThrows = [...throws, { x: relX, y: relY, pts }];
-    setThrows(newThrows);
-    setLastScore(pts);
-    const newTotal = newThrows.reduce((s, t) => s + t.pts, 0);
-    if (newThrows.length >= MAX_THROWS) {
-      setGameOver(true);
-      if (newTotal >= TARGET_SCORE) {
-        setWon(true);
-        if (soundOn) playSound('win');
-        onGameEnd('win');
-      } else {
-        if (soundOn) playSound('lose');
-        onGameEnd('loss');
-      }
-    }
-  };
-
-  const restart = () => {
-    setThrows([]); setLastScore(null); setGameOver(false); setWon(false);
-  };
-
-  const ringColors = ['#1A7431','#FFFFFF','#E63946','#FFFFFF','#000000','#FFFFFF','#000000','#E63946'];
-
-  return (
-    <div style={{ maxWidth: 400, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24 }}>🎯 Dart</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: 18 }}>{totalScore} puan</span>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{throws.length}/{MAX_THROWS}</span>
-          <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
-        </div>
-      </div>
-
-      {lastScore !== null && (
-        <div style={{ marginBottom: 8, fontWeight: 700, fontSize: 16, color: lastScore >= 25 ? '#538D4E' : lastScore >= 10 ? '#B59F3B' : 'var(--text-secondary)' }}>
-          {lastScore === 50 ? '🎯 Tam Merkez! +50' : lastScore === 0 ? 'Kaçırdın! +0' : '+' + lastScore + ' puan'}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div
-          ref={boardRef}
-          onClick={handleBoardClick}
-          style={{ position: 'relative', width: '80vw', maxWidth: 320, height: '80vw', maxHeight: 320, borderRadius: '50%', overflow: 'hidden', cursor: gameOver ? 'default' : 'crosshair', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
-        >
-          {[100,87,80,65,50,35,22,7].map((pct, i) => (
-            <div key={i} style={{
-              position: 'absolute',
-              top: `${(100-pct)/2}%`, left: `${(100-pct)/2}%`,
-              width: `${pct}%`, height: `${pct}%`,
-              borderRadius: '50%',
-              background: ringColors[i] || '#1A7431',
-              border: '1px solid rgba(0,0,0,0.2)',
-            }} />
-          ))}
-          {throws.map((t, i) => (
-            <div key={i} style={{
-              position: 'absolute',
-              left: `calc(${t.x * 100}% - 6px)`,
-              top: `calc(${t.y * 100}% - 6px)`,
-              width: 12, height: 12, borderRadius: '50%',
-              background: '#FFD700',
-              border: '2px solid #333',
-              zIndex: 10,
-              boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-            }} />
-          ))}
-        </div>
-      </div>
-
-      <div style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
-        Hedef: {TARGET_SCORE} puan | Kalan: {MAX_THROWS - throws.length} atış
-      </div>
-
-      {gameOver && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>{won ? '🏆' : '😔'}</div>
-            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
-              {won ? 'Tebrikler!' : 'Oyun Bitti'}
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Toplam: {totalScore} puan</p>
-            <Button onClick={restart}>Tekrar Oyna</Button>
-          </Card>
-        </div>
-      )}
     </div>
   );
 }
@@ -2423,6 +2295,162 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
 }
 
 // ============================================================
+// GAME: CONNECT FOUR (4 Sıra)
+// ============================================================
+const COLS = 7, ROWS = 6;
+function initC4Board() { return Array(ROWS * COLS).fill(null); }
+function checkC4Win(board, color) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      if (board[i] !== color) continue;
+      if (c + 3 < COLS && board[i+1] === color && board[i+2] === color && board[i+3] === color) return true;
+      if (r + 3 < ROWS && board[i+COLS] === color && board[i+2*COLS] === color && board[i+3*COLS] === color) return true;
+      if (r + 3 < ROWS && c + 3 < COLS && board[i+COLS+1] === color && board[i+2*COLS+2] === color && board[i+3*COLS+3] === color) return true;
+      if (r + 3 < ROWS && c - 3 >= 0 && board[i+COLS-1] === color && board[i+2*COLS-2] === color && board[i+3*COLS-3] === color) return true;
+    }
+  }
+  return false;
+}
+function dropC4(board, col, color) {
+  const nb = [...board];
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (!nb[r * COLS + col]) { nb[r * COLS + col] = color; return nb; }
+  }
+  return null;
+}
+function c4BotMove(board) {
+  const bot = 'yellow', human = 'red';
+  for (let c = 0; c < COLS; c++) { const nb = dropC4(board, c, bot); if (nb && checkC4Win(nb, bot)) return c; }
+  for (let c = 0; c < COLS; c++) { const nb = dropC4(board, c, human); if (nb && checkC4Win(nb, human)) return c; }
+  const center = [3,2,4,1,5,0,6];
+  for (const c of center) { const nb = dropC4(board, c, bot); if (nb) return c; }
+  return 0;
+}
+
+function ConnectFourGame({ game, onGameEnd, soundOn }) {
+  const [board, setBoard] = useState(initC4Board);
+  const [turn, setTurn] = useState('red');
+  const [winner, setWinner] = useState(null);
+  const [isDraw, setIsDraw] = useState(false);
+  const [mode, setMode] = useState(null); // null=pick, 'bot'=vs bot, '2p'=2 player
+  const [botThinking, setBotThinking] = useState(false);
+  const [hoverCol, setHoverCol] = useState(null);
+
+  const P1 = { color: 'red', label: '🔴 Sen', labelShort: '🔴' };
+  const P2bot = { color: 'yellow', label: '🤖 Bot', labelShort: '🤖' };
+  const P2local = { color: 'yellow', label: '🟡 Oyuncu 2', labelShort: '🟡' };
+  const P2 = mode === 'bot' ? P2bot : P2local;
+
+  const drop = (col) => {
+    if (!mode || winner || isDraw || botThinking) return;
+    if (mode === 'bot' && turn !== 'red') return;
+    const nb = dropC4(board, col, turn);
+    if (!nb) return;
+    if (soundOn) playSound('place');
+    if (checkC4Win(nb, turn)) {
+      setBoard(nb);
+      setWinner(turn);
+      onGameEnd(turn === 'red' ? 'win' : 'loss');
+      if (soundOn) playSound(turn === 'red' ? 'win' : 'lose');
+      return;
+    }
+    if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw'); return; }
+    const next = turn === 'red' ? 'yellow' : 'red';
+    setBoard(nb);
+    setTurn(next);
+    if (mode === 'bot' && next === 'yellow') {
+      setBotThinking(true);
+      setTimeout(() => {
+        const bc = c4BotMove(nb);
+        const nb2 = dropC4(nb, bc, 'yellow');
+        if (soundOn) playSound('place');
+        if (checkC4Win(nb2, 'yellow')) {
+          setBoard(nb2); setWinner('yellow');
+          onGameEnd('loss');
+          if (soundOn) playSound('lose');
+        } else if (nb2.every(Boolean)) {
+          setBoard(nb2); setIsDraw(true); onGameEnd('draw');
+        } else {
+          setBoard(nb2); setTurn('red');
+        }
+        setBotThinking(false);
+      }, 400);
+    }
+  };
+
+  const restart = () => {
+    setBoard(initC4Board()); setTurn('red'); setWinner(null); setIsDraw(false); setBotThinking(false); setHoverCol(null);
+  };
+
+  if (!mode) return (
+    <div style={{ maxWidth: 380, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 56, marginBottom: 12 }}>🔵🔴</div>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>4 Sıra</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 32, fontSize: 15 }}>4 taşı art arda diz, kazan!</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 260, margin: '0 auto' }}>
+        <button onClick={() => setMode('bot')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#E63946,#F4845F)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>🤖 Bota Karşı</button>
+        <button onClick={() => setMode('2p')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#7C3AED,#A78BFA)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>👥 2 Kişilik</button>
+      </div>
+    </div>
+  );
+
+  const CELL_COLOR = { red: '#E63946', yellow: '#F59E0B', null: null };
+  const isColFull = (col) => board[col] !== null;
+
+  return (
+    <div style={{ maxWidth: 400, margin: '0 auto', padding: '12px 8px', touchAction: 'manipulation' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '0 4px' }}>
+        <div>
+          <span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 20 }}>4 Sıra</span>
+          <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>{mode === 'bot' ? 'vs Bot' : '2 Kişi'}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {!winner && !isDraw && (
+            <div style={{ fontSize: 14, fontWeight: 600, color: turn === 'red' ? '#E63946' : '#F59E0B' }}>
+              {botThinking ? '🤖 Düşünüyor...' : turn === 'red' ? `${P1.label} sırasında` : `${P2.label} sırasında`}
+            </div>
+          )}
+          <button onClick={() => { restart(); setMode(null); }} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Menü</button>
+          <button onClick={restart} style={{ padding: '8px 14px', borderRadius: 10, border: 'none', background: '#E63946', color: '#FFF', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Yeni</button>
+        </div>
+      </div>
+
+      <div style={{ background: '#1D4ED8', borderRadius: 12, padding: 8, userSelect: 'none' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${COLS},1fr)`, gap: 4, marginBottom: 6 }}>
+          {Array(COLS).fill(0).map((_, c) => (
+            <button key={c} onClick={() => drop(c)} disabled={isColFull(c) || !!winner || isDraw || botThinking} style={{ height: 32, borderRadius: 8, border: 'none', background: hoverCol === c && !isColFull(c) ? (turn === 'red' ? 'rgba(229,57,70,0.5)' : 'rgba(245,158,11,0.5)') : 'rgba(255,255,255,0.15)', cursor: isColFull(c) || winner || isDraw || botThinking ? 'default' : 'pointer', transition: 'background 0.15s', color: '#FFF', fontSize: 16 }}
+              onMouseEnter={() => setHoverCol(c)} onMouseLeave={() => setHoverCol(null)}>
+              {hoverCol === c && !isColFull(c) && !winner && !isDraw && !botThinking ? (turn === 'red' ? '🔴' : '🟡') : '↓'}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${COLS},1fr)`, gridTemplateRows: `repeat(${ROWS},1fr)`, gap: 4 }}>
+          {board.map((cell, i) => (
+            <div key={i} style={{ aspectRatio: '1', borderRadius: '50%', background: cell ? CELL_COLOR[cell] : 'rgba(255,255,255,0.15)', border: '2px solid rgba(255,255,255,0.1)', transition: 'background 0.15s', boxShadow: cell ? '0 2px 6px rgba(0,0,0,0.3)' : 'none' }} />
+          ))}
+        </div>
+      </div>
+
+      {(winner || isDraw) && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: '32px 28px', textAlign: 'center', maxWidth: 300, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: 52, marginBottom: 8 }}>{isDraw ? '🤝' : winner === 'red' ? '🏆' : mode === 'bot' ? '🤖' : '🟡'}</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 6 }}>
+              {isDraw ? 'Berabere!' : winner === 'red' ? 'Kazandın!' : mode === 'bot' ? 'Bot Kazandı!' : 'Oyuncu 2 Kazandı!'}
+            </h2>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+              <button onClick={restart} style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: '#E63946', color: '#FFF', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>Tekrar</button>
+              <button onClick={() => { restart(); setMode(null); }} style={{ padding: '12px 20px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>Menü</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // CONSTANTS & HELPERS
 // ============================================================
 const GAMES = [
@@ -2436,13 +2464,14 @@ const GAMES = [
     bg: 'linear-gradient(135deg, #E63946 0%, #F4845F 100%)',
   },
   {
-    id: 'minesweeper',
-    name: 'Mayın Tarlası',
-    desc: 'Klasik Minesweeper',
-    icon: '💣',
-    players: 1,
-    color: '#457B9D',
-    bg: 'linear-gradient(135deg, #457B9D 0%, #48CAE4 100%)',
+    id: 'connectfour',
+    name: '4 Sıra',
+    desc: '4 taşı diz, kazanmak için yarış',
+    icon: '🔵',
+    players: 2,
+    local: true,
+    color: '#1D4ED8',
+    bg: 'linear-gradient(135deg, #1D4ED8 0%, #60A5FA 100%)',
   },
   {
     id: 'rps',
@@ -2452,6 +2481,15 @@ const GAMES = [
     players: 2,
     color: '#2A9D8F',
     bg: 'linear-gradient(135deg, #2A9D8F 0%, #76C893 100%)',
+  },
+  {
+    id: 'minesweeper',
+    name: 'Mayın Tarlası',
+    desc: 'Mayınları bulmadan alanı temizle',
+    icon: '💣',
+    players: 1,
+    color: '#457B9D',
+    bg: 'linear-gradient(135deg, #457B9D 0%, #48CAE4 100%)',
   },
   {
     id: 'memory',
@@ -2478,7 +2516,7 @@ const GAMES = [
     icon: '🔢',
     players: 1,
     color: '#F59563',
-    bg: 'linear-gradient(135deg, #F59563 0%, #F2B179 100%)',
+    bg: 'linear-gradient(135deg, #BBADA0 0%, #F59563 100%)',
   },
   {
     id: 'wordle',
@@ -2488,15 +2526,6 @@ const GAMES = [
     players: 1,
     color: '#538D4E',
     bg: 'linear-gradient(135deg, #538D4E 0%, #6AAF5E 100%)',
-  },
-  {
-    id: 'dart',
-    name: 'Dart',
-    desc: 'Hedefi vur, puan topla',
-    icon: '🎯',
-    players: 1,
-    color: '#E63946',
-    bg: 'linear-gradient(135deg, #E63946 0%, #FF6B6B 100%)',
   },
   {
     id: 'dama',
@@ -3601,13 +3630,12 @@ const FAKE_LB = {
     { name: 'CanTR', played: 14, wins: 9, avatar: 4 },
     { name: 'EceGamer', played: 12, wins: 7, avatar: 1 },
   ],
-  dart: [
-    { name: 'BurakXOX', played: 28, wins: 22, avatar: 2 },
-    { name: 'CanTR', played: 24, wins: 18, avatar: 4 },
-    { name: 'AhmetPro', played: 20, wins: 14, avatar: 0 },
-    { name: 'EmreK', played: 16, wins: 11, avatar: 0 },
-    { name: 'AsliBot', played: 14, wins: 8, avatar: 1 },
-    { name: 'ZeynepM', played: 10, wins: 5, avatar: 3 },
+  connectfour: [
+    { name: 'AlparslanK', played: 30, wins: 25, avatar: 0 },
+    { name: 'ZeynepM', played: 22, wins: 18, avatar: 3 },
+    { name: 'EmreK', played: 18, wins: 14, avatar: 2 },
+    { name: 'BurakXOX', played: 15, wins: 11, avatar: 1 },
+    { name: 'EceGamer', played: 12, wins: 8, avatar: 5 },
   ],
   dama: [
     { name: 'EmreK', played: 32, wins: 25, avatar: 0 },
@@ -4111,7 +4139,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: 16,
         }}
       >
@@ -5858,7 +5886,7 @@ export default function App() {
       snake: { played: 0, wins: 0, losses: 0 },
       '2048': { played: 0, wins: 0, losses: 0 },
       wordle: { played: 0, wins: 0, losses: 0 },
-      dart: { played: 0, wins: 0, losses: 0 },
+      connectfour: { played: 0, wins: 0, losses: 0 },
       dama: { played: 0, wins: 0, losses: 0 },
       sudoku: { played: 0, wins: 0, losses: 0 },
     },
@@ -5900,7 +5928,7 @@ export default function App() {
     const id = generateRoomId();
     setRoomId(id);
     setPlayers([user.name]);
-    setPage(game.players === 1 ? 'game' : 'room');
+    setPage(game.players === 1 || game.local ? 'game' : 'room');
   };
   const handleStartGame = () => {
     if (selectedGame.players > 1 && players.length < selectedGame.players)
@@ -6007,9 +6035,9 @@ export default function App() {
             soundOn={soundOn}
           />
         );
-      case 'dart':
+      case 'connectfour':
         return (
-          <DartGame
+          <ConnectFourGame
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
