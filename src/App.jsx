@@ -1062,6 +1062,11 @@ function MultiplayerLobby(props) {
     }
   }, [props.initialCode, sock.isRegistered, autoJoined, sock.roomData]);
 
+  // Auto-select game passed from main lobby
+  useEffect(function() {
+    if (props.initialGame) setSelectedMPGame(props.initialGame);
+  }, [props.initialGame]);
+
   // Fetch public rooms on mount + when not in a room
   useEffect(function() {
     if (!sock.roomData) {
@@ -2204,7 +2209,7 @@ function c4BotMove(board) {
   return 0;
 }
 
-function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps }) {
+function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const [board, setBoard] = useState(initC4Board);
   const [turn, setTurn] = useState('red');
   const [winner, setWinner] = useState(null);
@@ -2290,11 +2295,17 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps }) {
   if (!mode && !onlineProps) return (
     <div style={{ maxWidth: 380, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
       <div style={{ fontSize: 56, marginBottom: 12 }}>🔵🔴</div>
-      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>4 Sira</h2>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: 32, fontSize: 15 }}>4 tasi art arda diz, kazan!</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 260, margin: '0 auto' }}>
-        <button onClick={() => setMode('bot')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#E63946,#F4845F)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>Bot</button>
-        <button onClick={() => setMode('2p')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#7C3AED,#A78BFA)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>2 Kisilik</button>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>4 Sıra</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 28, fontSize: 15 }}>4 taşı art arda diz, kazan!</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 280, margin: '0 auto' }}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>
+            🌐 Çevrimiçi Oyna
+            <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 3 }}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <button onClick={() => setMode('bot')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#E63946,#F4845F)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>🤖 Bota Karşı</button>
+        <button onClick={() => setMode('2p')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#059669,#34D399)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
@@ -2368,7 +2379,7 @@ function checkGomokuWin(board, r, c, color) {
   }
   return false;
 }
-function GomokuGame({ onGameEnd, soundOn, onlineProps }) {
+function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const [board, setBoard] = useState(() => Array(GT_SIZE*GT_SIZE).fill(null));
   const [turn, setTurn] = useState('black');
   const [winner, setWinner] = useState(null);
@@ -2446,10 +2457,16 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps }) {
     <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:48,marginBottom:8}}>⚫⚪</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Beş Taş</h2>
-      <p style={{color:'var(--text-secondary)',marginBottom:28,fontSize:14}}>5 taşı art arda diz, kazan!</p>
-      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:240,margin:'0 auto'}}>
-        <button onClick={()=>setMode('bot')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#1A1A2E,#4B5563)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>🤖 Bota Karşı</button>
-        <button onClick={()=>setMode('2p')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#A78BFA)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>👥 2 Kişilik</button>
+      <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>5 taşı art arda diz, kazan!</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            🌐 Çevrimiçi Oyna
+            <div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <button onClick={()=>setMode('bot')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#1A1A2E,#4B5563)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🤖 Bota Karşı</button>
+        <button onClick={()=>setMode('2p')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
@@ -2490,7 +2507,8 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps }) {
 // ============================================================
 // GAME: TEPKİ YARIŞI
 // ============================================================
-function ReactionGame({ onGameEnd, soundOn, onlineProps }) {
+function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
+  const [mode, setMode] = useState(onlineProps ? 'local' : null);
   const [phase, setPhase] = useState('wait');
   const [scores, setScores] = useState([0,0]);
   const [round, setRound] = useState(0);
@@ -2498,6 +2516,17 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps }) {
   const [bgColor, setBgColor] = useState('#6B7280');
   const timerRef = useRef(null);
   const MAX_ROUNDS = 10;
+  if (!mode && !onlineProps) return (
+    <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:8}}>⚡</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Tepki Yarışı</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Ekrana kim daha hızlı basar?</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+        {onGoOnline && <button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#D97706,#FCD34D)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
 
   const startRound = useCallback(() => {
     setPhase('wait'); setLastWinner(null); setBgColor('#6B7280');
@@ -2582,13 +2611,25 @@ function genMathQ() {
   if(!opts.includes(ans))opts[0]=ans;
   return {q:`${a} ${op} ${b} = ?`,ans,opts};
 }
-function MathDuelGame({ onGameEnd, soundOn, onlineProps }) {
+function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
+  const [mode, setMode] = useState(onlineProps ? 'local' : null);
   const [scores, setScores] = useState([0,0]);
   const [round, setRound] = useState(0);
   const [q, setQ] = useState(genMathQ);
   const [answered, setAnswered] = useState(false);
   const [lastW, setLastW] = useState(null);
   const MAX=10;
+  if (!mode && !onlineProps) return (
+    <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:8}}>🧮</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Matematik Düellosu</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Soruları kim önce çözer?</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+        {onGoOnline && <button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#0369A1,#38BDF8)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
 
   const answer=(player,val)=>{
     if(answered)return;
@@ -2652,10 +2693,22 @@ function mkDeck(){
   for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]];}
   return d;
 }
-function CardBattleGame({ onGameEnd, soundOn, onlineProps }) {
+function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
+  const [mode,setMode]=useState(onlineProps?'local':null);
   const [deck]=useState(mkDeck);
   const [idx,setIdx]=useState(0);
   const [scores,setScores]=useState([0,0]);
+  if(!mode&&!onlineProps)return(
+    <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:8}}>🃏</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Kart Savaşı</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Yüksek kart kazanır!</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+        {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#C084FC)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
   const [rev,setRev]=useState(false);
   const [rw,setRw]=useState(null);
   const TOTAL=13;
@@ -2711,7 +2764,8 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps }) {
 // ============================================================
 // GAME: HAFIZA SAVAŞI (2-Player Memory)
 // ============================================================
-function MemoryBattleGame({ onGameEnd, soundOn, onlineProps }) {
+function MemoryBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
+  const [mode,setMode]=useState(onlineProps?'local':null);
   const EMOJIS=['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🥝','🍕','🌮','🎮','⚽'];
   const [cards]=useState(()=>{
     const pairs=[...EMOJIS,...EMOJIS].map((e,i)=>({id:i,emoji:e,flipped:false,matched:false}));
@@ -2723,6 +2777,18 @@ function MemoryBattleGame({ onGameEnd, soundOn, onlineProps }) {
   const [scores,setScores]=useState([0,0]);
   const [turn,setTurn]=useState(0);
   const [locked,setLocked]=useState(false);
+
+  if(!mode&&!onlineProps)return(
+    <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:8}}>🧠</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Hafıza Savaşı</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Eşleri bul, skoru kap!</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+        {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#BE185D,#F472B6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
 
   const flip=(i)=>{
     if(locked||cs[i].flipped||cs[i].matched||flipped.length>=2)return;
@@ -2796,12 +2862,24 @@ const RACE_WORDS=[
 ];
 function scrmbl(w){const a=[...w];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.join('');}
 
-function WordRaceGame({ onGameEnd, soundOn, onlineProps }) {
+function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
+  const [mode,setMode]=useState(onlineProps?'local':null);
   const [ri,setRi]=useState(0);
   const [scores,setScores]=useState([0,0]);
   const [inputs,setInputs]=useState(['','']);
   const [answered,setAnswered]=useState([false,false]);
   const [revealed,setRevealed]=useState(false);
+  if(!mode&&!onlineProps)return(
+    <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:8}}>🔤</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Kelime Yarışı</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Anagramı kim önce çözer?</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+        {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#065F46,#34D399)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
   const item=RACE_WORDS[ri%RACE_WORDS.length];
   const [scr]=useState(()=>scrmbl(item.word));
 
@@ -6315,7 +6393,12 @@ export default function App() {
     const id = generateRoomId();
     setRoomId(id);
     setPlayers([user.name]);
-    setPage(fullGame.players === 1 || fullGame.local ? 'game' : 'room');
+    setPage('game'); // All games now show their own mode selection screen
+  };
+  const handleGoOnline = (gameId) => {
+    const fullGame = GAMES.find(g => g.id === gameId);
+    if (fullGame) setSelectedGame(fullGame);
+    setPage('multiplayer');
   };
   const handleStartGame = () => {
     if (selectedGame.players > 1 && players.length < selectedGame.players)
@@ -6427,6 +6510,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('connectfour')}
           />
         );
       case 'dama':
@@ -6451,6 +6535,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('gomoku')}
           />
         );
       case 'reaction':
@@ -6459,6 +6544,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('reaction')}
           />
         );
       case 'mathduel':
@@ -6467,6 +6553,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('mathduel')}
           />
         );
       case 'cardbattle':
@@ -6475,6 +6562,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('cardbattle')}
           />
         );
       case 'memorybattle':
@@ -6483,6 +6571,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('memorybattle')}
           />
         );
       case 'wordrace':
@@ -6491,6 +6580,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('wordrace')}
           />
         );
       default:
@@ -6548,6 +6638,7 @@ export default function App() {
         {page === 'multiplayer' && (
           <MultiplayerLobby
             initialCode={roomId}
+            initialGame={selectedGame?.id}
             userName={user ? user.name : ''}
             onSelectGame={handleSelectGame}
           />
