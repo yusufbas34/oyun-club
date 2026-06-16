@@ -19,7 +19,13 @@ function useSocket(username) {
   var s5 = useState(null);
   var socketError = s5[0];
   var setSocketError = s5[1];
- 
+  var s6 = useState(null);
+  var lastGameMove = s6[0];
+  var setLastGameMove = s6[1];
+  var s7 = useState([]);
+  var publicRooms = s7[0];
+  var setPublicRooms = s7[1];
+
   useEffect(
     function () {
       if (!username) return;
@@ -183,6 +189,10 @@ function useSocket(username) {
               });
             });
           });
+
+          socket.on('game_move', function(data) {
+            setLastGameMove({ ...data, _ts: Date.now() });
+          });
         })
         .catch(function () {
           setSocketError('Socket.io yuklenemedi');
@@ -200,9 +210,9 @@ function useSocket(username) {
   );
 
   var createRoom = useCallback(
-    function (gameId) {
+    function (gameId, isPublic) {
       if (!socketRef.current || !isRegistered) return;
-      socketRef.current.emit('create_room', { gameId: gameId }, function (res) {
+      socketRef.current.emit('create_room', { gameId: gameId, isPublic: isPublic !== false }, function (res) {
         if (res && res.success) {
           setRoomData(res.room);
           setMessages([]);
@@ -299,6 +309,18 @@ function useSocket(username) {
     });
   }, []);
 
+  var sendGameMove = useCallback(function(data) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('game_move', data, function() {});
+  }, []);
+
+  var fetchPublicRooms = useCallback(function() {
+    fetch('https://oyun-club-backend-production.up.railway.app/api/rooms')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d && d.rooms) setPublicRooms(d.rooms); })
+      .catch(function() {});
+  }, []);
+
   return {
     isConnected: isConnected,
     isRegistered: isRegistered,
@@ -314,6 +336,10 @@ function useSocket(username) {
     sendRPSChoice: sendRPSChoice,
     restartGame: restartGame,
     setSocketError: setSocketError,
+    sendGameMove: sendGameMove,
+    lastGameMove: lastGameMove,
+    publicRooms: publicRooms,
+    fetchPublicRooms: fetchPublicRooms,
   };
 }
 
@@ -946,6 +972,49 @@ function MultiplayerRPS(props) {
 }
 
 // ============================================================
+// SHARE RESULT BUTTON
+// ============================================================
+function ShareResultButton({ winnerName, myName, gameName }) {
+  var didWin = winnerName === myName;
+  var text = didWin
+    ? 'Oyun Clubda ' + gameName + ' oyununu kazandim! Seninle oynamak icin: ' + window.location.origin
+    : 'Oyun Clubda ' + gameName + ' oynadim! Seninle oynamak icin: ' + window.location.origin;
+
+  function handleNativeShare() {
+    if (navigator.share) {
+      navigator.share({ title: 'Oyun Club', text: text, url: window.location.origin }).catch(function(){});
+    }
+  }
+
+  function handleTwitter() {
+    window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text), '_blank');
+  }
+
+  function handleWhatsApp() {
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
+      {navigator.share && (
+        <button onClick={handleNativeShare}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+          Paylas
+        </button>
+      )}
+      <button onClick={handleTwitter}
+        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#1DA1F2', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+        Twitter
+      </button>
+      <button onClick={handleWhatsApp}
+        style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#25D366', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+        WhatsApp
+      </button>
+    </div>
+  );
+}
+
+// ============================================================
 // MULTIPLAYER LOBBY
 // ============================================================
 var MP_GAMES = [
@@ -961,380 +1030,198 @@ var MP_GAMES = [
 ];
 
 function MultiplayerLobby(props) {
-  var initialCode = props && props.initialCode ? props.initialCode : "";
   var passedName = props && props.userName ? props.userName : "";
-  var s3 = useState(null);
-  var selectedMPGame = s3[0];
-  var setSelectedMPGame = s3[1];
-  var s4 = useState(initialCode);
-  var joinCode = s4[0];
-  var setJoinCode = s4[1];
-  var s5 = useState(passedName || "Oyuncu");
-  var username = s5[0];
-  var setUsername = s5[1];
-  var isNameSet = true;
+  var s1 = useState(null); var selectedMPGame = s1[0]; var setSelectedMPGame = s1[1];
+  var s2 = useState(''); var joinCode = s2[0]; var setJoinCode = s2[1];
+  var s3 = useState(passedName || "Oyuncu"); var username = s3[0];
+  var s4 = useState(false); var showPrivacyModal = s4[0]; var setShowPrivacyModal = s4[1];
+  var s5 = useState(false); var autoJoined = s5[0]; var setAutoJoined = s5[1];
+  var lastMoveRef = useRef(null);
 
   var sock = useSocket(username);
 
-  var s6 = useState(false);
-  var autoJoined = s6[0];
-  var setAutoJoined = s6[1];
-  useEffect(function () {
-    if (joinCode && sock.isRegistered && !autoJoined && !sock.roomData) {
+  // Auto-join from URL params
+  useEffect(function() {
+    if (props.initialCode && sock.isRegistered && !autoJoined && !sock.roomData) {
       setAutoJoined(true);
-      sock.joinRoom(joinCode);
+      sock.joinRoom(props.initialCode);
     }
-  }, [sock.isRegistered]);
+  }, [props.initialCode, sock.isRegistered, autoJoined, sock.roomData]);
 
+  // Fetch public rooms on mount + when not in a room
+  useEffect(function() {
+    if (!sock.roomData) {
+      sock.fetchPublicRooms();
+      var interval = setInterval(sock.fetchPublicRooms, 10000);
+      return function() { clearInterval(interval); };
+    }
+  }, [sock.roomData]);
+
+  function handleCreateRoom(isPublic) {
+    setShowPrivacyModal(false);
+    sock.createRoom(selectedMPGame, isPublic);
+  }
+
+  function handleJoinPublicRoom(roomId) {
+    sock.joinRoom(roomId);
+  }
+
+  function handleCopyLink() {
+    if (!sock.roomData) return;
+    var link = window.location.origin + '/?room=' + sock.roomData.id;
+    navigator.clipboard.writeText(link).catch(function() {});
+  }
+
+  var gameNames = {
+    xox: 'XOX', rps: 'Tas Kagit Makas', connectfour: '4 Sira', gomoku: 'Bes Tas',
+    reaction: 'Tepki Yarisi', mathduel: 'Matematik Duellosu', cardbattle: 'Kart Savasi',
+    memorybattle: 'Hafiza Savasi', wordrace: 'Kelime Yarisi'
+  };
+  var gameIcons = {
+    xox: '❌⭕', rps: '✊✋✌️', connectfour: '🔵', gomoku: '⚫',
+    reaction: '⚡', mathduel: '🧮', cardbattle: '🃏', memorybattle: '🧠', wordrace: '🔤'
+  };
+
+  // --- ROOM VIEW ---
   if (sock.roomData) {
     var players = sock.roomData.players || [];
     var maxP = sock.roomData.maxPlayers || 2;
     var canStart = players.length >= maxP;
     var isHost = players[0] && players[0].name === username;
+    var myIndex = players.findIndex(function(p) { return p.name === username; });
+    var currentGame = sock.roomData.gameId;
+    var onlineProps = myIndex >= 0 ? {
+      myIndex: myIndex,
+      opponentName: (players.find(function(p) { return p.name !== username; }) || {}).name || 'Rakip',
+      onMove: sock.sendGameMove,
+      remoteMove: sock.lastGameMove,
+    } : null;
 
     return (
-      <div
-        style={{
-          maxWidth: 800,
-          margin: '0 auto',
-          padding: 24,
-          fontFamily: "'DM Sans', sans-serif",
-          color: 'var(--text)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            borderRadius: 10,
-            background: 'rgba(74,222,128,0.1)',
-            border: '1px solid rgba(74,222,128,0.3)',
-            fontSize: 13,
-            marginBottom: 20,
-          }}
-        >
-          <div
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: '#4ade80',
-            }}
-          />
-          <span>Bagli — {username}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 300 }}>
-            <div
-              style={{
-                padding: 20,
-                borderRadius: 14,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                marginBottom: 20,
-                textAlign: 'center',
-              }}
-            >
-              <div style={{ fontSize: 13, opacity: 0.6, marginBottom: 4 }}>
-                Oda Kodu
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
+        {/* Room header */}
+        <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, marginBottom: 16, border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "'Sora', sans-serif" }}>
+                {gameIcons[currentGame] || '🎮'} {gameNames[currentGame] || currentGame}
               </div>
-              <div
-                style={{
-                  fontFamily: "'Sora', sans-serif",
-                  fontSize: 32,
-                  fontWeight: 800,
-                  letterSpacing: 6,
-                  color: '#E63946',
-                  padding: '10px 0',
-                  userSelect: 'all',
-                }}
-              >
-                {sock.roomData.id}
-              </div>
-              <button
-                onClick={() => {
-                  const link = window.location.origin + '/?room=' + sock.roomData.id;
-                  if (navigator.clipboard) navigator.clipboard.writeText(link);
-                  alert('Link kopyalandı! Arkadaşına gönder:\n' + link);
-                }}
-                style={{ marginTop: 8, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#E63946', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-              >
-                🔗 Davet Linki Kopyala
-              </button>
-              <div style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>
-                Oyun:{' '}
-                {sock.roomData.gameId === 'xox'
-                  ? 'XOX'
-                  : sock.roomData.gameId === 'rps'
-                  ? 'Tas Kagit Makas'
-                  : sock.roomData.gameId}
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                Masa Kodu: <strong style={{ letterSpacing: 2, fontFamily: 'monospace', fontSize: 16 }}>{sock.roomData.id}</strong>
               </div>
             </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                Oyuncular ({players.length}/{maxP})
-              </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {players.map(function (p, i) {
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: 20,
-                        background: 'rgba(74,222,128,0.15)',
-                        border: '1px solid rgba(74,222,128,0.3)',
-                        fontSize: 13,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {p.name === username ? 'Sen' : p.name}
-                      {i === 0 ? ' (Host)' : ''}
-                    </div>
-                  );
-                })}
-                {players.length < maxP && (
-                  <div
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 20,
-                      background: 'var(--surface-hover)',
-                      border: '1px solid var(--border)',
-                      fontSize: 13,
-                    }}
-                  >
-                    Rakip bekleniyor...
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleCopyLink}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                Davet Linki
+              </button>
+              <button onClick={sock.leaveRoom}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                Cik
+              </button>
+            </div>
+          </div>
+          {/* Players */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {players.map(function(p, i) {
+              return (
+                <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: i === myIndex ? 'rgba(99,102,241,0.1)' : 'var(--surface-hover)', border: '1px solid ' + (i === myIndex ? '#6366f1' : 'var(--border)'), borderRadius: 10, padding: '8px 14px' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: i === 0 ? '#E63946' : '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13 }}>{p.name ? p.name[0].toUpperCase() : '?'}</div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}{i === myIndex ? ' (Sen)' : ''}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{i === 0 ? 'Host' : 'Oyuncu 2'}</div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {sock.roomData.state === 'waiting' && canStart && isHost && (
-              <button
-                onClick={sock.startGame}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: '#2A9D8F',
-                  color: '#fff',
-                  fontWeight: 600,
-                  fontSize: 15,
-                  cursor: 'pointer',
-                  fontFamily: "'DM Sans', sans-serif",
-                  marginBottom: 12,
-                  width: '100%',
-                }}
-              >
-                Oyunu Baslat
-              </button>
-            )}
-            {sock.roomData.state === 'waiting' && canStart && !isHost && (
-              <p
-                style={{
-                  fontSize: 13,
-                  color: 'var(--text-secondary)',
-                  marginBottom: 12,
-                }}
-              >
-                Host oyunu baslatmasini bekliyor...
-              </p>
-            )}
-            {sock.roomData.state === 'waiting' && !canStart && (
-              <p
-                style={{
-                  fontSize: 13,
-                  color: 'var(--text-secondary)',
-                  marginBottom: 12,
-                }}
-              >
-                Rakip bekleniyor...
-              </p>
-            )}
-
-            {sock.roomData.state === 'playing' &&
-              sock.roomData.gameId === 'xox' && (
-                <MultiplayerXOX
-                  gameState={sock.roomData.gameState}
-                  players={players}
-                  username={username}
-                  onMove={sock.sendXOXMove}
-                />
-              )}
-
-            {sock.roomData.state === 'playing' &&
-              sock.roomData.gameId === 'rps' && (
-                <MultiplayerRPS
-                  players={players}
-                  username={username}
-                  onChoice={sock.sendRPSChoice}
-                  rpsReveal={sock.roomData.rpsReveal}
-                  rpsScores={sock.roomData.rpsScores}
-                  rpsRound={sock.roomData.rpsRound}
-                  gameState={sock.roomData.gameState}
-                />
-              )}
-
-            {sock.roomData.state === 'finished' && (
-              <div
-                style={{
-                  padding: 20,
-                  borderRadius: 14,
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  marginBottom: 12,
-                  textAlign: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 24,
-                    fontWeight: 800,
-                    fontFamily: "'Sora', sans-serif",
-                    marginBottom: 4,
-                  }}
-                >
-                  {sock.roomData.gameResult &&
-                  sock.roomData.gameResult.winnerName === username
-                    ? 'Kazandin! 🎉'
-                    : sock.roomData.gameResult &&
-                      sock.roomData.gameResult.winner === 'draw'
-                    ? 'Berabere! 🤝'
-                    : sock.roomData.gameResult &&
-                      sock.roomData.gameResult.winnerName
-                    ? sock.roomData.gameResult.winnerName + ' Kazandi!'
-                    : 'Oyun Bitti!'}
                 </div>
-                {sock.roomData.gameState &&
-                  sock.roomData.gameId === 'xox' &&
-                  sock.roomData.gameState.board && (
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: 4,
-                        maxWidth: 150,
-                        margin: '8px auto',
-                      }}
-                    >
-                      {sock.roomData.gameState.board.map(function (cell, i) {
-                        var isWin =
-                          sock.roomData.gameState.winLine &&
-                          sock.roomData.gameState.winLine.indexOf(i) !== -1;
-                        return (
-                          <div
-                            key={i}
-                            style={{
-                              aspectRatio: '1',
-                              borderRadius: 4,
-                              border: isWin
-                                ? '2px solid #E63946'
-                                : '1px solid var(--border)',
-                              background: isWin
-                                ? cell === 'X'
-                                  ? '#FEE2E2'
-                                  : '#DBEAFE'
-                                : 'var(--surface-hover)',
-                              fontSize: 16,
-                              fontWeight: 800,
-                              color: cell === 'X' ? '#E63946' : '#457B9D',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            {cell}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                {isHost && players.length >= maxP && (
-                  <button
-                    onClick={sock.restartGame}
-                    style={{
-                      padding: '10px 24px',
-                      borderRadius: 10,
-                      border: 'none',
-                      background: '#2A9D8F',
-                      color: '#fff',
-                      fontWeight: 600,
-                      fontSize: 14,
-                      cursor: 'pointer',
-                      fontFamily: "'DM Sans', sans-serif",
-                      marginTop: 8,
-                    }}
-                  >
-                    Tekrar Oyna
-                  </button>
-                )}
-                {isHost && players.length < maxP && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-secondary)',
-                      marginTop: 8,
-                    }}
-                  >
-                    Tekrar oynamak icin rakip gerekli
-                  </p>
-                )}
-                {!isHost && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-secondary)',
-                      marginTop: 8,
-                    }}
-                  >
-                    Host yeni oyun baslatabilir
-                  </p>
-                )}
+              );
+            })}
+            {players.length < maxP && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-hover)', border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 14px', opacity: 0.6 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>?</div>
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Rakip bekleniyor...</div>
               </div>
             )}
-
-            <button
-              onClick={sock.leaveRoom}
-              style={{
-                padding: '10px 24px',
-                borderRadius: 10,
-                border: 'none',
-                background: '#FEE2E2',
-                color: '#DC2626',
-                fontWeight: 600,
-                fontSize: 14,
-                cursor: 'pointer',
-                fontFamily: "'DM Sans', sans-serif",
-                marginTop: 8,
-              }}
-            >
-              Masadan Ayril
-            </button>
-          </div>
-          <div style={{ flex: '0 0 360px' }}>
-            <ChatPanel
-              messages={sock.messages}
-              onSend={sock.sendMessage}
-              currentUser={username}
-              isConnected={sock.isRegistered}
-              playerCount={players.length}
-            />
           </div>
         </div>
+
+        {/* Start button / waiting */}
+        {sock.roomData.state === 'waiting' && canStart && isHost && (
+          <button onClick={sock.startGame}
+            style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #059669, #34D399)', color: '#fff', fontWeight: 700, fontSize: 16, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", marginBottom: 16 }}>
+            Oyunu Baslat
+          </button>
+        )}
+        {sock.roomData.state === 'waiting' && !canStart && (
+          <div style={{ textAlign: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 12, marginBottom: 16, border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 24 }}>⏳</div>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Rakip bekleniyor... Daveti kopyala ve arkadasina gonder!</div>
+          </div>
+        )}
+        {sock.roomData.state === 'waiting' && canStart && !isHost && (
+          <div style={{ textAlign: 'center', padding: 12, fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+            Host oyunu baslatmasini bekleyin...
+          </div>
+        )}
+
+        {/* Game area */}
+        {sock.roomData.state === 'playing' && currentGame === 'xox' && (
+          <MultiplayerXOX gameState={sock.roomData.gameState} players={players} username={username} onMove={sock.sendXOXMove} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'rps' && (
+          <MultiplayerRPS players={players} username={username} onChoice={sock.sendRPSChoice} rpsReveal={sock.roomData.rpsReveal} rpsScores={sock.roomData.rpsScores} rpsRound={sock.roomData.rpsRound} gameState={sock.roomData.gameState} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'gomoku' && onlineProps && (
+          <GomokuGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'connectfour' && onlineProps && (
+          <ConnectFourGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'cardbattle' && onlineProps && (
+          <CardBattleGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'memorybattle' && onlineProps && (
+          <MemoryBattleGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'mathduel' && onlineProps && (
+          <MathDuelGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'reaction' && onlineProps && (
+          <ReactionGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'wordrace' && onlineProps && (
+          <WordRaceGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+
+        {/* Game finished */}
+        {sock.roomData.state === 'finished' && (
+          <div style={{ padding: 24, borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>
+              {sock.roomData.gameResult && sock.roomData.gameResult.winnerName === username ? '🏆' :
+               sock.roomData.gameResult && sock.roomData.gameResult.winner === 'draw' ? '🤝' : '😔'}
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Sora', sans-serif", marginBottom: 8 }}>
+              {sock.roomData.gameResult && sock.roomData.gameResult.winnerName === username ? 'Kazandin! Tebrikler!' :
+               sock.roomData.gameResult && sock.roomData.gameResult.winner === 'draw' ? 'Berabere!' :
+               sock.roomData.gameResult && sock.roomData.gameResult.winnerName ? sock.roomData.gameResult.winnerName + ' kazandi!' : 'Oyun Bitti!'}
+            </div>
+            <ShareResultButton
+              winnerName={sock.roomData.gameResult && sock.roomData.gameResult.winnerName}
+              myName={username}
+              gameName={gameNames[currentGame] || currentGame}
+            />
+            {isHost && canStart && (
+              <button onClick={sock.restartGame}
+                style={{ marginTop: 12, padding: '10px 24px', borderRadius: 10, border: 'none', background: '#2A9D8F', color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                Tekrar Oyna
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Chat */}
+        <ChatPanel messages={sock.messages} onSend={sock.sendMessage} currentUser={username} isConnected={sock.isRegistered} playerCount={players.length} />
+
         {sock.socketError && (
-          <div
-            style={{
-              padding: '10px 16px',
-              borderRadius: 10,
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              color: '#fca5a5',
-              fontSize: 13,
-              marginTop: 16,
-            }}
-          >
+          <div style={{ padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 13, marginTop: 12 }}>
             {sock.socketError}
           </div>
         )}
@@ -1342,195 +1229,118 @@ function MultiplayerLobby(props) {
     );
   }
 
+  // --- LOBBY VIEW ---
   return (
-    <div
-      style={{
-        maxWidth: 800,
-        margin: '0 auto',
-        padding: 24,
-        fontFamily: "'DM Sans', sans-serif",
-        color: 'var(--text)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 16px',
-          borderRadius: 10,
-          background: sock.isRegistered
-            ? 'rgba(74,222,128,0.1)'
-            : 'rgba(239,68,68,0.1)',
-          border:
-            '1px solid ' +
-            (sock.isRegistered
-              ? 'rgba(74,222,128,0.3)'
-              : 'rgba(239,68,68,0.3)'),
-          fontSize: 13,
-          marginBottom: 20,
-        }}
-      >
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: sock.isRegistered ? '#4ade80' : '#ef4444',
-          }}
-        />
-        <span>
-          {sock.isRegistered ? 'Bagli — ' + username : 'Baglaniliyor...'}
-        </span>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
+      {/* Connection status */}
+      <div style={{ padding: '10px 16px', borderRadius: 10, background: sock.isConnected ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: '1px solid ' + (sock.isConnected ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'), color: sock.isConnected ? '#16a34a' : '#ef4444', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: sock.isConnected ? '#16a34a' : '#ef4444', display: 'inline-block' }} />
+        {sock.isConnected ? 'Sunucuya baglandi' : 'Baglaniliyor... (10-20 saniye surebilir)'}
+        {!sock.isConnected && (
+          <button onClick={function() { window.location.reload(); }} style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, border: 'none', background: 'rgba(239,68,68,0.2)', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}>
+            Yenile
+          </button>
+        )}
       </div>
-      <div style={{ marginBottom: 24 }}>
-        <h2
-          style={{
-            fontFamily: "'Sora', sans-serif",
-            fontSize: 18,
-            fontWeight: 700,
-            marginBottom: 12,
-          }}
-        >
-          Oyun Sec
-        </h2>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {MP_GAMES.map(function (g) {
-            return (
-              <div
-                key={g.id}
-                onClick={function () {
-                  setSelectedMPGame(g.id);
-                }}
-                style={{
-                  padding: '14px 20px',
-                  borderRadius: 12,
-                  border:
-                    '2px solid ' +
-                    (selectedMPGame === g.id ? '#6366f1' : 'var(--border)'),
-                  background:
-                    selectedMPGame === g.id
-                      ? 'rgba(99,102,241,0.15)'
-                      : 'var(--surface)',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  minWidth: 140,
-                }}
-              >
-                <div style={{ fontSize: 24, marginBottom: 4 }}>{g.icon}</div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{g.name}</div>
-                <div style={{ fontSize: 11, opacity: 0.5 }}>
-                  {g.players} oyuncu
+
+      {/* Public rooms */}
+      {sock.publicRooms && sock.publicRooms.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+            Acik Masalar
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sock.publicRooms.map(function(room) {
+              return (
+                <div key={room.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{gameIcons[room.gameId] || '🎮'} {room.gameName}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{room.hostName} · {room.players}/{room.maxPlayers} oyuncu</div>
+                  </div>
+                  <button onClick={function() { handleJoinPublicRoom(room.id); }}
+                    disabled={!sock.isRegistered || room.players >= room.maxPlayers}
+                    style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: room.players < room.maxPlayers ? '#6366f1' : '#ccc', color: '#fff', fontWeight: 600, fontSize: 13, cursor: room.players < room.maxPlayers ? 'pointer' : 'not-allowed', fontFamily: "'DM Sans', sans-serif" }}>
+                    {room.players >= room.maxPlayers ? 'Dolu' : 'Katil'}
+                  </button>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Game selection */}
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Masa Olustur</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginBottom: 16 }}>
+          {MP_GAMES.map(function(g) {
+            return (
+              <div key={g.id} onClick={function() { setSelectedMPGame(g.id); }}
+                style={{ padding: '14px 10px', borderRadius: 12, border: '2px solid ' + (selectedMPGame === g.id ? '#6366f1' : 'var(--border)'), background: selectedMPGame === g.id ? 'rgba(99,102,241,0.12)' : 'var(--surface)', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
+                <div style={{ fontSize: 28, marginBottom: 6 }}>{g.icon}</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{g.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>2 oyuncu</div>
               </div>
             );
           })}
         </div>
-        {selectedMPGame && (function() {
-          var selGame = MP_GAMES.find(function(g){ return g.id === selectedMPGame; });
-          if (selGame && selGame.local) {
-            return (
-              <button
-                onClick={function() {
-                  if (props.onSelectGame) {
-                    var fullGame = { id: selGame.id, name: selGame.name, icon: selGame.icon, players: 2, local: true, color: '#1D4ED8', bg: 'linear-gradient(135deg,#1D4ED8,#60A5FA)', desc: '' };
-                    props.onSelectGame(fullGame);
-                  }
-                }}
-                style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, border: 'none', background: '#059669', color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-              >
-                ▶ Oyna (Yerel 2 Kişi)
-              </button>
-            );
-          }
-          return (
-            <button
-              onClick={function () {
-                sock.setSocketError(null);
-                sock.createRoom(selectedMPGame);
-              }}
-              disabled={!sock.isRegistered}
-              style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 14, cursor: sock.isRegistered ? 'pointer' : 'not-allowed', opacity: sock.isRegistered ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif" }}
-            >
-              Masa Olustur
-            </button>
-          );
-        })()}
+        {selectedMPGame && (
+          <button
+            onClick={function() { setShowPrivacyModal(true); }}
+            disabled={!sock.isRegistered}
+            style={{ padding: '12px 28px', borderRadius: 10, border: 'none', background: sock.isRegistered ? 'var(--accent)' : '#ccc', color: '#fff', fontWeight: 700, fontSize: 15, cursor: sock.isRegistered ? 'pointer' : 'not-allowed', fontFamily: "'DM Sans', sans-serif" }}>
+            Masa Olustur
+          </button>
+        )}
       </div>
-      <div style={{ marginBottom: 24 }}>
-        <h2
-          style={{
-            fontFamily: "'Sora', sans-serif",
-            fontSize: 18,
-            fontWeight: 700,
-            marginBottom: 12,
-          }}
-        >
-          Masaya Katil
-        </h2>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+
+      {/* Join by code */}
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Koda ile Katil</h2>
+        <div style={{ display: 'flex', gap: 10 }}>
           <input
-            style={{
-              padding: '10px 16px',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              fontSize: 16,
-              fontFamily: 'monospace',
-              letterSpacing: 4,
-              textTransform: 'uppercase',
-              width: 180,
-              textAlign: 'center',
-              outline: 'none',
-            }}
-            placeholder="ABCD"
-            value={joinCode}
-            onChange={function (e) {
-              setJoinCode(e.target.value.toUpperCase().slice(0, 6));
-            }}
-            onKeyDown={function (e) {
-              if (e.key === 'Enter' && joinCode.length >= 4)
-                sock.joinRoom(joinCode);
-            }}
+            value={joinCode} onChange={function(e) { setJoinCode(e.target.value.toUpperCase()); }}
+            placeholder="Masa kodu (AB1234)"
+            style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 15, fontFamily: 'monospace', letterSpacing: 2, outline: 'none' }}
           />
           <button
-            onClick={function () {
-              sock.joinRoom(joinCode);
-            }}
-            disabled={joinCode.length < 4 || !sock.isRegistered}
-            style={{
-              padding: '10px 24px',
-              borderRadius: 10,
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontWeight: 600,
-              fontSize: 14,
-              cursor:
-                joinCode.length >= 4 && sock.isRegistered
-                  ? 'pointer'
-                  : 'not-allowed',
-              opacity: joinCode.length >= 4 && sock.isRegistered ? 1 : 0.5,
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
+            onClick={function() { if (joinCode.trim()) sock.joinRoom(joinCode.trim()); }}
+            disabled={!sock.isRegistered || !joinCode.trim()}
+            style={{ padding: '12px 24px', borderRadius: 10, border: 'none', background: sock.isRegistered && joinCode.trim() ? '#059669' : '#ccc', color: '#fff', fontWeight: 700, fontSize: 15, cursor: sock.isRegistered && joinCode.trim() ? 'pointer' : 'not-allowed', fontFamily: "'DM Sans', sans-serif" }}>
             Katil
           </button>
         </div>
       </div>
+
       {sock.socketError && (
-        <div
-          style={{
-            padding: '10px 16px',
-            borderRadius: 10,
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            color: '#fca5a5',
-            fontSize: 13,
-          }}
-        >
+        <div style={{ padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 13 }}>
           {sock.socketError}
+        </div>
+      )}
+
+      {/* Privacy Modal */}
+      {showPrivacyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 20, padding: 28, maxWidth: 380, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: "'Sora', sans-serif", marginBottom: 8 }}>
+              {gameIcons[selectedMPGame]} {gameNames[selectedMPGame]}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>Masani nasil acmak istersin?</div>
+            <button onClick={function() { handleCreateRoom(true); }}
+              style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
+              Herkese Acik
+              <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Ana sayfada gorunur, herkes katilabilir</div>
+            </button>
+            <button onClick={function() { handleCreateRoom(false); }}
+              style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #374151, #6B7280)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
+              Gizli (Sadece Davetli)
+              <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>Link veya kod ile katilim</div>
+            </button>
+            <button onClick={function() { setShowPrivacyModal(false); }}
+              style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}>
+              Iptal
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -2351,14 +2161,30 @@ function c4BotMove(board) {
   return 0;
 }
 
-function ConnectFourGame({ game, onGameEnd, soundOn }) {
+function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps }) {
   const [board, setBoard] = useState(initC4Board);
   const [turn, setTurn] = useState('red');
   const [winner, setWinner] = useState(null);
   const [isDraw, setIsDraw] = useState(false);
-  const [mode, setMode] = useState(null); // null=pick, 'bot'=vs bot, '2p'=2 player
+  const [mode, setMode] = useState(onlineProps ? 'online' : null);
   const [botThinking, setBotThinking] = useState(false);
   const [hoverCol, setHoverCol] = useState(null);
+
+  // Online: apply remote moves
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'drop') {
+      setBoard(function(prev) {
+        var nb = dropC4(prev, mv.col, mv.color);
+        if (!nb) return prev;
+        if (checkC4Win(nb, mv.color)) { setWinner(mv.color); }
+        else if (nb.every(Boolean)) { setIsDraw(true); }
+        else { setTurn(mv.color === 'red' ? 'yellow' : 'red'); }
+        return nb;
+      });
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
 
   const P1 = { color: 'red', label: '🔴 Sen', labelShort: '🔴' };
   const P2bot = { color: 'yellow', label: '🤖 Bot', labelShort: '🤖' };
@@ -2366,6 +2192,18 @@ function ConnectFourGame({ game, onGameEnd, soundOn }) {
   const P2 = mode === 'bot' ? P2bot : P2local;
 
   const drop = (col) => {
+    if (onlineProps) {
+      var myColor = onlineProps.myIndex === 0 ? 'red' : 'yellow';
+      if (winner || isDraw || turn !== myColor) return;
+      const nb = dropC4(board, col, myColor);
+      if (!nb) return;
+      if (soundOn) playSound('place');
+      if (checkC4Win(nb, myColor)) { setBoard(nb); setWinner(myColor); onGameEnd(myColor === 'red' ? 'win' : 'loss'); if (soundOn) playSound('win'); }
+      else if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw'); }
+      else { setBoard(nb); setTurn(myColor === 'red' ? 'yellow' : 'red'); }
+      onlineProps.onMove({ type: 'drop', col: col, color: myColor, _ts: Date.now() });
+      return;
+    }
     if (!mode || winner || isDraw || botThinking) return;
     if (mode === 'bot' && turn !== 'red') return;
     const nb = dropC4(board, col, turn);
@@ -2406,14 +2244,14 @@ function ConnectFourGame({ game, onGameEnd, soundOn }) {
     setBoard(initC4Board()); setTurn('red'); setWinner(null); setIsDraw(false); setBotThinking(false); setHoverCol(null);
   };
 
-  if (!mode) return (
+  if (!mode && !onlineProps) return (
     <div style={{ maxWidth: 380, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
       <div style={{ fontSize: 56, marginBottom: 12 }}>🔵🔴</div>
-      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>4 Sıra</h2>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: 32, fontSize: 15 }}>4 taşı art arda diz, kazan!</p>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>4 Sira</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 32, fontSize: 15 }}>4 tasi art arda diz, kazan!</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 260, margin: '0 auto' }}>
-        <button onClick={() => setMode('bot')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#E63946,#F4845F)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>🤖 Bota Karşı</button>
-        <button onClick={() => setMode('2p')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#7C3AED,#A78BFA)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>👥 2 Kişilik</button>
+        <button onClick={() => setMode('bot')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#E63946,#F4845F)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>Bot</button>
+        <button onClick={() => setMode('2p')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#7C3AED,#A78BFA)', color: '#FFF', fontSize: 17, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>2 Kisilik</button>
       </div>
     </div>
   );
@@ -2487,15 +2325,52 @@ function checkGomokuWin(board, r, c, color) {
   }
   return false;
 }
-function GomokuGame({ onGameEnd, soundOn }) {
+function GomokuGame({ onGameEnd, soundOn, onlineProps }) {
   const [board, setBoard] = useState(() => Array(GT_SIZE*GT_SIZE).fill(null));
   const [turn, setTurn] = useState('black');
   const [winner, setWinner] = useState(null);
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState(onlineProps ? 'online' : null);
   const [botThinking, setBotThinking] = useState(false);
   const [lastMove, setLastMove] = useState(null);
 
+  // Online: apply remote moves
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'place' && mv.senderId && mv.senderId !== (onlineProps.myIndex === 0 ? 'p0' : 'p1')) {
+      setBoard(function(prev) {
+        if (prev[mv.idx]) return prev;
+        var nb = [...prev]; nb[mv.idx] = mv.color;
+        var r = Math.floor(mv.idx/GT_SIZE), c = mv.idx%GT_SIZE;
+        if (checkGomokuWin(nb, r, c, mv.color)) { setWinner(mv.color); }
+        setTurn(mv.color === 'black' ? 'white' : 'black');
+        setLastMove(mv.idx);
+        return nb;
+      });
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
+
   const place = (idx) => {
+    var isOnline = !!onlineProps;
+    if (isOnline) {
+      // In online mode: myIndex 0 = black, myIndex 1 = white
+      var myColor = onlineProps.myIndex === 0 ? 'black' : 'white';
+      if (board[idx] || winner || turn !== myColor) return;
+      const nb = [...board]; nb[idx] = myColor;
+      const r = Math.floor(idx/GT_SIZE), c = idx%GT_SIZE;
+      if (soundOn) playSound('place');
+      if (checkGomokuWin(nb, r, c, myColor)) {
+        setBoard(nb); setWinner(myColor); setLastMove(idx);
+        onGameEnd(myColor === 'black' ? 'win' : 'loss');
+        if (soundOn) playSound('win');
+      } else if (nb.every(Boolean)) {
+        setBoard(nb); setWinner('draw'); onGameEnd('draw');
+      } else {
+        setBoard(nb); setTurn(myColor === 'black' ? 'white' : 'black'); setLastMove(idx);
+      }
+      onlineProps.onMove({ type: 'place', idx: idx, color: myColor, _ts: Date.now() });
+      return;
+    }
     if (!mode || board[idx] || winner || botThinking) return;
     if (mode === 'bot' && turn === 'white') return;
     const nb = [...board]; nb[idx] = turn;
@@ -2524,7 +2399,7 @@ function GomokuGame({ onGameEnd, soundOn }) {
     }
   };
   const restart = () => { setBoard(Array(GT_SIZE*GT_SIZE).fill(null)); setTurn('black'); setWinner(null); setBotThinking(false); setLastMove(null); };
-  if (!mode) return (
+  if (!mode && !onlineProps) return (
     <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:48,marginBottom:8}}>⚫⚪</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Beş Taş</h2>
@@ -2572,7 +2447,7 @@ function GomokuGame({ onGameEnd, soundOn }) {
 // ============================================================
 // GAME: TEPKİ YARIŞI
 // ============================================================
-function ReactionGame({ onGameEnd, soundOn }) {
+function ReactionGame({ onGameEnd, soundOn, onlineProps }) {
   const [phase, setPhase] = useState('wait');
   const [scores, setScores] = useState([0,0]);
   const [round, setRound] = useState(0);
@@ -2664,7 +2539,7 @@ function genMathQ() {
   if(!opts.includes(ans))opts[0]=ans;
   return {q:`${a} ${op} ${b} = ?`,ans,opts};
 }
-function MathDuelGame({ onGameEnd, soundOn }) {
+function MathDuelGame({ onGameEnd, soundOn, onlineProps }) {
   const [scores, setScores] = useState([0,0]);
   const [round, setRound] = useState(0);
   const [q, setQ] = useState(genMathQ);
@@ -2734,7 +2609,7 @@ function mkDeck(){
   for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]];}
   return d;
 }
-function CardBattleGame({ onGameEnd, soundOn }) {
+function CardBattleGame({ onGameEnd, soundOn, onlineProps }) {
   const [deck]=useState(mkDeck);
   const [idx,setIdx]=useState(0);
   const [scores,setScores]=useState([0,0]);
@@ -2793,7 +2668,7 @@ function CardBattleGame({ onGameEnd, soundOn }) {
 // ============================================================
 // GAME: HAFIZA SAVAŞI (2-Player Memory)
 // ============================================================
-function MemoryBattleGame({ onGameEnd, soundOn }) {
+function MemoryBattleGame({ onGameEnd, soundOn, onlineProps }) {
   const EMOJIS=['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🥝','🍕','🌮','🎮','⚽'];
   const [cards]=useState(()=>{
     const pairs=[...EMOJIS,...EMOJIS].map((e,i)=>({id:i,emoji:e,flipped:false,matched:false}));
@@ -2878,7 +2753,7 @@ const RACE_WORDS=[
 ];
 function scrmbl(w){const a=[...w];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.join('');}
 
-function WordRaceGame({ onGameEnd, soundOn }) {
+function WordRaceGame({ onGameEnd, soundOn, onlineProps }) {
   const [ri,setRi]=useState(0);
   const [scores,setScores]=useState([0,0]);
   const [inputs,setInputs]=useState(['','']);
