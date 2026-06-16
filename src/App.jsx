@@ -4875,24 +4875,18 @@ const RoomLobby = ({ game, roomId, players, onStart, onCopyLink }) => (
 // ============================================================
 // XOX GAME
 // ============================================================
-const XOXGame = ({ game, players, onGameEnd, soundOn }) => {
+const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
+  const [mode, setMode] = useState(null); // null | 'bot' | '2p'
   const [board, setBoard] = useState(Array(9).fill(null));
   const [isX, setIsX] = useState(true);
   const [winner, setWinner] = useState(null);
   const [winLine, setWinLine] = useState(null);
   const [scores, setScores] = useState({ x: 0, o: 0, draw: 0 });
   const [showConfetti, setShowConfetti] = useState(false);
+  const [botThinking, setBotThinking] = useState(false);
+
   const checkWinner = useCallback((b) => {
-    const lines = [
-      [0, 1, 2],
-      [3, 4, 5],
-      [6, 7, 8],
-      [0, 3, 6],
-      [1, 4, 7],
-      [2, 5, 8],
-      [0, 4, 8],
-      [2, 4, 6],
-    ];
+    const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
     for (const [a, bb, c] of lines) {
       if (b[a] && b[a] === b[bb] && b[a] === b[c])
         return { winner: b[a], line: [a, bb, c] };
@@ -4900,39 +4894,82 @@ const XOXGame = ({ game, players, onGameEnd, soundOn }) => {
     if (b.every(Boolean)) return { winner: 'draw', line: null };
     return null;
   }, []);
-  const handleClick = (i) => {
-    if (board[i] || winner) return;
-    if (soundOn) playSound('place');
-    const nb = [...board];
-    nb[i] = isX ? 'X' : 'O';
-    setBoard(nb);
-    const r = checkWinner(nb);
-    if (r) {
-      setWinner(r.winner);
-      setWinLine(r.line);
-      if (r.winner === 'draw') {
-        setScores((s) => ({ ...s, draw: s.draw + 1 }));
-        onGameEnd('draw');
-      } else if (r.winner === 'X') {
-        setScores((s) => ({ ...s, x: s.x + 1 }));
-        onGameEnd('win');
-        if (soundOn) playSound('win');
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 2000);
-      } else {
-        setScores((s) => ({ ...s, o: s.o + 1 }));
-        onGameEnd('loss');
-        if (soundOn) playSound('lose');
+
+  // Simple bot: win > block > center > corner > random
+  const botMove = useCallback((b) => {
+    const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    const empty = b.map((v,i) => v ? null : i).filter(i => i !== null);
+    for (const mark of ['O','X']) {
+      for (const [a,bb,c] of lines) {
+        const cells = [b[a],b[bb],b[c]];
+        if (cells.filter(v=>v===mark).length===2 && cells.includes(null)) {
+          const idx = [a,bb,c][cells.indexOf(null)];
+          if (empty.includes(idx)) return idx;
+        }
       }
     }
-    setIsX(!isX);
+    if (empty.includes(4)) return 4;
+    const corners = [0,2,6,8].filter(i => empty.includes(i));
+    if (corners.length) return corners[Math.floor(Math.random()*corners.length)];
+    return empty[Math.floor(Math.random()*empty.length)];
+  }, []);
+
+  const applyMove = useCallback((nb, currentIsX) => {
+    const r = checkWinner(nb);
+    if (r) {
+      setWinner(r.winner); setWinLine(r.line);
+      if (r.winner === 'draw') { setScores(s=>({...s,draw:s.draw+1})); onGameEnd('draw'); }
+      else if (r.winner === 'X') { setScores(s=>({...s,x:s.x+1})); onGameEnd('win'); if(soundOn)playSound('win'); setShowConfetti(true); setTimeout(()=>setShowConfetti(false),2000); }
+      else { setScores(s=>({...s,o:s.o+1})); onGameEnd('loss'); if(soundOn)playSound('lose'); }
+      return true;
+    }
+    return false;
+  }, [checkWinner, onGameEnd, soundOn]);
+
+  const handleClick = (i) => {
+    if (!mode || board[i] || winner || botThinking) return;
+    if (mode === 'bot' && !isX) return; // O = bot's turn
+    if (soundOn) playSound('place');
+    const nb = [...board]; nb[i] = isX ? 'X' : 'O';
+    setBoard(nb);
+    const finished = applyMove(nb, isX);
+    if (!finished) {
+      setIsX(!isX);
+      if (mode === 'bot') {
+        setBotThinking(true);
+        setTimeout(() => {
+          const bi = botMove(nb);
+          if (bi !== undefined) {
+            const nb2 = [...nb]; nb2[bi] = 'O';
+            setBoard(nb2);
+            applyMove(nb2, false);
+            setIsX(true);
+          }
+          setBotThinking(false);
+        }, 400);
+      }
+    }
   };
-  const reset = () => {
-    setBoard(Array(9).fill(null));
-    setIsX(true);
-    setWinner(null);
-    setWinLine(null);
-  };
+
+  const reset = () => { setBoard(Array(9).fill(null)); setIsX(true); setWinner(null); setWinLine(null); };
+
+  if (!mode) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:12}}>✕○</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>XOX</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:28,fontSize:15}}>Klasik Tic-Tac-Toe</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:280,margin:'0 auto'}}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+            🌐 Çevrimiçi Oyna
+            <div style={{fontSize:12,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <button onClick={()=>setMode('bot')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>🤖 Bota Karşı</button>
+        <button onClick={()=>setMode('2p')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -4954,7 +4991,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn }) => {
       >
         {[
           {
-            label: players[0] || 'X',
+            label: players[0] || 'Sen (X)',
             score: scores.x,
             color: '#E63946',
             active: isX && !winner,
@@ -4965,7 +5002,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn }) => {
             color: 'var(--text-secondary)',
           },
           {
-            label: players[1] || 'O',
+            label: mode === 'bot' ? '🤖 Bot (O)' : players[1] || 'Oyuncu 2 (O)',
             score: scores.o,
             color: '#457B9D',
             active: !isX && !winner,
@@ -5044,37 +5081,29 @@ const XOXGame = ({ game, players, onGameEnd, soundOn }) => {
           </button>
         ))}
       </div>
-      <div style={{ textAlign: 'center', marginTop: 28 }}>
+      <div style={{ textAlign: 'center', marginTop: 24 }}>
         {winner ? (
           <div style={{ animation: 'bounceIn 0.5s ease' }}>
-            <p
-              style={{
-                fontFamily: "'Sora', sans-serif",
-                fontSize: 22,
-                fontWeight: 700,
-                marginBottom: 16,
-              }}
-            >
-              {winner === 'draw'
-                ? 'Berabere! 🤝'
-                : `${
-                    winner === 'X' ? players[0] || 'X' : players[1] || 'O'
-                  } Kazandı! 🎉`}
+            <p style={{ fontFamily: "'Sora', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 16 }}>
+              {winner === 'draw' ? 'Berabere! 🤝'
+                : winner === 'X' ? (mode === 'bot' ? 'Kazandın! 🎉' : 'Oyuncu 1 Kazandı! 🎉')
+                : (mode === 'bot' ? 'Bot Kazandı! 🤖' : 'Oyuncu 2 Kazandı! 🎉')}
             </p>
-            <Button onClick={reset} style={{ background: game.bg }}>
-              Tekrar Oyna
-            </Button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button onClick={reset} style={{ background: game?.bg || '#E63946' }}>Tekrar Oyna</Button>
+              <button onClick={() => { reset(); setMode(null); }} style={{ padding: '10px 20px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Menü</button>
+            </div>
           </div>
         ) : (
-          <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
-            Sıra:{' '}
-            <strong style={{ color: isX ? '#E63946' : '#457B9D' }}>
-              {isX ? players[0] || 'X' : players[1] || 'O'}
-            </strong>
-          </p>
+          <div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: 8 }}>
+              {botThinking ? '🤖 Bot düşünüyor...' : <>Sıra: <strong style={{ color: isX ? '#E63946' : '#457B9D' }}>{isX ? 'Sen (X)' : (mode === 'bot' ? '🤖 Bot' : 'Oyuncu 2 (O)')}</strong></>}
+            </p>
+            <button onClick={() => { reset(); setMode(null); }} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>Menü</button>
+          </div>
         )}
       </div>
-      <Confetti active={showConfetti} color={game.color} />
+      <Confetti active={showConfetti} color={game?.color || '#E63946'} />
     </div>
   );
 };
@@ -5342,20 +5371,40 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
 // ============================================================
 // RPS GAME
 // ============================================================
-const RPSGame = ({ game, players, onGameEnd, soundOn }) => {
+const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
   const CHOICES = [
     { id: 'rock', emoji: '✊', name: 'Taş', beats: 'scissors' },
     { id: 'paper', emoji: '✋', name: 'Kağıt', beats: 'rock' },
     { id: 'scissors', emoji: '✌️', name: 'Makas', beats: 'paper' },
   ];
+  const [mode, setMode] = useState(null); // null | 'bot' | '2p'
   const [p1Choice, setP1Choice] = useState(null);
   const [p2Choice, setP2Choice] = useState(null);
+  const [p2Hidden, setP2Hidden] = useState(null); // for 2p mode - hidden until both pick
   const [scores, setScores] = useState([0, 0]);
   const [round, setRound] = useState(1);
   const [result, setResult] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [gameWinner, setGameWinner] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
+
+  if (!mode) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:12}}>✊✋✌️</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Taş Kağıt Makas</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:28,fontSize:15}}>En iyi 3'ü alan kazanır</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:280,margin:'0 auto'}}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+            🌐 Çevrimiçi Oyna
+            <div style={{fontSize:12,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <button onClick={()=>setMode('bot')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#2A9D8F,#76C893)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>🤖 Bota Karşı</button>
+        <button onClick={()=>setMode('2p')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
   const play = (choice) => {
     if (showResult) return;
     if (soundOn) playSound('place');
@@ -6451,6 +6500,7 @@ export default function App() {
             players={players}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('xox')}
           />
         );
       case 'minesweeper':
@@ -6469,6 +6519,7 @@ export default function App() {
             players={players}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('rps')}
           />
         );
       case 'memory':
