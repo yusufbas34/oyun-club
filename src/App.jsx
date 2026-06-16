@@ -30,25 +30,30 @@ function useSocket(username) {
     function () {
       if (!username) return;
       var socket;
+      var retryCount = 0;
+
+      // Wake up Railway backend first (HTTP ping), then connect socket
+      fetch(BACKEND_URL + '/api/health').catch(function(){});
+
       import('https://cdn.socket.io/4.7.5/socket.io.esm.min.js')
         .then(function (mod) {
-          console.log("SOCKET-IO MOD:", mod, typeof mod.io);
           var ioFunc = mod.io || mod.default;
           socket = ioFunc(BACKEND_URL, {
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
             reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 12000,
+            timeout: 20000,
           });
           socketRef.current = socket;
 
           socket.on('connect', function () {
-            console.log('Socket baglandi:', socket.id);
+            retryCount = 0;
             setIsConnected(true);
             setSocketError(null);
             socket.emit('register', { name: username }, function (res) {
               if (res && res.success) {
-                console.log('Kayit basarili:', res.user);
                 setIsRegistered(true);
               } else {
                 setSocketError(res ? res.error : 'Kayit basarisiz');
@@ -62,7 +67,12 @@ function useSocket(username) {
           });
 
           socket.on('connect_error', function () {
-            setSocketError('Sunucuya baglanamadi');
+            retryCount++;
+            if (retryCount <= 2) {
+              setSocketError('Sunucuya baglaniliyor... (' + retryCount + '. deneme)');
+            } else {
+              setSocketError('Sunucu uyaniyor, lutfen bekleyin...');
+            }
             setIsConnected(false);
           });
 
@@ -1233,12 +1243,18 @@ function MultiplayerLobby(props) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
       {/* Connection status */}
-      <div style={{ padding: '10px 16px', borderRadius: 10, background: sock.isConnected ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: '1px solid ' + (sock.isConnected ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'), color: sock.isConnected ? '#16a34a' : '#ef4444', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: sock.isConnected ? '#16a34a' : '#ef4444', display: 'inline-block' }} />
-        {sock.isConnected ? 'Sunucuya baglandi' : 'Baglaniliyor... (10-20 saniye surebilir)'}
+      <div style={{ padding: '12px 16px', borderRadius: 12, background: sock.isConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: '1px solid ' + (sock.isConnected ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'), color: sock.isConnected ? '#16a34a' : '#dc2626', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: sock.isConnected ? '#16a34a' : '#ef4444', display: 'inline-block', flexShrink: 0, boxShadow: sock.isConnected ? '0 0 6px #16a34a' : '0 0 6px #ef4444' }} />
+        <span style={{ flex: 1 }}>
+          {sock.isConnected
+            ? '🟢 Sunucuya bağlandı — oynayabilirsin!'
+            : sock.socketError
+            ? '🔴 ' + sock.socketError + ' — otomatik yeniden deniyor...'
+            : '🟡 Sunucuya bağlanılıyor... (ilk açılışta 20-30 sn sürebilir)'}
+        </span>
         {!sock.isConnected && (
-          <button onClick={function() { window.location.reload(); }} style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, border: 'none', background: 'rgba(239,68,68,0.2)', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}>
-            Yenile
+          <button onClick={function() { window.location.reload(); }} style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.15)', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+            🔄 Yenile
           </button>
         )}
       </div>
