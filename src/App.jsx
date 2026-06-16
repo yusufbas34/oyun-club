@@ -236,13 +236,17 @@ function useSocket(username) {
 
   var joinRoom = useCallback(
     function (roomCode) {
-      if (!socketRef.current || !isRegistered) return;
-      socketRef.current.emit('join_room', { roomId: roomCode }, function (res) {
+      if (!socketRef.current) { setSocketError('Bağlantı yok, lütfen bekleyin'); return; }
+      if (!isRegistered) { setSocketError('Sunucuya kayıt bekleniyor...'); return; }
+      setSocketError(null);
+      console.log('[joinRoom] kod:', roomCode);
+      socketRef.current.emit('join_room', { roomId: roomCode.toUpperCase().trim() }, function (res) {
+        console.log('[joinRoom] yanit:', res);
         if (res && res.success) {
           setRoomData(res.room);
           setMessages([]);
         } else {
-          setSocketError(res ? res.error : 'Katilma basarisiz');
+          setSocketError(res ? res.error : 'Katilma basarisiz - kod yanlis olabilir');
         }
       });
     },
@@ -1246,8 +1250,10 @@ function MultiplayerLobby(props) {
       <div style={{ padding: '12px 16px', borderRadius: 12, background: sock.isConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: '1px solid ' + (sock.isConnected ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'), color: sock.isConnected ? '#16a34a' : '#dc2626', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ width: 10, height: 10, borderRadius: '50%', background: sock.isConnected ? '#16a34a' : '#ef4444', display: 'inline-block', flexShrink: 0, boxShadow: sock.isConnected ? '0 0 6px #16a34a' : '0 0 6px #ef4444' }} />
         <span style={{ flex: 1 }}>
-          {sock.isConnected
-            ? '🟢 Sunucuya bağlandı — oynayabilirsin!'
+          {sock.isRegistered
+            ? '🟢 Bağlandı — masa oluşturabilir veya katılabilirsin!'
+            : sock.isConnected
+            ? '🟡 Hazırlanıyor...'
             : sock.socketError
             ? '🔴 ' + sock.socketError + ' — otomatik yeniden deniyor...'
             : '🟡 Sunucuya bağlanılıyor... (ilk açılışta 20-30 sn sürebilir)'}
@@ -1312,27 +1318,48 @@ function MultiplayerLobby(props) {
 
       {/* Join by code */}
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Koda ile Katil</h2>
+        <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>🔑 Koda ile Katıl</h2>
         <div style={{ display: 'flex', gap: 10 }}>
           <input
-            value={joinCode} onChange={function(e) { setJoinCode(e.target.value.toUpperCase()); }}
-            placeholder="Masa kodu (AB1234)"
-            style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 15, fontFamily: 'monospace', letterSpacing: 2, outline: 'none' }}
+            value={joinCode}
+            onChange={function(e) {
+              setJoinCode(e.target.value.toUpperCase());
+              sock.setSocketError(null);
+            }}
+            onKeyDown={function(e) {
+              if (e.key === 'Enter' && joinCode.trim() && sock.isRegistered) {
+                sock.setSocketError(null);
+                sock.joinRoom(joinCode.trim());
+              }
+            }}
+            placeholder="Masa kodu gir (örn: AB1234)"
+            maxLength={6}
+            style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '2px solid ' + (sock.socketError && joinCode ? '#ef4444' : 'var(--border)'), background: 'var(--surface)', color: 'var(--text)', fontSize: 16, fontFamily: 'monospace', letterSpacing: 4, outline: 'none', textTransform: 'uppercase' }}
           />
           <button
-            onClick={function() { if (joinCode.trim()) sock.joinRoom(joinCode.trim()); }}
+            onClick={function() {
+              if (!joinCode.trim()) return;
+              sock.setSocketError(null);
+              sock.joinRoom(joinCode.trim());
+            }}
             disabled={!sock.isRegistered || !joinCode.trim()}
             style={{ padding: '12px 24px', borderRadius: 10, border: 'none', background: sock.isRegistered && joinCode.trim() ? '#059669' : '#ccc', color: '#fff', fontWeight: 700, fontSize: 15, cursor: sock.isRegistered && joinCode.trim() ? 'pointer' : 'not-allowed', fontFamily: "'DM Sans', sans-serif" }}>
-            Katil
+            Katıl →
           </button>
         </div>
+        {sock.socketError && (
+          <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 13, fontWeight: 500 }}>
+            ⚠️ {sock.socketError === 'Masa bulunamdı' || sock.socketError === 'Masa bulunamadı'
+              ? 'Masa bulunamadı. Kod yanlış olabilir veya masa kapanmış olabilir.'
+              : sock.socketError}
+          </div>
+        )}
+        {!sock.isRegistered && !sock.isConnected && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+            ⏳ Sunucuya bağlanıldıktan sonra katılabilirsin.
+          </div>
+        )}
       </div>
-
-      {sock.socketError && (
-        <div style={{ padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 13 }}>
-          {sock.socketError}
-        </div>
-      )}
 
       {/* Privacy Modal */}
       {showPrivacyModal && (
