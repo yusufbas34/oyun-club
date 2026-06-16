@@ -949,8 +949,15 @@ function MultiplayerRPS(props) {
 // MULTIPLAYER LOBBY
 // ============================================================
 var MP_GAMES = [
-  { id: 'xox', name: 'XOX', icon: '❌⭕', players: 2 },
-  { id: 'rps', name: 'Taş Kağıt Makas', icon: '✊✋✌️', players: 2 },
+  { id: 'xox',         name: 'XOX',                icon: '❌⭕',    players: 2, online: true  },
+  { id: 'rps',         name: 'Taş Kağıt Makas',    icon: '✊✋✌️', players: 2, online: true  },
+  { id: 'connectfour', name: '4 Sıra',              icon: '🔵',     players: 2, local: true   },
+  { id: 'gomoku',      name: 'Beş Taş',             icon: '⚫',     players: 2, local: true   },
+  { id: 'reaction',    name: 'Tepki Yarışı',         icon: '⚡',     players: 2, local: true   },
+  { id: 'mathduel',    name: 'Matematik Düellosu',   icon: '🧮',     players: 2, local: true   },
+  { id: 'cardbattle',  name: 'Kart Savaşı',          icon: '🃏',     players: 2, local: true   },
+  { id: 'memorybattle',name: 'Hafıza Savaşı',        icon: '🧠',     players: 2, local: true   },
+  { id: 'wordrace',    name: 'Kelime Yarışı',         icon: '🔤',     players: 2, local: true   },
 ];
 
 function MultiplayerLobby(props) {
@@ -1046,7 +1053,17 @@ function MultiplayerLobby(props) {
               >
                 {sock.roomData.id}
               </div>
-              <div style={{ fontSize: 12, opacity: 0.5 }}>
+              <button
+                onClick={() => {
+                  const link = window.location.origin + '/?room=' + sock.roomData.id;
+                  if (navigator.clipboard) navigator.clipboard.writeText(link);
+                  alert('Link kopyalandı! Arkadaşına gönder:\n' + link);
+                }}
+                style={{ marginTop: 8, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#E63946', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+              >
+                🔗 Davet Linki Kopyala
+              </button>
+              <div style={{ fontSize: 12, opacity: 0.5, marginTop: 6 }}>
                 Oyun:{' '}
                 {sock.roomData.gameId === 'xox'
                   ? 'XOX'
@@ -1409,30 +1426,36 @@ function MultiplayerLobby(props) {
             );
           })}
         </div>
-        {selectedMPGame && (
-          <button
-            onClick={function () {
-              sock.setSocketError(null);
-              sock.createRoom(selectedMPGame);
-            }}
-            disabled={!sock.isRegistered}
-            style={{
-              marginTop: 16,
-              padding: '10px 24px',
-              borderRadius: 10,
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: sock.isRegistered ? 'pointer' : 'not-allowed',
-              opacity: sock.isRegistered ? 1 : 0.5,
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
-            Masa Olustur
-          </button>
-        )}
+        {selectedMPGame && (function() {
+          var selGame = MP_GAMES.find(function(g){ return g.id === selectedMPGame; });
+          if (selGame && selGame.local) {
+            return (
+              <button
+                onClick={function() {
+                  if (props.onSelectGame) {
+                    var fullGame = { id: selGame.id, name: selGame.name, icon: selGame.icon, players: 2, local: true, color: '#1D4ED8', bg: 'linear-gradient(135deg,#1D4ED8,#60A5FA)', desc: '' };
+                    props.onSelectGame(fullGame);
+                  }
+                }}
+                style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, border: 'none', background: '#059669', color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                ▶ Oyna (Yerel 2 Kişi)
+              </button>
+            );
+          }
+          return (
+            <button
+              onClick={function () {
+                sock.setSocketError(null);
+                sock.createRoom(selectedMPGame);
+              }}
+              disabled={!sock.isRegistered}
+              style={{ marginTop: 16, padding: '10px 24px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 14, cursor: sock.isRegistered ? 'pointer' : 'not-allowed', opacity: sock.isRegistered ? 1 : 0.5, fontFamily: "'DM Sans', sans-serif" }}
+            >
+              Masa Olustur
+            </button>
+          );
+        })()}
       </div>
       <div style={{ marginBottom: 24 }}>
         <h2
@@ -2451,6 +2474,467 @@ function ConnectFourGame({ game, onGameEnd, soundOn }) {
 }
 
 // ============================================================
+// GAME: BEŞ TAŞ (Gomoku 5-in-a-row)
+// ============================================================
+const GT_SIZE = 13;
+function checkGomokuWin(board, r, c, color) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr,dc] of dirs) {
+    let cnt = 1;
+    for (let d=1;d<5;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=GT_SIZE||nc<0||nc>=GT_SIZE||board[nr*GT_SIZE+nc]!==color)break;cnt++;}
+    for (let d=1;d<5;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=GT_SIZE||nc<0||nc>=GT_SIZE||board[nr*GT_SIZE+nc]!==color)break;cnt++;}
+    if (cnt >= 5) return true;
+  }
+  return false;
+}
+function GomokuGame({ onGameEnd, soundOn }) {
+  const [board, setBoard] = useState(() => Array(GT_SIZE*GT_SIZE).fill(null));
+  const [turn, setTurn] = useState('black');
+  const [winner, setWinner] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [botThinking, setBotThinking] = useState(false);
+  const [lastMove, setLastMove] = useState(null);
+
+  const place = (idx) => {
+    if (!mode || board[idx] || winner || botThinking) return;
+    if (mode === 'bot' && turn === 'white') return;
+    const nb = [...board]; nb[idx] = turn;
+    const r = Math.floor(idx/GT_SIZE), c = idx%GT_SIZE;
+    if (soundOn) playSound('place');
+    if (checkGomokuWin(nb, r, c, turn)) {
+      setBoard(nb); setWinner(turn); setLastMove(idx);
+      onGameEnd(turn === 'black' ? 'win' : 'loss');
+      if (soundOn) playSound(turn === 'black' ? 'win' : 'lose'); return;
+    }
+    if (nb.every(Boolean)) { setBoard(nb); setWinner('draw'); onGameEnd('draw'); return; }
+    const next = turn === 'black' ? 'white' : 'black';
+    setBoard(nb); setTurn(next); setLastMove(idx);
+    if (mode === 'bot' && next === 'white') {
+      setBotThinking(true);
+      setTimeout(() => {
+        const empty = nb.map((v,i)=>v?null:i).filter(i=>i!==null);
+        const pick = empty[Math.floor(Math.random()*empty.length)];
+        const nb2=[...nb]; nb2[pick]='white';
+        if (soundOn) playSound('place');
+        const pr=Math.floor(pick/GT_SIZE),pc=pick%GT_SIZE;
+        if (checkGomokuWin(nb2,pr,pc,'white')) { setBoard(nb2); setWinner('white'); setLastMove(pick); onGameEnd('loss'); if(soundOn)playSound('lose'); }
+        else { setBoard(nb2); setTurn('black'); setLastMove(pick); }
+        setBotThinking(false);
+      }, 350);
+    }
+  };
+  const restart = () => { setBoard(Array(GT_SIZE*GT_SIZE).fill(null)); setTurn('black'); setWinner(null); setBotThinking(false); setLastMove(null); };
+  if (!mode) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:8}}>⚫⚪</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Beş Taş</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:28,fontSize:14}}>5 taşı art arda diz, kazan!</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:240,margin:'0 auto'}}>
+        <button onClick={()=>setMode('bot')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#1A1A2E,#4B5563)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>🤖 Bota Karşı</button>
+        <button onClick={()=>setMode('2p')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#A78BFA)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>👥 2 Kişilik</button>
+      </div>
+    </div>
+  );
+  const cs = Math.floor(Math.min(typeof window!=='undefined'?window.innerWidth-32:360,380)/GT_SIZE);
+  return (
+    <div style={{maxWidth:420,margin:'0 auto',padding:'10px 8px',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <div style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>Beş Taş</div>
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {!winner&&<span style={{fontSize:12,fontWeight:600,color:turn==='black'?'var(--text)':'var(--text-secondary)'}}>{botThinking?'🤖...':turn==='black'?'⚫ Senin sıran':mode==='bot'?'🤖 Bot':'⚪ Oyuncu 2'}</span>}
+          <button onClick={()=>{restart();setMode(null);}} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:11,cursor:'pointer'}}>Menü</button>
+          <button onClick={restart} style={{padding:'6px 10px',borderRadius:8,border:'none',background:'#1A1A2E',color:'#FFF',fontSize:11,cursor:'pointer'}}>Yeni</button>
+        </div>
+      </div>
+      <div style={{background:'#DCB483',borderRadius:8,padding:4,overflowX:'auto'}}>
+        <div style={{display:'grid',gridTemplateColumns:`repeat(${GT_SIZE},${cs}px)`,width:GT_SIZE*cs}}>
+          {board.map((cell,i)=>(
+            <div key={i} onClick={()=>place(i)} style={{width:cs,height:cs,display:'flex',alignItems:'center',justifyContent:'center',cursor:cell||winner?'default':'pointer',background:i===lastMove?'rgba(255,200,0,0.3)':'transparent',border:'0.5px solid rgba(139,90,43,0.3)',boxSizing:'border-box'}}>
+              {cell&&<div style={{width:cs*0.75,height:cs*0.75,borderRadius:'50%',background:cell==='black'?'#1A1A1A':'#F5F5F5',border:`1px solid ${cell==='black'?'#000':'#CCC'}`,boxShadow:'0 1px 3px rgba(0,0,0,0.4)'}}/>}
+            </div>
+          ))}
+        </div>
+      </div>
+      {winner&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{winner==='draw'?'🤝':winner==='black'?'🏆':mode==='bot'?'🤖':'⚪'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:16}}>{winner==='draw'?'Berabere!':winner==='black'?'Kazandın!':mode==='bot'?'Bot Kazandı!':'Oyuncu 2 Kazandı!'}</h2>
+          <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+            <button onClick={restart} style={{padding:'10px 18px',borderRadius:10,border:'none',background:'#1A1A2E',color:'#FFF',fontWeight:700,cursor:'pointer'}}>Tekrar</button>
+            <button onClick={()=>{restart();setMode(null);}} style={{padding:'10px 18px',borderRadius:10,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontWeight:700,cursor:'pointer'}}>Menü</button>
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: TEPKİ YARIŞI
+// ============================================================
+function ReactionGame({ onGameEnd, soundOn }) {
+  const [phase, setPhase] = useState('wait');
+  const [scores, setScores] = useState([0,0]);
+  const [round, setRound] = useState(0);
+  const [lastWinner, setLastWinner] = useState(null);
+  const [bgColor, setBgColor] = useState('#6B7280');
+  const timerRef = useRef(null);
+  const MAX_ROUNDS = 10;
+
+  const startRound = useCallback(() => {
+    setPhase('wait'); setLastWinner(null); setBgColor('#6B7280');
+    const delay = 1500 + Math.random()*3000;
+    timerRef.current = setTimeout(() => {
+      const colors=['#E63946','#F59E0B','#10B981','#3B82F6','#8B5CF6'];
+      setBgColor(colors[Math.floor(Math.random()*colors.length)]);
+      setPhase('tap');
+      if (soundOn) playSound('place');
+    }, delay);
+  }, [soundOn]);
+
+  useEffect(() => { startRound(); return ()=>clearTimeout(timerRef.current); }, []);
+
+  const handleTap = (player) => {
+    if (phase==='result') return;
+    clearTimeout(timerRef.current);
+    if (phase==='wait') {
+      const loser = player;
+      const winner = loser===0?1:0;
+      const ns=[...scores]; ns[winner]++;
+      setScores(ns); setLastWinner(winner); setPhase('result'); setBgColor('#EF4444');
+      const nr=round+1; setRound(nr);
+      if (nr>=MAX_ROUNDS){onGameEnd(ns[0]>=ns[1]?'win':'loss');return;}
+      setTimeout(startRound,1500); return;
+    }
+    const ns=[...scores]; ns[player]++;
+    setScores(ns); setLastWinner(player); setPhase('result'); setBgColor('#22C55E');
+    const nr=round+1; setRound(nr);
+    if (nr>=MAX_ROUNDS){onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
+    setTimeout(startRound,1200);
+  };
+
+  const restart = () => { setScores([0,0]); setRound(0); setLastWinner(null); clearTimeout(timerRef.current); startRound(); };
+
+  return (
+    <div style={{height:'88vh',display:'flex',flexDirection:'column',userSelect:'none',touchAction:'manipulation'}}>
+      <div style={{textAlign:'center',padding:'8px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 16px'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>⚡ Tepki Yarışı</span>
+        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {round}/{MAX_ROUNDS}</span>
+        <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#E63946',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
+      </div>
+      <div style={{flex:1,display:'flex',flexDirection:'column',gap:3,padding:'8px'}}>
+        {[1,0].map(p=>(
+          <div key={p} onPointerDown={e=>{e.preventDefault();handleTap(p);}}
+            style={{flex:1,borderRadius:16,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',
+              background:phase==='tap'?bgColor:phase==='result'&&lastWinner===p?'#22C55E':phase==='result'?'#EF4444':'#6B7280',
+              transform:p===1?'rotate(180deg)':'none',transition:'background 0.15s',WebkitUserSelect:'none'}}>
+            <div style={{fontSize:16,fontWeight:800,color:'#FFF',marginBottom:4}}>⬆ Oyuncu {p+1}</div>
+            <div style={{fontSize:40,fontWeight:900,color:'#FFF'}}>{scores[p]}</div>
+            <div style={{fontSize:14,color:'rgba(255,255,255,0.8)',marginTop:4}}>
+              {phase==='wait'?'Bekle...':phase==='tap'?'TAP! 👆':lastWinner===p?'+1 ✓':'Yavaş kaldın'}
+            </div>
+          </div>
+        ))}
+      </div>
+      {round>=MAX_ROUNDS&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[1]>scores[0]?'🥇':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Oyuncu 1 Kazandı!':scores[1]>scores[0]?'Oyuncu 2 Kazandı!':'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#E63946',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: MATEMATİK DÜELLOSU
+// ============================================================
+function genMathQ() {
+  const ops=['+','-','×'];
+  const op=ops[Math.floor(Math.random()*ops.length)];
+  let a,b,ans;
+  if(op==='+'){a=Math.floor(Math.random()*50)+1;b=Math.floor(Math.random()*50)+1;ans=a+b;}
+  else if(op==='-'){a=Math.floor(Math.random()*50)+10;b=Math.floor(Math.random()*a)+1;ans=a-b;}
+  else{a=Math.floor(Math.random()*12)+2;b=Math.floor(Math.random()*12)+2;ans=a*b;}
+  const w1=ans+(Math.floor(Math.random()*5)+1)*(Math.random()<0.5?1:-1);
+  const w2=ans+(Math.floor(Math.random()*8)+3)*(Math.random()<0.5?1:-1);
+  const opts=[ans,Math.abs(w1),Math.abs(w2)].filter((v,i,a)=>a.indexOf(v)===i).slice(0,3).sort(()=>Math.random()-0.5);
+  if(!opts.includes(ans))opts[0]=ans;
+  return {q:`${a} ${op} ${b} = ?`,ans,opts};
+}
+function MathDuelGame({ onGameEnd, soundOn }) {
+  const [scores, setScores] = useState([0,0]);
+  const [round, setRound] = useState(0);
+  const [q, setQ] = useState(genMathQ);
+  const [answered, setAnswered] = useState(false);
+  const [lastW, setLastW] = useState(null);
+  const MAX=10;
+
+  const answer=(player,val)=>{
+    if(answered)return;
+    setAnswered(true);
+    const ok=val===q.ans;
+    const ns=[...scores]; if(ok)ns[player]++;
+    setScores(ns); setLastW(ok?player:null);
+    if(soundOn)playSound(ok?'place':'lose');
+    const nr=round+1;
+    setTimeout(()=>{
+      if(nr>=MAX){setRound(nr);onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
+      setRound(nr);setQ(genMathQ());setAnswered(false);setLastW(null);
+    },1200);
+  };
+  const restart=()=>{setScores([0,0]);setRound(0);setQ(genMathQ());setAnswered(false);setLastW(null);};
+
+  return (
+    <div style={{height:'90vh',display:'flex',flexDirection:'column',touchAction:'manipulation',userSelect:'none'}}>
+      <div style={{textAlign:'center',padding:'8px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>🧮 Matematik Düellosu</span>
+        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {round}/{MAX} · P1:{scores[0]} P2:{scores[1]}</span>
+        <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#3B82F6',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
+      </div>
+      <div style={{textAlign:'center',padding:'20px 16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
+        <div style={{fontSize:30,fontWeight:900,fontFamily:"'Sora',sans-serif"}}>{q.q}</div>
+      </div>
+      <div style={{flex:1,display:'flex',flexDirection:'column'}}>
+        {[1,0].map(p=>(
+          <div key={p} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16,transform:p===1?'rotate(180deg)':'none',borderBottom:p===1?'2px solid var(--border)':'none'}}>
+            <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:8}}>Oyuncu {p+1} — {scores[p]} puan</div>
+            {!answered?(
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center'}}>
+                {q.opts.map(opt=>(
+                  <button key={opt} onClick={()=>answer(p,opt)} style={{padding:'12px 20px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:20,fontWeight:700,cursor:'pointer',minWidth:70}}>{opt}</button>
+                ))}
+              </div>
+            ):(
+              <div style={{fontSize:18,fontWeight:700,color:lastW===p?'#22C55E':'#EF4444'}}>{lastW===p?'✓ Doğru!':answered?'✗ Yanlış':'⏳'}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      {round>=MAX&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[1]>scores[0]?'🥇':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Oyuncu 1 Kazandı!':scores[1]>scores[0]?'Oyuncu 2 Kazandı!':'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#3B82F6',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: KART SAVAŞI
+// ============================================================
+function mkDeck(){
+  const s=['♠','♥','♦','♣'],r=['2','3','4','5','6','7','8','9','10','J','Q','K','A'],v={'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14};
+  const d=[];for(const suit of s)for(const rank of r)d.push({label:rank+suit,value:v[rank],suit});
+  for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]];}
+  return d;
+}
+function CardBattleGame({ onGameEnd, soundOn }) {
+  const [deck]=useState(mkDeck);
+  const [idx,setIdx]=useState(0);
+  const [scores,setScores]=useState([0,0]);
+  const [rev,setRev]=useState(false);
+  const [rw,setRw]=useState(null);
+  const TOTAL=13;
+  const c1=deck[idx*2],c2=deck[idx*2+1];
+  const isRed=c=>c.suit==='♥'||c.suit==='♦';
+
+  const reveal=()=>{
+    if(rev)return;
+    setRev(true);if(soundOn)playSound('place');
+    const w=c1.value>c2.value?0:c2.value>c1.value?1:-1;
+    setRw(w);
+    const ns=[...scores];if(w===0)ns[0]++;else if(w===1)ns[1]++;
+    setScores(ns);
+    if(idx+1>=TOTAL){setTimeout(()=>{onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');},1500);}
+  };
+  const next=()=>{setIdx(i=>i+1);setRev(false);setRw(null);};
+  const restart=()=>{setIdx(0);setScores([0,0]);setRev(false);setRw(null);};
+
+  return (
+    <div style={{maxWidth:400,margin:'0 auto',padding:'16px 12px',textAlign:'center',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:20}}>🃏 Kart Savaşı</div>
+        <div style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {Math.min(idx+1,TOTAL)}/{TOTAL}</div>
+        <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#DC2626',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
+      </div>
+      <div style={{display:'flex',gap:12,justifyContent:'center',marginBottom:20}}>
+        {[c1,c2].map((card,pi)=>(
+          <div key={pi} style={{flex:1,maxWidth:150}}>
+            <div style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:6}}>Oyuncu {pi+1} · {scores[pi]}p</div>
+            <div style={{aspectRatio:'2/3',borderRadius:16,border:`3px solid ${rw===pi?'#22C55E':'var(--border)'}`,background:'var(--surface)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:pi===0||rev?28:36,fontWeight:800,color:pi===0||rev?(isRed(card)?'#E63946':'var(--text)'):'var(--text-secondary)'}}>
+              {pi===0||rev?card.label:'🂠'}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!rev&&idx<TOTAL&&<button onClick={reveal} style={{width:'100%',padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:18,fontWeight:700,cursor:'pointer'}}>Kartı Aç 🃏</button>}
+      {rev&&rw!==null&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:10,color:rw===-1?'var(--text-secondary)':'#22C55E'}}>{rw===-1?'Berabere!':`Oyuncu ${rw+1} kazandı!`}</div>
+        {idx+1<TOTAL&&<button onClick={next} style={{padding:'12px 28px',borderRadius:12,border:'none',background:'#1D4ED8',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>Sonraki →</button>}
+      </div>}
+      {idx+1>=TOTAL&&rev&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[1]>scores[0]?'🥇':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Oyuncu 1 Kazandı!':scores[1]>scores[0]?'Oyuncu 2 Kazandı!':'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#DC2626',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: HAFIZA SAVAŞI (2-Player Memory)
+// ============================================================
+function MemoryBattleGame({ onGameEnd, soundOn }) {
+  const EMOJIS=['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🥝','🍕','🌮','🎮','⚽'];
+  const [cards]=useState(()=>{
+    const pairs=[...EMOJIS,...EMOJIS].map((e,i)=>({id:i,emoji:e,flipped:false,matched:false}));
+    for(let i=pairs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pairs[i],pairs[j]]=[pairs[j],pairs[i]];}
+    return pairs;
+  });
+  const [cs,setCs]=useState(()=>cards.map(c=>({...c})));
+  const [flipped,setFlipped]=useState([]);
+  const [scores,setScores]=useState([0,0]);
+  const [turn,setTurn]=useState(0);
+  const [locked,setLocked]=useState(false);
+
+  const flip=(i)=>{
+    if(locked||cs[i].flipped||cs[i].matched||flipped.length>=2)return;
+    if(soundOn)playSound('place');
+    const ns=cs.map((c,ci)=>ci===i?{...c,flipped:true}:c);
+    setCs(ns);
+    const nf=[...flipped,i];
+    setFlipped(nf);
+    if(nf.length===2){
+      setLocked(true);
+      const[a,b]=nf;
+      if(ns[a].emoji===ns[b].emoji){
+        setTimeout(()=>{
+          const m=ns.map((c,ci)=>ci===a||ci===b?{...c,matched:true}:c);
+          setCs(m);
+          const nsc=[...scores];nsc[turn]++;setScores(nsc);
+          setFlipped([]);setLocked(false);
+          if(m.every(c=>c.matched)){onGameEnd(nsc[0]>=nsc[1]?'win':'loss');if(soundOn)playSound(nsc[0]>=nsc[1]?'win':'lose');}
+        },500);
+      }else{
+        setTimeout(()=>{
+          setCs(c=>c.map((card,ci)=>ci===a||ci===b?{...card,flipped:false}:card));
+          setFlipped([]);setLocked(false);setTurn(t=>t===0?1:0);
+        },900);
+      }
+    }
+  };
+  const allMatched=cs.every(c=>c.matched);
+
+  return (
+    <div style={{maxWidth:420,margin:'0 auto',padding:'10px 8px',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <div style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>🧠 Hafıza Savaşı</div>
+        <div style={{display:'flex',gap:12,fontSize:14}}>
+          <span style={{fontWeight:700,color:turn===0?'#E63946':'var(--text-secondary)'}}>P1:{scores[0]}</span>
+          <span style={{fontWeight:700,color:turn===1?'#3B82F6':'var(--text-secondary)'}}>P2:{scores[1]}</span>
+        </div>
+      </div>
+      <div style={{marginBottom:8,fontSize:13,textAlign:'center',fontWeight:600,color:turn===0?'#E63946':'#3B82F6'}}>
+        {!allMatched&&(turn===0?'🔴 Oyuncu 1 sırasında':'🔵 Oyuncu 2 sırasında')}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6}}>
+        {cs.map((card,i)=>(
+          <div key={i} onClick={()=>flip(i)} style={{aspectRatio:'1',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,cursor:card.flipped||card.matched?'default':'pointer',background:card.matched?'#22C55E':card.flipped?'var(--surface)':turn===0?'#E63946':'#3B82F6',border:'2px solid var(--border)',transition:'background 0.2s',userSelect:'none'}}>
+            {(card.flipped||card.matched)?card.emoji:''}
+          </div>
+        ))}
+      </div>
+      {allMatched&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[1]>scores[0]?'🥇':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Oyuncu 1 Kazandı!':scores[1]>scores[0]?'Oyuncu 2 Kazandı!':'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <button onClick={()=>window.location.reload()} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#7C3AED',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: KELİME YARIŞI (Anagram Race)
+// ============================================================
+const RACE_WORDS=[
+  {word:'ARABA',clue:'Dört tekerlekli araç'},{word:'KALEM',clue:'Yazı yazmak için'},
+  {word:'KITAP',clue:'Okuruz bunu'},{word:'ELMAS',clue:'Değerli taş'},
+  {word:'BULUT',clue:'Gökyüzünde'},{word:'FENER',clue:'Işık verir'},
+  {word:'LIMON',clue:'Ekşi sarı meyve'},{word:'MAKAS',clue:'Kesmek için'},
+  {word:'PAZAR',clue:'Alışveriş yeri'},{word:'ZAMAN',clue:'Geçip gider'},
+  {word:'KANAT',clue:'Uçmak için'},{word:'DUMAN',clue:'Ateşten çıkar'},
+];
+function scrmbl(w){const a=[...w];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.join('');}
+
+function WordRaceGame({ onGameEnd, soundOn }) {
+  const [ri,setRi]=useState(0);
+  const [scores,setScores]=useState([0,0]);
+  const [inputs,setInputs]=useState(['','']);
+  const [answered,setAnswered]=useState([false,false]);
+  const [revealed,setRevealed]=useState(false);
+  const item=RACE_WORDS[ri%RACE_WORDS.length];
+  const [scr]=useState(()=>scrmbl(item.word));
+
+  const submit=(player)=>{
+    if(answered[player]||revealed)return;
+    const ok=inputs[player].toUpperCase().trim()===item.word;
+    const na=[...answered];na[player]=true;setAnswered(na);
+    const ns=[...scores];if(ok){ns[player]++;setScores(ns);if(soundOn)playSound('place');}
+    if(ok||na.every(Boolean)){
+      setRevealed(true);
+      const nr=ri+1;
+      if(nr>=RACE_WORDS.length){setTimeout(()=>{onGameEnd(ns[0]>=ns[1]?'win':'loss');},1500);return;}
+      setTimeout(()=>{setRi(nr);setInputs(['','']);setAnswered([false,false]);setRevealed(false);},1800);
+    }
+  };
+
+  return (
+    <div style={{height:'90vh',display:'flex',flexDirection:'column',touchAction:'manipulation'}}>
+      <div style={{textAlign:'center',padding:'8px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>🔤 Kelime Yarışı</span>
+        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {ri+1}/{RACE_WORDS.length} · P1:{scores[0]} P2:{scores[1]}</span>
+      </div>
+      <div style={{textAlign:'center',padding:'16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
+        <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:4}}>{item.clue}</div>
+        <div style={{fontSize:28,fontWeight:900,letterSpacing:6,fontFamily:"'Sora',sans-serif"}}>{scr}</div>
+        {revealed&&<div style={{fontSize:16,color:'#22C55E',fontWeight:700,marginTop:4}}>→ {item.word}</div>}
+      </div>
+      <div style={{flex:1,display:'flex',flexDirection:'column'}}>
+        {[1,0].map(p=>(
+          <div key={p} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16,transform:p===1?'rotate(180deg)':'none',borderBottom:p===1?'2px solid var(--border)':'none'}}>
+            <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:8}}>Oyuncu {p+1} · {scores[p]}p</div>
+            {!answered[p]&&!revealed?(
+              <div style={{display:'flex',gap:8,width:'100%',maxWidth:300}}>
+                <input value={inputs[p]} onChange={e=>{const ni=[...inputs];ni[p]=e.target.value;setInputs(ni);}} onKeyDown={e=>e.key==='Enter'&&submit(p)}
+                  placeholder="Kelimeyi yaz..."
+                  style={{flex:1,padding:'10px 12px',borderRadius:10,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:700,outline:'none'}}/>
+                <button onClick={()=>submit(p)} style={{padding:'10px 14px',borderRadius:10,border:'none',background:'#22C55E',color:'#FFF',fontWeight:700,cursor:'pointer',fontSize:16}}>✓</button>
+              </div>
+            ):(
+              <div style={{fontSize:16,fontWeight:700,color:inputs[p].toUpperCase().trim()===item.word?'#22C55E':'#EF4444'}}>
+                {answered[p]?(inputs[p].toUpperCase().trim()===item.word?'✓ Doğru!':'✗ Yanlış'):'⏳'}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // CONSTANTS & HELPERS
 // ============================================================
 const GAMES = [
@@ -2544,6 +3028,72 @@ const GAMES = [
     players: 1,
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
+  },
+  {
+    id: 'gomoku',
+    name: 'Beş Taş',
+    desc: '5 taşı diz, rakibini geç',
+    icon: '⚫',
+    players: 2,
+    local: true,
+    category: 'multi',
+    color: '#1F2937',
+    bg: 'linear-gradient(135deg, #1F2937 0%, #4B5563 100%)',
+  },
+  {
+    id: 'reaction',
+    name: 'Tepki Yarışı',
+    desc: 'Ekrana en hızlı kim basar?',
+    icon: '⚡',
+    players: 2,
+    local: true,
+    category: 'multi',
+    color: '#D97706',
+    bg: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)',
+  },
+  {
+    id: 'mathduel',
+    name: 'Matematik Düellosu',
+    desc: 'Soruları en hızlı sen çöz',
+    icon: '🧮',
+    players: 2,
+    local: true,
+    category: 'multi',
+    color: '#0369A1',
+    bg: 'linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)',
+  },
+  {
+    id: 'cardbattle',
+    name: 'Kart Savaşı',
+    desc: 'Yüksek kart kazanır',
+    icon: '🃏',
+    players: 2,
+    local: true,
+    category: 'multi',
+    color: '#7C3AED',
+    bg: 'linear-gradient(135deg, #7C3AED 0%, #C084FC 100%)',
+  },
+  {
+    id: 'memorybattle',
+    name: 'Hafıza Savaşı',
+    desc: 'Eşleri bul, skoru kap',
+    icon: '🧠',
+    players: 2,
+    local: true,
+    category: 'multi',
+    color: '#BE185D',
+    bg: 'linear-gradient(135deg, #BE185D 0%, #F472B6 100%)',
+  },
+  {
+    id: 'wordrace',
+    name: 'Kelime Yarışı',
+    desc: 'Anagramı kim önce çözer?',
+    icon: '🔤',
+    players: 2,
+    local: true,
+    category: 'multi',
+    color: '#065F46',
+    bg: 'linear-gradient(135deg, #065F46 0%, #34D399 100%)',
   },
 ];
 
@@ -5798,8 +6348,19 @@ export default function App() {
   const [toast, setToast] = useState({ message: '', visible: false });
   const [soundOn, setSoundOn] = useState(() => { try { const s = localStorage.getItem('oyunclub_sound'); return s !== null ? s === 'true' : true; } catch { return true; } });
   const [dark, setDark] = useState(() => { try { return localStorage.getItem('oyunclub_dark') === 'true'; } catch { return false; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0} };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0} };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) return JSON.parse(s); } catch {} return { games: EMPTY_STATS, history: [] }; });
+
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get('room');
+    if (roomCode) {
+      window.history.replaceState({}, '', window.location.pathname);
+      setRoomId(roomCode);
+      setPage('multiplayer');
+    }
+  }, [user]);
 
   useEffect(() => { if (user) localStorage.setItem('oyunclub_user', JSON.stringify(user)); else localStorage.removeItem('oyunclub_user'); }, [user]);
   useEffect(() => { localStorage.setItem('oyunclub_stats', JSON.stringify(stats)); }, [stats]);
@@ -5844,9 +6405,8 @@ export default function App() {
     setPage('game');
   };
   const handleCopyLink = () => {
-    const link = `oyun.club/room/${roomId}`;
-    if (navigator.clipboard) navigator.clipboard.writeText(link);
-    showToast(`Link kopyalandı: ${link}`);
+    if (navigator.clipboard) navigator.clipboard.writeText(roomId);
+    showToast(`Oda kodu kopyalandı: ${roomId}`);
   };
   const handleJoinRoom = (code) => {
     setPage('multiplayer');
@@ -5967,6 +6527,54 @@ export default function App() {
             soundOn={soundOn}
           />
         );
+      case 'gomoku':
+        return (
+          <GomokuGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'reaction':
+        return (
+          <ReactionGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'mathduel':
+        return (
+          <MathDuelGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'cardbattle':
+        return (
+          <CardBattleGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'memorybattle':
+        return (
+          <MemoryBattleGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'wordrace':
+        return (
+          <WordRaceGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
       default:
         return null;
     }
@@ -6023,6 +6631,7 @@ export default function App() {
           <MultiplayerLobby
             initialCode={roomId}
             userName={user ? user.name : ''}
+            onSelectGame={handleSelectGame}
           />
         )}
         {page === 'room' && selectedGame && (
