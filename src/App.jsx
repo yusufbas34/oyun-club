@@ -25,6 +25,9 @@ function useSocket(username) {
   var s7 = useState([]);
   var publicRooms = s7[0];
   var setPublicRooms = s7[1];
+  var s8 = useState(null);
+  var myUserId = s8[0];
+  var setMyUserId = s8[1];
 
   useEffect(
     function () {
@@ -55,6 +58,7 @@ function useSocket(username) {
             socket.emit('register', { name: username }, function (res) {
               if (res && res.success) {
                 setIsRegistered(true);
+                if (res.user && res.user.id) setMyUserId(res.user.id);
               } else {
                 setSocketError(res ? res.error : 'Kayit basarisiz');
               }
@@ -354,6 +358,7 @@ function useSocket(username) {
     lastGameMove: lastGameMove,
     publicRooms: publicRooms,
     fetchPublicRooms: fetchPublicRooms,
+    myUserId: myUserId,
   };
 }
 
@@ -1106,15 +1111,17 @@ function MultiplayerLobby(props) {
     var players = sock.roomData.players || [];
     var maxP = sock.roomData.maxPlayers || 2;
     var canStart = players.length >= maxP;
-    var isHost = players[0] && players[0].name === username;
-    var myIndex = players.findIndex(function(p) { return p.name === username; });
+    var isHost = players[0] && players[0].id === sock.myUserId;
+    var myIndex = sock.myUserId
+      ? players.findIndex(function(p) { return p.id === sock.myUserId; })
+      : players.findIndex(function(p) { return p.name === username; });
     var currentGame = sock.roomData.gameId;
-    var onlineProps = myIndex >= 0 ? {
-      myIndex: myIndex,
-      opponentName: (players.find(function(p) { return p.name !== username; }) || {}).name || 'Rakip',
+    var onlineProps = {
+      myIndex: myIndex >= 0 ? myIndex : 0,
+      opponentName: (players.find(function(p) { return p.id !== sock.myUserId && p.name !== username; }) || players[myIndex === 0 ? 1 : 0] || {}).name || 'Rakip',
       onMove: sock.sendGameMove,
       remoteMove: sock.lastGameMove,
-    } : null;
+    };
 
     return (
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
@@ -1188,25 +1195,25 @@ function MultiplayerLobby(props) {
         {sock.roomData.state === 'playing' && currentGame === 'rps' && (
           <MultiplayerRPS players={players} username={username} onChoice={sock.sendRPSChoice} rpsReveal={sock.roomData.rpsReveal} rpsScores={sock.roomData.rpsScores} rpsRound={sock.roomData.rpsRound} gameState={sock.roomData.gameState} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'gomoku' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'gomoku' && (
           <GomokuGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'connectfour' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'connectfour' && (
           <ConnectFourGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'cardbattle' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'cardbattle' && (
           <CardBattleGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'memorybattle' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'memorybattle' && (
           <MemoryBattleGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'mathduel' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'mathduel' && (
           <MathDuelGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'reaction' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'reaction' && (
           <ReactionGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
-        {sock.roomData.state === 'playing' && currentGame === 'wordrace' && onlineProps && (
+        {sock.roomData.state === 'playing' && currentGame === 'wordrace' && (
           <WordRaceGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
 
@@ -2222,7 +2229,7 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
   useEffect(function() {
     if (!onlineProps || !onlineProps.remoteMove) return;
     var mv = onlineProps.remoteMove;
-    if (mv.type === 'drop') {
+    if (mv.type === 'drop' && typeof mv.playerIndex !== 'undefined' && mv.playerIndex !== onlineProps.myIndex) {
       setBoard(function(prev) {
         var nb = dropC4(prev, mv.col, mv.color);
         if (!nb) return prev;
@@ -2249,7 +2256,7 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
       if (checkC4Win(nb, myColor)) { setBoard(nb); setWinner(myColor); onGameEnd(myColor === 'red' ? 'win' : 'loss'); if (soundOn) playSound('win'); }
       else if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw'); }
       else { setBoard(nb); setTurn(myColor === 'red' ? 'yellow' : 'red'); }
-      onlineProps.onMove({ type: 'drop', col: col, color: myColor, _ts: Date.now() });
+      onlineProps.onMove({ type: 'drop', col: col, color: myColor, playerIndex: onlineProps.myIndex, _ts: Date.now() });
       return;
     }
     if (!mode || winner || isDraw || botThinking) return;
@@ -2391,7 +2398,7 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   useEffect(function() {
     if (!onlineProps || !onlineProps.remoteMove) return;
     var mv = onlineProps.remoteMove;
-    if (mv.type === 'place' && mv.senderId && mv.senderId !== (onlineProps.myIndex === 0 ? 'p0' : 'p1')) {
+    if (mv.type === 'place' && typeof mv.playerIndex !== 'undefined' && mv.playerIndex !== onlineProps.myIndex) {
       setBoard(function(prev) {
         if (prev[mv.idx]) return prev;
         var nb = [...prev]; nb[mv.idx] = mv.color;
@@ -2422,7 +2429,7 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       } else {
         setBoard(nb); setTurn(myColor === 'black' ? 'white' : 'black'); setLastMove(idx);
       }
-      onlineProps.onMove({ type: 'place', idx: idx, color: myColor, _ts: Date.now() });
+      onlineProps.onMove({ type: 'place', idx: idx, color: myColor, playerIndex: onlineProps.myIndex, _ts: Date.now() });
       return;
     }
     if (!mode || board[idx] || winner || botThinking) return;
@@ -2694,10 +2701,44 @@ function mkDeck(){
   return d;
 }
 function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
-  const [mode,setMode]=useState(onlineProps?'local':null);
-  const [deck]=useState(mkDeck);
+  const isOnline = !!onlineProps;
+  const isHost = isOnline && onlineProps.myIndex === 0;
+  const [mode,setMode]=useState(onlineProps?'online':null);
+  const [deck,setDeck]=useState(()=>!isOnline||isHost?mkDeck():null);
   const [idx,setIdx]=useState(0);
   const [scores,setScores]=useState([0,0]);
+  const [rev,setRev]=useState(false);
+  const [rw,setRw]=useState(null);
+  const sentInitRef=useRef(false);
+  const TOTAL=13;
+
+  // Host sends deck to guest on mount
+  useEffect(function(){
+    if(!isHost||!deck||sentInitRef.current)return;
+    sentInitRef.current=true;
+    setTimeout(function(){ onlineProps.onMove({type:'cb_init',deck:deck,_ts:Date.now()}); },400);
+  },[isHost&&!!deck]);
+
+  // Receive remote moves
+  useEffect(function(){
+    if(!isOnline||!onlineProps.remoteMove)return;
+    var mv=onlineProps.remoteMove;
+    if(mv.type==='cb_init'&&mv.deck&&!deck){
+      setDeck(mv.deck);
+    } else if(mv.type==='cb_reveal'&&!rev&&deck){
+      setRev(true);if(soundOn)playSound('place');
+      const d=deck;
+      const c1=d[mv.idx*2],c2=d[mv.idx*2+1];
+      const w=c1&&c2?(c1.value>c2.value?0:c2.value>c1.value?1:-1):-1;
+      setRw(w);setScores(mv.scores);
+      if(mv.idx+1>=TOTAL){setTimeout(()=>{onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');if(soundOn)playSound('win');},1500);}
+    } else if(mv.type==='cb_next'){
+      setIdx(mv.idx);setRev(false);setRw(null);
+    } else if(mv.type==='cb_restart'&&mv.deck){
+      setDeck(mv.deck);setIdx(0);setScores([0,0]);setRev(false);setRw(null);
+    }
+  },[isOnline&&onlineProps.remoteMove&&onlineProps.remoteMove._ts]);
+
   if(!mode&&!onlineProps)return(
     <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:48,marginBottom:8}}>🃏</div>
@@ -2709,51 +2750,82 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       </div>
     </div>
   );
-  const [rev,setRev]=useState(false);
-  const [rw,setRw]=useState(null);
-  const TOTAL=13;
-  const c1=deck[idx*2],c2=deck[idx*2+1];
-  const isRed=c=>c.suit==='♥'||c.suit==='♦';
+
+  if(isOnline&&!deck)return(
+    <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-secondary)'}}>
+      <div style={{fontSize:36,marginBottom:12}}>🃏</div>
+      <div style={{fontSize:15}}>Kart destesi hazırlanıyor...</div>
+    </div>
+  );
+
+  const c1=deck&&deck[idx*2],c2=deck&&deck[idx*2+1];
+  const isRed=c=>c&&(c.suit==='♥'||c.suit==='♦');
+
+  // In online mode: player 0 = c1, player 1 = c2
+  const myCard=isOnline?(onlineProps.myIndex===0?c1:c2):c1;
+  const oppCard=isOnline?(onlineProps.myIndex===0?c2:c1):c2;
+  const myScore=isOnline?scores[onlineProps.myIndex]:scores[0];
+  const oppScore=isOnline?scores[1-onlineProps.myIndex]:scores[1];
+  const myName=isOnline?'Sen':' Oyuncu 1';
+  const oppName=isOnline?onlineProps.opponentName:'Oyuncu 2';
 
   const reveal=()=>{
-    if(rev)return;
+    if(rev||!c1||!c2)return;
     setRev(true);if(soundOn)playSound('place');
     const w=c1.value>c2.value?0:c2.value>c1.value?1:-1;
     setRw(w);
     const ns=[...scores];if(w===0)ns[0]++;else if(w===1)ns[1]++;
     setScores(ns);
-    if(idx+1>=TOTAL){setTimeout(()=>{onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');},1500);}
+    if(isOnline)onlineProps.onMove({type:'cb_reveal',idx,scores:ns,_ts:Date.now()});
+    if(idx+1>=TOTAL){setTimeout(()=>{onGameEnd(ns[isOnline?onlineProps.myIndex:0]>=ns[isOnline?1-onlineProps.myIndex:1]?'win':'loss');if(soundOn)playSound('win');},1500);}
   };
-  const next=()=>{setIdx(i=>i+1);setRev(false);setRw(null);};
-  const restart=()=>{setIdx(0);setScores([0,0]);setRev(false);setRw(null);};
+  const next=()=>{
+    const ni=idx+1;setIdx(ni);setRev(false);setRw(null);
+    if(isOnline)onlineProps.onMove({type:'cb_next',idx:ni,_ts:Date.now()});
+  };
+  const restart=()=>{
+    const nd=mkDeck();setDeck(nd);setIdx(0);setScores([0,0]);setRev(false);setRw(null);
+    if(isOnline)onlineProps.onMove({type:'cb_restart',deck:nd,_ts:Date.now()});
+  };
+
+  // Who won this round: 0=player0, 1=player1, -1=draw
+  const myWon=isOnline?(rw===onlineProps.myIndex):(rw===0);
+  const roundLabel=rw===-1?'Berabere!':myWon?'Sen kazandın! 🏆':`${oppName} kazandı!`;
+  const gameWon=isOnline?(scores[onlineProps.myIndex]>scores[1-onlineProps.myIndex]):(scores[0]>scores[1]);
 
   return (
     <div style={{maxWidth:400,margin:'0 auto',padding:'16px 12px',textAlign:'center',touchAction:'manipulation'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
         <div style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:20}}>🃏 Kart Savaşı</div>
         <div style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {Math.min(idx+1,TOTAL)}/{TOTAL}</div>
-        <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#DC2626',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
+        {!isOnline&&<button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#DC2626',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>}
       </div>
       <div style={{display:'flex',gap:12,justifyContent:'center',marginBottom:20}}>
-        {[c1,c2].map((card,pi)=>(
-          <div key={pi} style={{flex:1,maxWidth:150}}>
-            <div style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:6}}>Oyuncu {pi+1} · {scores[pi]}p</div>
-            <div style={{aspectRatio:'2/3',borderRadius:16,border:`3px solid ${rw===pi?'#22C55E':'var(--border)'}`,background:'var(--surface)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:pi===0||rev?28:36,fontWeight:800,color:pi===0||rev?(isRed(card)?'#E63946':'var(--text)'):'var(--text-secondary)'}}>
-              {pi===0||rev?card.label:'🂠'}
-            </div>
+        {/* My card (face-up) */}
+        <div style={{flex:1,maxWidth:150}}>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:6}}>{myName} · {myScore}p</div>
+          <div style={{aspectRatio:'2/3',borderRadius:16,border:`3px solid ${isOnline?(rev&&rw===onlineProps.myIndex?'#22C55E':rev&&rw!==-1?'#E63946':'var(--border)'):(rev&&rw===0?'#22C55E':'var(--border)')}`,background:'var(--surface)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:800,color:myCard?(isRed(myCard)?'#E63946':'var(--text)'):'var(--text-secondary)'}}>
+            {myCard?myCard.label:'🂠'}
           </div>
-        ))}
+        </div>
+        {/* Opponent card (face-down until reveal) */}
+        <div style={{flex:1,maxWidth:150}}>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',marginBottom:6}}>{oppName} · {oppScore}p</div>
+          <div style={{aspectRatio:'2/3',borderRadius:16,border:`3px solid ${isOnline?(rev&&rw===(1-onlineProps.myIndex)?'#22C55E':rev&&rw!==-1?'#E63946':'var(--border)'):(rev&&rw===1?'#22C55E':'var(--border)')}`,background:'var(--surface)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:rev?28:36,fontWeight:800,color:rev?(oppCard&&isRed(oppCard)?'#E63946':'var(--text)'):'var(--text-secondary)'}}>
+            {rev&&oppCard?oppCard.label:'🂠'}
+          </div>
+        </div>
       </div>
       {!rev&&idx<TOTAL&&<button onClick={reveal} style={{width:'100%',padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:18,fontWeight:700,cursor:'pointer'}}>Kartı Aç 🃏</button>}
       {rev&&rw!==null&&<div style={{marginBottom:12}}>
-        <div style={{fontSize:18,fontWeight:700,marginBottom:10,color:rw===-1?'var(--text-secondary)':'#22C55E'}}>{rw===-1?'Berabere!':`Oyuncu ${rw+1} kazandı!`}</div>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:10,color:rw===-1?'var(--text-secondary)':'#22C55E'}}>{roundLabel}</div>
         {idx+1<TOTAL&&<button onClick={next} style={{padding:'12px 28px',borderRadius:12,border:'none',background:'#1D4ED8',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>Sonraki →</button>}
       </div>}
       {idx+1>=TOTAL&&rev&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
         <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
-          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[1]>scores[0]?'🥇':'🤝'}</div>
-          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Oyuncu 1 Kazandı!':scores[1]>scores[0]?'Oyuncu 2 Kazandı!':'Berabere!'}</h2>
-          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <div style={{fontSize:48,marginBottom:8}}>{myScore>oppScore?'🏆':myScore<oppScore?'😔':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
           <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#DC2626',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
         </div>
       </div>}
@@ -2765,18 +2837,71 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
 // GAME: HAFIZA SAVAŞI (2-Player Memory)
 // ============================================================
 function MemoryBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
-  const [mode,setMode]=useState(onlineProps?'local':null);
+  const isOnline=!!onlineProps;
+  const isHost=isOnline&&onlineProps.myIndex===0;
   const EMOJIS=['🍎','🍊','🍋','🍇','🍓','🍒','🍑','🥝','🍕','🌮','🎮','⚽'];
-  const [cards]=useState(()=>{
+  const [mode,setMode]=useState(onlineProps?'online':null);
+  const makeCards=useCallback(()=>{
     const pairs=[...EMOJIS,...EMOJIS].map((e,i)=>({id:i,emoji:e,flipped:false,matched:false}));
     for(let i=pairs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pairs[i],pairs[j]]=[pairs[j],pairs[i]];}
     return pairs;
-  });
-  const [cs,setCs]=useState(()=>cards.map(c=>({...c})));
+  },[]);
+  const [cs,setCs]=useState(()=>!isOnline||isHost?makeCards():null);
   const [flipped,setFlipped]=useState([]);
   const [scores,setScores]=useState([0,0]);
   const [turn,setTurn]=useState(0);
   const [locked,setLocked]=useState(false);
+  const sentInitRef=useRef(false);
+
+  // Host sends card layout to guest
+  useEffect(function(){
+    if(!isHost||!cs||sentInitRef.current)return;
+    sentInitRef.current=true;
+    setTimeout(function(){ onlineProps.onMove({type:'mb_init',cards:cs,_ts:Date.now()}); },400);
+  },[isHost&&!!cs]);
+
+  // Receive remote moves
+  useEffect(function(){
+    if(!isOnline||!onlineProps.remoteMove)return;
+    var mv=onlineProps.remoteMove;
+    if(mv.type==='mb_init'&&mv.cards&&!cs){
+      setCs(mv.cards.map(c=>({...c,flipped:false,matched:c.matched||false})));
+    } else if(mv.type==='mb_flip'&&cs){
+      applyFlip(mv.cardIdx,mv.turn,true);
+    } else if(mv.type==='mb_restart'&&mv.cards){
+      setCs(mv.cards);setFlipped([]);setScores([0,0]);setTurn(0);setLocked(false);
+    }
+  },[isOnline&&onlineProps.remoteMove&&onlineProps.remoteMove._ts]);
+
+  const applyFlip=useCallback((i,flippingTurn,isRemote)=>{
+    setCs(prev=>{
+      if(!prev||prev[i].flipped||prev[i].matched)return prev;
+      const ns=prev.map((c,ci)=>ci===i?{...c,flipped:true}:c);
+      setFlipped(nf=>{
+        const newFlipped=[...nf,i];
+        if(newFlipped.length===2){
+          setLocked(true);
+          const[a,b]=newFlipped;
+          if(ns[a].emoji===ns[b].emoji){
+            setTimeout(()=>{
+              setCs(c=>c.map((card,ci)=>ci===a||ci===b?{...card,matched:true,flipped:true}:card));
+              setScores(sc=>{const nsc=[...sc];nsc[flippingTurn]++;
+                if(nsc.reduce((s,v)=>s+v,0)===12){onGameEnd(nsc[0]>=nsc[1]?'win':'loss');if(soundOn)playSound('win');}
+                return nsc;});
+              setFlipped([]);setLocked(false);
+            },500);
+          } else {
+            setTimeout(()=>{
+              setCs(c=>c.map((card,ci)=>ci===a||ci===b?{...card,flipped:false}:card));
+              setFlipped([]);setLocked(false);setTurn(t=>t===0?1:0);
+            },900);
+          }
+        }
+        return newFlipped;
+      });
+      return ns;
+    });
+  },[onGameEnd,soundOn]);
 
   if(!mode&&!onlineProps)return(
     <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
@@ -2790,59 +2915,59 @@ function MemoryBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     </div>
   );
 
+  if(isOnline&&!cs)return(
+    <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-secondary)'}}>
+      <div style={{fontSize:36,marginBottom:12}}>🧠</div>
+      <div style={{fontSize:15}}>Kartlar hazırlanıyor...</div>
+    </div>
+  );
+
+  const myTurn=!isOnline||turn===onlineProps.myIndex;
+  const myName=isOnline?'Sen':'Oyuncu 1';
+  const oppName=isOnline?onlineProps.opponentName:'Oyuncu 2';
+  const myScore=isOnline?scores[onlineProps.myIndex]:scores[0];
+  const oppScore=isOnline?scores[1-onlineProps.myIndex]:scores[1];
+
   const flip=(i)=>{
-    if(locked||cs[i].flipped||cs[i].matched||flipped.length>=2)return;
+    if(locked||!cs||cs[i].flipped||cs[i].matched||flipped.length>=2)return;
+    if(isOnline&&!myTurn)return;
     if(soundOn)playSound('place');
-    const ns=cs.map((c,ci)=>ci===i?{...c,flipped:true}:c);
-    setCs(ns);
-    const nf=[...flipped,i];
-    setFlipped(nf);
-    if(nf.length===2){
-      setLocked(true);
-      const[a,b]=nf;
-      if(ns[a].emoji===ns[b].emoji){
-        setTimeout(()=>{
-          const m=ns.map((c,ci)=>ci===a||ci===b?{...c,matched:true}:c);
-          setCs(m);
-          const nsc=[...scores];nsc[turn]++;setScores(nsc);
-          setFlipped([]);setLocked(false);
-          if(m.every(c=>c.matched)){onGameEnd(nsc[0]>=nsc[1]?'win':'loss');if(soundOn)playSound(nsc[0]>=nsc[1]?'win':'lose');}
-        },500);
-      }else{
-        setTimeout(()=>{
-          setCs(c=>c.map((card,ci)=>ci===a||ci===b?{...card,flipped:false}:card));
-          setFlipped([]);setLocked(false);setTurn(t=>t===0?1:0);
-        },900);
-      }
-    }
+    if(isOnline)onlineProps.onMove({type:'mb_flip',cardIdx:i,turn,_ts:Date.now()});
+    applyFlip(i,turn,false);
   };
-  const allMatched=cs.every(c=>c.matched);
+
+  const allMatched=cs&&cs.every(c=>c.matched);
+
+  const restart=()=>{
+    const nc=makeCards();setCs(nc);setFlipped([]);setScores([0,0]);setTurn(0);setLocked(false);
+    if(isOnline)onlineProps.onMove({type:'mb_restart',cards:nc,_ts:Date.now()});
+  };
 
   return (
     <div style={{maxWidth:420,margin:'0 auto',padding:'10px 8px',touchAction:'manipulation'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
         <div style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>🧠 Hafıza Savaşı</div>
         <div style={{display:'flex',gap:12,fontSize:14}}>
-          <span style={{fontWeight:700,color:turn===0?'#E63946':'var(--text-secondary)'}}>P1:{scores[0]}</span>
-          <span style={{fontWeight:700,color:turn===1?'#3B82F6':'var(--text-secondary)'}}>P2:{scores[1]}</span>
+          <span style={{fontWeight:700,color:turn===0?'#E63946':'var(--text-secondary)'}}>{myName}:{myScore}</span>
+          <span style={{fontWeight:700,color:turn===1?'#3B82F6':'var(--text-secondary)'}}>{oppName}:{oppScore}</span>
         </div>
       </div>
-      <div style={{marginBottom:8,fontSize:13,textAlign:'center',fontWeight:600,color:turn===0?'#E63946':'#3B82F6'}}>
-        {!allMatched&&(turn===0?'🔴 Oyuncu 1 sırasında':'🔵 Oyuncu 2 sırasında')}
+      <div style={{marginBottom:8,fontSize:13,textAlign:'center',fontWeight:600,color:myTurn?'#22C55E':'#3B82F6'}}>
+        {!allMatched&&(myTurn?'🟢 Senin sıran':'🔵 '+oppName+' sırasında')}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6}}>
-        {cs.map((card,i)=>(
-          <div key={i} onClick={()=>flip(i)} style={{aspectRatio:'1',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,cursor:card.flipped||card.matched?'default':'pointer',background:card.matched?'#22C55E':card.flipped?'var(--surface)':turn===0?'#E63946':'#3B82F6',border:'2px solid var(--border)',transition:'background 0.2s',userSelect:'none'}}>
+        {cs&&cs.map((card,i)=>(
+          <div key={i} onClick={()=>flip(i)} style={{aspectRatio:'1',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,cursor:card.flipped||card.matched||!myTurn?'default':'pointer',background:card.matched?'#22C55E':card.flipped?'var(--surface)':turn===0?'#E63946':'#3B82F6',border:'2px solid var(--border)',transition:'background 0.2s',userSelect:'none',opacity:!myTurn&&!card.flipped&&!card.matched?0.85:1}}>
             {(card.flipped||card.matched)?card.emoji:''}
           </div>
         ))}
       </div>
       {allMatched&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
         <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
-          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[1]>scores[0]?'🥇':'🤝'}</div>
-          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Oyuncu 1 Kazandı!':scores[1]>scores[0]?'Oyuncu 2 Kazandı!':'Berabere!'}</h2>
-          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
-          <button onClick={()=>window.location.reload()} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#7C3AED',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+          <div style={{fontSize:48,marginBottom:8}}>{myScore>oppScore?'🏆':myScore<oppScore?'😔':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
+          <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#7C3AED',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
         </div>
       </div>}
     </div>
