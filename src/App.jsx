@@ -207,6 +207,10 @@ function useSocket(username) {
           socket.on('game_move', function(data) {
             setLastGameMove({ ...data, _ts: Date.now() });
           });
+
+          socket.on('rooms_updated', function(data) {
+            if (data && data.rooms) setPublicRooms(data.rooms);
+          });
         })
         .catch(function () {
           setSocketError('Socket.io yuklenemedi');
@@ -1072,11 +1076,11 @@ function MultiplayerLobby(props) {
     if (props.initialGame) setSelectedMPGame(props.initialGame);
   }, [props.initialGame]);
 
-  // Fetch public rooms on mount + when not in a room
+  // Fetch public rooms on mount; rooms_updated socket event handles real-time updates
   useEffect(function() {
     if (!sock.roomData) {
       sock.fetchPublicRooms();
-      var interval = setInterval(sock.fetchPublicRooms, 10000);
+      var interval = setInterval(sock.fetchPublicRooms, 8000);
       return function() { clearInterval(interval); };
     }
   }, [sock.roomData]);
@@ -1277,32 +1281,6 @@ function MultiplayerLobby(props) {
         )}
       </div>
 
-      {/* Public rooms */}
-      {sock.publicRooms && sock.publicRooms.length > 0 && (
-        <div style={{ marginBottom: 28 }}>
-          <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
-            Acik Masalar
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {sock.publicRooms.map(function(room) {
-              return (
-                <div key={room.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>{gameIcons[room.gameId] || '🎮'} {room.gameName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{room.hostName} · {room.players}/{room.maxPlayers} oyuncu</div>
-                  </div>
-                  <button onClick={function() { handleJoinPublicRoom(room.id); }}
-                    disabled={!sock.isRegistered || room.players >= room.maxPlayers}
-                    style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: room.players < room.maxPlayers ? '#6366f1' : '#ccc', color: '#fff', fontWeight: 600, fontSize: 13, cursor: room.players < room.maxPlayers ? 'pointer' : 'not-allowed', fontFamily: "'DM Sans', sans-serif" }}>
-                    {room.players >= room.maxPlayers ? 'Dolu' : 'Katil'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Game selection */}
       <div style={{ marginBottom: 28 }}>
         <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Masa Olustur</h2>
@@ -1369,6 +1347,52 @@ function MultiplayerLobby(props) {
         {!sock.isRegistered && !sock.isConnected && (
           <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
             ⏳ Sunucuya bağlanıldıktan sonra katılabilirsin.
+          </div>
+        )}
+      </div>
+
+      {/* Public rooms grid */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, margin: 0 }}>
+            🟢 Açık Masalar
+            {sock.publicRooms && sock.publicRooms.length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: '#6366f1', background: 'rgba(99,102,241,0.1)', borderRadius: 8, padding: '2px 8px' }}>
+                {sock.publicRooms.length}
+              </span>
+            )}
+          </h2>
+          <button onClick={sock.fetchPublicRooms} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+            🔄 Yenile
+          </button>
+        </div>
+        {(!sock.publicRooms || sock.publicRooms.length === 0) ? (
+          <div style={{ textAlign: 'center', padding: '24px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px dashed var(--border)', color: 'var(--text-secondary)', fontSize: 14 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🎮</div>
+            <div>Şu an açık masa yok.</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>Yukarıdan bir oyun seçerek masa oluşturabilirsin!</div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {sock.publicRooms.slice(0, 15).map(function(room) {
+              const isFull = room.players >= room.maxPlayers;
+              return (
+                <div key={room.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 10px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', gap: 6, opacity: isFull ? 0.6 : 1 }}>
+                  <div style={{ fontSize: 20, textAlign: 'center' }}>{gameIcons[room.gameId] || '🎮'}</div>
+                  <div style={{ fontWeight: 700, fontSize: 12, textAlign: 'center', lineHeight: 1.2 }}>{room.gameName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center' }}>{room.hostName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                    <span style={{ color: room.players < room.maxPlayers ? '#22c55e' : '#ef4444', fontWeight: 600 }}>{room.players}</span>/{room.maxPlayers}
+                  </div>
+                  <button
+                    onClick={function() { if (!isFull) handleJoinPublicRoom(room.id); }}
+                    disabled={!sock.isRegistered || isFull}
+                    style={{ padding: '7px 4px', borderRadius: 8, border: 'none', background: !isFull && sock.isRegistered ? '#6366f1' : '#ccc', color: '#fff', fontWeight: 700, fontSize: 12, cursor: !isFull && sock.isRegistered ? 'pointer' : 'not-allowed', fontFamily: "'DM Sans', sans-serif" }}>
+                    {isFull ? 'Dolu' : 'Katıl →'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -2515,70 +2539,157 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
 // GAME: TEPKİ YARIŞI
 // ============================================================
 function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
-  const [mode, setMode] = useState(onlineProps ? 'local' : null);
-  const [phase, setPhase] = useState('wait');
-  const [scores, setScores] = useState([0,0]);
-  const [round, setRound] = useState(0);
-  const [lastWinner, setLastWinner] = useState(null);
-  const [bgColor, setBgColor] = useState('#6B7280');
-  const timerRef = useRef(null);
-  const MAX_ROUNDS = 10;
-  if (!mode && !onlineProps) return (
+  const isOnline=!!onlineProps;
+  const isHost=isOnline&&onlineProps.myIndex===0;
+  const [mode,setMode]=useState(onlineProps?'online':null);
+  const [phase,setPhase]=useState('idle');
+  const [scores,setScores]=useState([0,0]);
+  const [round,setRound]=useState(0);
+  const [lastWinner,setLastWinner]=useState(null);
+  const [bgColor,setBgColor]=useState('#6B7280');
+  const timerRef=useRef(null);
+  const roundRef=useRef(0);
+  const tapDone=useRef(false);
+  const COLORS=['#E63946','#F59E0B','#10B981','#3B82F6','#8B5CF6'];
+  const MAX_ROUNDS=7;
+
+  // Remote moves
+  useEffect(function(){
+    if(!isOnline||!onlineProps.remoteMove)return;
+    var mv=onlineProps.remoteMove;
+    if(mv.type==='rg_wait'&&!isHost){
+      clearTimeout(timerRef.current);tapDone.current=false;
+      setPhase('wait');setBgColor('#6B7280');setLastWinner(null);
+      roundRef.current=mv.round;
+    } else if(mv.type==='rg_flash'&&!isHost){
+      setBgColor(mv.color);setPhase('tap');
+      if(soundOn)playSound('place');
+    } else if(mv.type==='rg_result'&&mv.round===roundRef.current&&!tapDone.current){
+      tapDone.current=true;clearTimeout(timerRef.current);
+      setScores(mv.scores);setLastWinner(mv.winner);setPhase('result');
+      setBgColor(mv.winner===onlineProps.myIndex?'#22C55E':'#EF4444');
+      if(soundOn)playSound(mv.winner===onlineProps.myIndex?'place':'lose');
+      const nr=mv.round+1;roundRef.current=nr;setRound(nr);
+      if(nr>=MAX_ROUNDS){setTimeout(function(){onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');},1500);return;}
+      setTimeout(function(){if(isHost)startRound();},1600);
+    } else if(mv.type==='rg_restart'){
+      clearTimeout(timerRef.current);setScores([0,0]);setRound(0);
+      roundRef.current=0;tapDone.current=false;
+      if(!isHost){setPhase('wait');setBgColor('#6B7280');setLastWinner(null);}
+    }
+  },[isOnline&&onlineProps.remoteMove&&onlineProps.remoteMove._ts]);
+
+  const startRound=useCallback(function(){
+    tapDone.current=false;
+    setPhase('wait');setBgColor('#6B7280');setLastWinner(null);
+    if(isOnline)onlineProps.onMove({type:'rg_wait',round:roundRef.current,_ts:Date.now()});
+    var delay=1500+Math.random()*3000;
+    timerRef.current=setTimeout(function(){
+      var color=COLORS[Math.floor(Math.random()*COLORS.length)];
+      setBgColor(color);setPhase('tap');
+      if(isOnline)onlineProps.onMove({type:'rg_flash',color,round:roundRef.current,_ts:Date.now()});
+      if(soundOn)playSound('place');
+    },delay);
+  },[isOnline,soundOn]);
+
+  useEffect(function(){
+    if(mode==='online'||mode==='local'){
+      if(isHost||!isOnline)startRound();
+      else{setPhase('wait');setBgColor('#6B7280');}
+    }
+    return function(){clearTimeout(timerRef.current);};
+  },[mode]);
+
+  const handleTap=function(player){
+    if(tapDone.current||phase==='idle'||phase==='result')return;
+    tapDone.current=true;
+    clearTimeout(timerRef.current);
+    var myIdx=isOnline?onlineProps.myIndex:player;
+    var currentRound=roundRef.current;
+    var ns=[...scores];
+    var winner;
+    if(phase==='wait'){winner=isOnline?(1-myIdx):(player===0?1:0);setBgColor('#EF4444');}
+    else{winner=myIdx;setBgColor('#22C55E');if(soundOn)playSound('place');}
+    ns[winner]++;
+    setScores(ns);setLastWinner(winner);setPhase('result');
+    if(isOnline)onlineProps.onMove({type:'rg_result',winner,scores:ns,round:currentRound,_ts:Date.now()});
+    var nr=currentRound+1;roundRef.current=nr;setRound(nr);
+    if(nr>=MAX_ROUNDS){setTimeout(function(){onGameEnd(ns[isOnline?onlineProps.myIndex:0]>=ns[isOnline?1-onlineProps.myIndex:1]?'win':'loss');},1500);return;}
+    setTimeout(function(){if(isHost||!isOnline)startRound();},1500);
+  };
+
+  const restart=function(){
+    clearTimeout(timerRef.current);setScores([0,0]);setRound(0);setLastWinner(null);
+    roundRef.current=0;tapDone.current=false;
+    if(isOnline)onlineProps.onMove({type:'rg_restart',_ts:Date.now()});
+    startRound();
+  };
+
+  if(!mode&&!onlineProps)return(
     <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:48,marginBottom:8}}>⚡</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Tepki Yarışı</h2>
       <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Ekrana kim daha hızlı basar?</p>
       <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
-        {onGoOnline && <button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
         <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#D97706,#FCD34D)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
 
-  const startRound = useCallback(() => {
-    setPhase('wait'); setLastWinner(null); setBgColor('#6B7280');
-    const delay = 1500 + Math.random()*3000;
-    timerRef.current = setTimeout(() => {
-      const colors=['#E63946','#F59E0B','#10B981','#3B82F6','#8B5CF6'];
-      setBgColor(colors[Math.floor(Math.random()*colors.length)]);
-      setPhase('tap');
-      if (soundOn) playSound('place');
-    }, delay);
-  }, [soundOn]);
+  const myScore=isOnline?scores[onlineProps.myIndex]:scores[0];
+  const oppScore=isOnline?scores[1-onlineProps.myIndex]:scores[1];
+  const oppName=isOnline?onlineProps.opponentName:'Oyuncu 2';
+  const myResult=lastWinner===null?null:(lastWinner===(isOnline?onlineProps.myIndex:0));
 
-  useEffect(() => { startRound(); return ()=>clearTimeout(timerRef.current); }, []);
-
-  const handleTap = (player) => {
-    if (phase==='result') return;
-    clearTimeout(timerRef.current);
-    if (phase==='wait') {
-      const loser = player;
-      const winner = loser===0?1:0;
-      const ns=[...scores]; ns[winner]++;
-      setScores(ns); setLastWinner(winner); setPhase('result'); setBgColor('#EF4444');
-      const nr=round+1; setRound(nr);
-      if (nr>=MAX_ROUNDS){onGameEnd(ns[0]>=ns[1]?'win':'loss');return;}
-      setTimeout(startRound,1500); return;
-    }
-    const ns=[...scores]; ns[player]++;
-    setScores(ns); setLastWinner(player); setPhase('result'); setBgColor('#22C55E');
-    const nr=round+1; setRound(nr);
-    if (nr>=MAX_ROUNDS){onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
-    setTimeout(startRound,1200);
-  };
-
-  const restart = () => { setScores([0,0]); setRound(0); setLastWinner(null); clearTimeout(timerRef.current); startRound(); };
-
-  return (
+  if(isOnline)return(
     <div style={{height:'88vh',display:'flex',flexDirection:'column',userSelect:'none',touchAction:'manipulation'}}>
-      <div style={{textAlign:'center',padding:'8px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>⚡ Tepki Yarışı</span>
+        <span style={{fontSize:13,fontWeight:600}}>{myScore} — {oppScore}</span>
+        <span style={{fontSize:12,color:'var(--text-secondary)'}}>Tur {round}/{MAX_ROUNDS}</span>
+      </div>
+      {/* Opponent area (top, smaller) */}
+      <div style={{flex:0.6,background:'#374151',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderBottom:'2px solid #1F2937'}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#9CA3AF',marginBottom:4}}>👤 {oppName}</div>
+        <div style={{fontSize:36,fontWeight:900,color:'#FFF'}}>{oppScore}</div>
+        <div style={{fontSize:12,color:'#6B7280',marginTop:4}}>
+          {phase==='tap'?'⚡ Tepki veriyor...':phase==='result'?(lastWinner!==(onlineProps.myIndex)?'✓ Hızlıydı!':'✗ Yavaş'):'⏳ Bekliyor...'}
+        </div>
+      </div>
+      {/* My tap area (bottom, larger) */}
+      <div onPointerDown={function(e){e.preventDefault();handleTap(onlineProps.myIndex);}}
+        style={{flex:1,background:phase==='tap'?bgColor:phase==='result'&&myResult?'#22C55E':phase==='result'?'#EF4444':'#6B7280',
+          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'background 0.15s',WebkitUserSelect:'none'}}>
+        <div style={{fontSize:18,fontWeight:800,color:'#FFF',marginBottom:8}}>Sen · {myScore}p</div>
+        <div style={{fontSize:52,fontWeight:900,color:'#FFF',marginBottom:8}}>
+          {phase==='wait'?'⏳':phase==='tap'?'👆':myResult?'🏆':'😔'}
+        </div>
+        <div style={{fontSize:16,fontWeight:700,color:'rgba(255,255,255,0.9)'}}>
+          {phase==='wait'?'Bekle... Renk değişince bas!':phase==='tap'?'DOKUNDUR! 👆':myResult?'Kazandın bu turu!':'Kaybettin bu turu'}
+        </div>
+      </div>
+      {round>=MAX_ROUNDS&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{myScore>oppScore?'🏆':myScore<oppScore?'😔':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
+          <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#E63946',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+
+  return(
+    <div style={{height:'88vh',display:'flex',flexDirection:'column',userSelect:'none',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
         <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>⚡ Tepki Yarışı</span>
         <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {round}/{MAX_ROUNDS}</span>
         <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#E63946',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
       </div>
       <div style={{flex:1,display:'flex',flexDirection:'column',gap:3,padding:'8px'}}>
-        {[1,0].map(p=>(
-          <div key={p} onPointerDown={e=>{e.preventDefault();handleTap(p);}}
+        {[1,0].map(function(p){return(
+          <div key={p} onPointerDown={function(e){e.preventDefault();handleTap(p);}}
             style={{flex:1,borderRadius:16,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',
               background:phase==='tap'?bgColor:phase==='result'&&lastWinner===p?'#22C55E':phase==='result'?'#EF4444':'#6B7280',
               transform:p===1?'rotate(180deg)':'none',transition:'background 0.15s',WebkitUserSelect:'none'}}>
@@ -2588,7 +2699,7 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
               {phase==='wait'?'Bekle...':phase==='tap'?'TAP! 👆':lastWinner===p?'+1 ✓':'Yavaş kaldın'}
             </div>
           </div>
-        ))}
+        );})}
       </div>
       {round>=MAX_ROUNDS&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
         <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
@@ -2619,41 +2730,158 @@ function genMathQ() {
   return {q:`${a} ${op} ${b} = ?`,ans,opts};
 }
 function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
-  const [mode, setMode] = useState(onlineProps ? 'local' : null);
-  const [scores, setScores] = useState([0,0]);
-  const [round, setRound] = useState(0);
-  const [q, setQ] = useState(genMathQ);
-  const [answered, setAnswered] = useState(false);
-  const [lastW, setLastW] = useState(null);
+  const isOnline=!!onlineProps;
+  const isHost=isOnline&&onlineProps.myIndex===0;
+  const [mode,setMode]=useState(onlineProps?'online':null);
+  const [scores,setScores]=useState([0,0]);
+  const [round,setRound]=useState(0);
+  const [q,setQ]=useState(()=>!isOnline||isHost?genMathQ():null);
+  const [answered,setAnswered]=useState(false);
+  const [lastW,setLastW]=useState(null);
+  const roundDone=useRef(false);
+  const sentQ=useRef(false);
   const MAX=10;
-  if (!mode && !onlineProps) return (
+
+  // Host sends question to guest
+  useEffect(function(){
+    if(!isHost||!q||sentQ.current)return;
+    sentQ.current=true;
+    setTimeout(function(){ onlineProps.onMove({type:'md_q',q,round,_ts:Date.now()}); },300);
+  },[isHost&&!!q&&round]);
+
+  // Remote moves
+  useEffect(function(){
+    if(!isOnline||!onlineProps.remoteMove)return;
+    var mv=onlineProps.remoteMove;
+    if(mv.type==='md_q'&&!isHost&&mv.round===round){
+      setQ(mv.q);setAnswered(false);setLastW(null);roundDone.current=false;
+    } else if(mv.type==='md_result'&&!roundDone.current){
+      roundDone.current=true;
+      setLastW(mv.winner);setScores(mv.scores);setAnswered(true);
+      if(soundOn)playSound(mv.winner===onlineProps.myIndex?'place':'lose');
+      const nr=mv.round+1;
+      setTimeout(function(){
+        if(nr>=MAX){setRound(nr);onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');return;}
+        setRound(nr);setAnswered(false);setLastW(null);roundDone.current=false;
+        if(isHost){const nq=genMathQ();setQ(nq);sentQ.current=false;}
+        else setQ(null);
+      },1200);
+    } else if(mv.type==='md_restart'){
+      setScores([0,0]);setRound(0);setAnswered(false);setLastW(null);roundDone.current=false;sentQ.current=false;
+      if(!isHost)setQ(null);
+    }
+  },[isOnline&&onlineProps.remoteMove&&onlineProps.remoteMove._ts]);
+
+  const answer=function(player,val){
+    if(answered||roundDone.current||!q)return;
+    const ok=val===q.ans;
+    if(isOnline){
+      if(!ok)return; // only correct answers trigger in online
+      roundDone.current=true;
+      setAnswered(true);
+      const winner=onlineProps.myIndex;
+      const ns=[...scores];ns[winner]++;
+      setScores(ns);setLastW(winner);
+      if(soundOn)playSound('place');
+      onlineProps.onMove({type:'md_result',winner,scores:ns,round,_ts:Date.now()});
+      const nr=round+1;
+      setTimeout(function(){
+        if(nr>=MAX){setRound(nr);onGameEnd(ns[onlineProps.myIndex]>=ns[1-onlineProps.myIndex]?'win':'loss');return;}
+        setRound(nr);setAnswered(false);setLastW(null);roundDone.current=false;
+        if(isHost){const nq=genMathQ();setQ(nq);sentQ.current=false;}
+        else setQ(null);
+      },1200);
+      return;
+    }
+    // local 2-player
+    setAnswered(true);
+    const ns=[...scores];if(ok)ns[player]++;
+    setScores(ns);setLastW(ok?player:null);
+    if(soundOn)playSound(ok?'place':'lose');
+    const nr=round+1;
+    setTimeout(function(){
+      if(nr>=MAX){setRound(nr);onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
+      setRound(nr);setQ(genMathQ());setAnswered(false);setLastW(null);
+    },1200);
+  };
+  const restart=function(){
+    setScores([0,0]);setRound(0);setAnswered(false);setLastW(null);roundDone.current=false;
+    if(isOnline){
+      sentQ.current=false;
+      if(isHost){const nq=genMathQ();setQ(nq);}
+      else setQ(null);
+      onlineProps.onMove({type:'md_restart',_ts:Date.now()});
+    } else {setQ(genMathQ());}
+  };
+
+  if(!mode&&!onlineProps)return(
     <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:48,marginBottom:8}}>🧮</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Matematik Düellosu</h2>
       <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Soruları kim önce çözer?</p>
       <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
-        {onGoOnline && <button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
         <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#0369A1,#38BDF8)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
 
-  const answer=(player,val)=>{
-    if(answered)return;
-    setAnswered(true);
-    const ok=val===q.ans;
-    const ns=[...scores]; if(ok)ns[player]++;
-    setScores(ns); setLastW(ok?player:null);
-    if(soundOn)playSound(ok?'place':'lose');
-    const nr=round+1;
-    setTimeout(()=>{
-      if(nr>=MAX){setRound(nr);onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
-      setRound(nr);setQ(genMathQ());setAnswered(false);setLastW(null);
-    },1200);
-  };
-  const restart=()=>{setScores([0,0]);setRound(0);setQ(genMathQ());setAnswered(false);setLastW(null);};
+  const myScore=isOnline?scores[onlineProps.myIndex]:scores[0];
+  const oppScore=isOnline?scores[1-onlineProps.myIndex]:scores[1];
+  const oppName=isOnline?onlineProps.opponentName:'Oyuncu 2';
 
-  return (
+  if(isOnline)return(
+    <div style={{maxWidth:440,margin:'0 auto',padding:'16px 12px',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,padding:'0 4px'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>🧮 Matematik Düellosu</span>
+        <span style={{fontSize:12,color:'var(--text-secondary)'}}>Tur {round}/{MAX}</span>
+      </div>
+      <div style={{display:'flex',gap:10,marginBottom:16}}>
+        <div style={{flex:1,textAlign:'center',padding:'10px',background:'rgba(99,102,241,0.1)',borderRadius:12,border:'2px solid #6366f1'}}>
+          <div style={{fontSize:12,color:'var(--text-secondary)'}}>Sen</div>
+          <div style={{fontSize:26,fontWeight:900,color:'#6366f1'}}>{myScore}</div>
+        </div>
+        <div style={{flex:1,textAlign:'center',padding:'10px',background:'rgba(239,68,68,0.08)',borderRadius:12,border:'1px solid var(--border)'}}>
+          <div style={{fontSize:12,color:'var(--text-secondary)'}}>{oppName}</div>
+          <div style={{fontSize:26,fontWeight:900,color:'#ef4444'}}>{oppScore}</div>
+        </div>
+      </div>
+      {!q?(
+        <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-secondary)',fontSize:15}}>Soru yükleniyor...</div>
+      ):(
+        <>
+          <div style={{textAlign:'center',padding:'24px 16px',background:'var(--surface)',borderRadius:16,border:'1px solid var(--border)',marginBottom:16}}>
+            <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:8}}>Kim önce doğru cevabı bulur?</div>
+            <div style={{fontSize:32,fontWeight:900,fontFamily:"'Sora',sans-serif",color:'var(--text)'}}>{q.q}</div>
+          </div>
+          {!answered?(
+            <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center'}}>
+              {q.opts.map(function(opt){return(
+                <button key={opt} onClick={()=>answer(onlineProps.myIndex,opt)}
+                  style={{padding:'16px 24px',borderRadius:14,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:22,fontWeight:700,cursor:'pointer',minWidth:90,transition:'all 0.1s'}}>
+                  {opt}
+                </button>
+              );})}
+            </div>
+          ):(
+            <div style={{textAlign:'center',padding:'20px',fontSize:18,fontWeight:700,color:lastW===onlineProps.myIndex?'#22C55E':'var(--text-secondary)'}}>
+              {lastW===onlineProps.myIndex?'🎉 Sen kazandın bu turu!':lastW!==null?`${oppName} önce buldu!`:'⏳ Sonuç bekleniyor...'}
+            </div>
+          )}
+        </>
+      )}
+      {round>=MAX&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{myScore>oppScore?'🏆':myScore<oppScore?'😔':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
+          <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#3B82F6',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+
+  return(
     <div style={{height:'90vh',display:'flex',flexDirection:'column',touchAction:'manipulation',userSelect:'none'}}>
       <div style={{textAlign:'center',padding:'8px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>🧮 Matematik Düellosu</span>
@@ -2661,7 +2889,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
         <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#3B82F6',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
       </div>
       <div style={{textAlign:'center',padding:'20px 16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
-        <div style={{fontSize:30,fontWeight:900,fontFamily:"'Sora',sans-serif"}}>{q.q}</div>
+        <div style={{fontSize:30,fontWeight:900,fontFamily:"'Sora',sans-serif"}}>{q&&q.q}</div>
       </div>
       <div style={{flex:1,display:'flex',flexDirection:'column'}}>
         {[1,0].map(p=>(
@@ -2669,7 +2897,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
             <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:8}}>Oyuncu {p+1} — {scores[p]} puan</div>
             {!answered?(
               <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center'}}>
-                {q.opts.map(opt=>(
+                {q&&q.opts.map(opt=>(
                   <button key={opt} onClick={()=>answer(p,opt)} style={{padding:'12px 20px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:20,fontWeight:700,cursor:'pointer',minWidth:70}}>{opt}</button>
                 ))}
               </div>
@@ -2988,12 +3216,50 @@ const RACE_WORDS=[
 function scrmbl(w){const a=[...w];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.join('');}
 
 function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
-  const [mode,setMode]=useState(onlineProps?'local':null);
+  const isOnline=!!onlineProps;
+  const isHost=isOnline&&onlineProps.myIndex===0;
+  const [mode,setMode]=useState(onlineProps?'online':null);
   const [ri,setRi]=useState(0);
+  const [scr,setScr]=useState(()=>!isOnline||isHost?scrmbl(RACE_WORDS[0].word):null);
   const [scores,setScores]=useState([0,0]);
+  const [myInput,setMyInput]=useState('');
+  const [revealed,setRevealed]=useState(false);
+  const [roundResult,setRoundResult]=useState(null); // { winner: 0|1 | null }
   const [inputs,setInputs]=useState(['','']);
   const [answered,setAnswered]=useState([false,false]);
-  const [revealed,setRevealed]=useState(false);
+  const roundDone=useRef(false);
+  const sentWord=useRef(false);
+
+  // Host sends word to guest
+  useEffect(function(){
+    if(!isHost||!scr||sentWord.current)return;
+    sentWord.current=true;
+    setTimeout(function(){ onlineProps.onMove({type:'wr_word',ri,scr,_ts:Date.now()}); },300);
+  },[isHost&&!!scr&&ri]);
+
+  // Remote moves
+  useEffect(function(){
+    if(!isOnline||!onlineProps.remoteMove)return;
+    var mv=onlineProps.remoteMove;
+    if(mv.type==='wr_word'&&!isHost){
+      setRi(mv.ri);setScr(mv.scr);setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;
+    } else if(mv.type==='wr_result'&&!roundDone.current){
+      roundDone.current=true;
+      setScores(mv.scores);setRevealed(true);
+      setRoundResult({winner:mv.winner});
+      if(soundOn)playSound(mv.winner===onlineProps.myIndex?'place':'lose');
+      const nr=mv.ri+1;
+      if(nr>=RACE_WORDS.length){setTimeout(function(){onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');},1800);return;}
+      setTimeout(function(){
+        setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;
+        if(isHost){const ni=RACE_WORDS[nr];const ns2=scrmbl(ni.word);setRi(nr);setScr(ns2);sentWord.current=false;}
+      },1800);
+    } else if(mv.type==='wr_restart'){
+      setScores([0,0]);setRi(0);setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;sentWord.current=false;
+      if(!isHost)setScr(null);
+    }
+  },[isOnline&&onlineProps.remoteMove&&onlineProps.remoteMove._ts]);
+
   if(!mode&&!onlineProps)return(
     <div style={{maxWidth:360,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:48,marginBottom:8}}>🔤</div>
@@ -3005,9 +3271,31 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       </div>
     </div>
   );
-  const item=RACE_WORDS[ri%RACE_WORDS.length];
-  const [scr]=useState(()=>scrmbl(item.word));
 
+  const item=RACE_WORDS[ri%RACE_WORDS.length];
+  const myScore=isOnline?scores[onlineProps.myIndex]:scores[0];
+  const oppScore=isOnline?scores[1-onlineProps.myIndex]:scores[1];
+  const oppName=isOnline?onlineProps.opponentName:'Oyuncu 2';
+
+  const onlineSubmit=function(){
+    if(roundDone.current||revealed||!myInput.trim())return;
+    const ok=myInput.toUpperCase().trim()===item.word;
+    if(!ok){setMyInput('');return;}
+    roundDone.current=true;
+    const winner=onlineProps.myIndex;
+    const ns=[...scores];ns[winner]++;
+    setScores(ns);setRevealed(true);setRoundResult({winner});
+    if(soundOn)playSound('place');
+    onlineProps.onMove({type:'wr_result',winner,scores:ns,ri,_ts:Date.now()});
+    const nr=ri+1;
+    if(nr>=RACE_WORDS.length){setTimeout(function(){onGameEnd(ns[onlineProps.myIndex]>=ns[1-onlineProps.myIndex]?'win':'loss');},1800);return;}
+    setTimeout(function(){
+      setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;
+      if(isHost){const ni2=RACE_WORDS[nr];const ns3=scrmbl(ni2.word);setRi(nr);setScr(ns3);sentWord.current=false;}
+    },1800);
+  };
+
+  // Local submit (non-online)
   const submit=(player)=>{
     if(answered[player]||revealed)return;
     const ok=inputs[player].toUpperCase().trim()===item.word;
@@ -3021,6 +3309,57 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     }
   };
 
+  const localScr=isOnline?scr:scrmbl(item.word);
+
+  if(isOnline)return(
+    <div style={{maxWidth:440,margin:'0 auto',padding:'16px 12px',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>🔤 Kelime Yarışı</span>
+        <span style={{fontSize:12,color:'var(--text-secondary)'}}>Tur {ri+1}/{RACE_WORDS.length}</span>
+      </div>
+      <div style={{display:'flex',gap:10,marginBottom:16}}>
+        <div style={{flex:1,textAlign:'center',padding:'10px',background:'rgba(99,102,241,0.1)',borderRadius:12,border:'2px solid #6366f1'}}>
+          <div style={{fontSize:12,color:'var(--text-secondary)'}}>Sen</div>
+          <div style={{fontSize:26,fontWeight:900,color:'#6366f1'}}>{myScore}</div>
+        </div>
+        <div style={{flex:1,textAlign:'center',padding:'10px',background:'rgba(239,68,68,0.08)',borderRadius:12,border:'1px solid var(--border)'}}>
+          <div style={{fontSize:12,color:'var(--text-secondary)'}}>{oppName}</div>
+          <div style={{fontSize:26,fontWeight:900,color:'#ef4444'}}>{oppScore}</div>
+        </div>
+      </div>
+      {!scr?(
+        <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-secondary)',fontSize:15}}>Kelime yükleniyor...</div>
+      ):(
+        <div style={{background:'var(--surface)',borderRadius:16,border:'1px solid var(--border)',padding:'20px 16px',marginBottom:16,textAlign:'center'}}>
+          <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:6}}>{item.clue}</div>
+          <div style={{fontSize:32,fontWeight:900,letterSpacing:8,fontFamily:"'Sora',sans-serif"}}>{scr}</div>
+          {revealed&&<div style={{fontSize:16,color:'#22C55E',fontWeight:700,marginTop:8}}>→ {item.word}</div>}
+          {roundResult&&<div style={{fontSize:15,fontWeight:700,marginTop:8,color:roundResult.winner===onlineProps.myIndex?'#22C55E':'#EF4444'}}>
+            {roundResult.winner===onlineProps.myIndex?'🎉 Önce sen buldun!':roundResult.winner!==null?`${oppName} önce buldu!`:'Süre doldu'}
+          </div>}
+        </div>
+      )}
+      {scr&&!revealed&&(
+        <div style={{display:'flex',gap:10}}>
+          <input value={myInput} onChange={e=>setMyInput(e.target.value.toUpperCase())}
+            onKeyDown={e=>e.key==='Enter'&&onlineSubmit()}
+            placeholder="Cevabı yaz ve gönder..."
+            style={{flex:1,padding:'12px 14px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:700,outline:'none',letterSpacing:2}}/>
+          <button onClick={onlineSubmit} style={{padding:'12px 16px',borderRadius:12,border:'none',background:'#22C55E',color:'#FFF',fontWeight:700,fontSize:18,cursor:'pointer'}}>✓</button>
+        </div>
+      )}
+      {ri+1>=RACE_WORDS.length&&revealed&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{myScore>oppScore?'🏆':myScore<oppScore?'😔':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
+          <button onClick={function(){setScores([0,0]);setRi(0);setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;sentWord.current=false;if(!isHost)setScr(null);onlineProps.onMove({type:'wr_restart',_ts:Date.now()});}} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#065F46',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+
+  // LOCAL MODE (same device)
   return (
     <div style={{height:'90vh',display:'flex',flexDirection:'column',touchAction:'manipulation'}}>
       <div style={{textAlign:'center',padding:'8px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -3029,7 +3368,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       </div>
       <div style={{textAlign:'center',padding:'16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
         <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:4}}>{item.clue}</div>
-        <div style={{fontSize:28,fontWeight:900,letterSpacing:6,fontFamily:"'Sora',sans-serif"}}>{scr}</div>
+        <div style={{fontSize:28,fontWeight:900,letterSpacing:6,fontFamily:"'Sora',sans-serif"}}>{localScr}</div>
         {revealed&&<div style={{fontSize:16,color:'#22C55E',fontWeight:700,marginTop:4}}>→ {item.word}</div>}
       </div>
       <div style={{flex:1,display:'flex',flexDirection:'column'}}>
