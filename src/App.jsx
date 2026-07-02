@@ -4863,10 +4863,29 @@ const LeaderboardPage = ({ user, stats }) => {
 // ============================================================
 // LOBBY
 // ============================================================
+const GAME_ICONS_MAP = {
+  xox: '❌⭕', rps: '✊✋✌️', connectfour: '🔵', gomoku: '⚫',
+  reaction: '⚡', mathduel: '🧮', cardbattle: '🃏', memorybattle: '🧠', wordrace: '🔤'
+};
+
 const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [showJoin, setShowJoin] = useState(false);
+  const [publicRooms, setPublicRooms] = useState([]);
+
+  useEffect(function() {
+    function fetchRooms() {
+      fetch('https://oyun-club-backend-production.up.railway.app/api/rooms')
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if (d && d.rooms) setPublicRooms(d.rooms); })
+        .catch(function() {});
+    }
+    fetchRooms();
+    var interval = setInterval(fetchRooms, 8000);
+    return function() { clearInterval(interval); };
+  }, []);
+
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length < 4) {
@@ -5054,6 +5073,47 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
           </div>
         )}
       </Card>
+
+      {/* Public rooms section */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1 }}>
+            🟢 Açık Masalar
+            {publicRooms.length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#6366f1', background: 'rgba(99,102,241,0.15)', borderRadius: 6, padding: '1px 7px' }}>
+                {publicRooms.length}
+              </span>
+            )}
+          </div>
+        </div>
+        {publicRooms.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '18px 12px', background: 'var(--surface)', borderRadius: 12, border: '1px dashed var(--border)', color: 'var(--text-secondary)', fontSize: 13 }}>
+            Şu an açık masa yok — Çok Oyunculu'dan masa oluşturabilirsin!
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {publicRooms.slice(0, 15).map(function(room) {
+              const isFull = room.players >= room.maxPlayers;
+              return (
+                <div key={room.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 10px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', gap: 5, opacity: isFull ? 0.6 : 1 }}>
+                  <div style={{ fontSize: 20, textAlign: 'center' }}>{GAME_ICONS_MAP[room.gameId] || '🎮'}</div>
+                  <div style={{ fontWeight: 700, fontSize: 11, textAlign: 'center', lineHeight: 1.2 }}>{room.gameName}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>{room.hostName}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                    <span style={{ color: isFull ? '#ef4444' : '#22c55e', fontWeight: 600 }}>{room.players}</span>/{room.maxPlayers}
+                  </div>
+                  <button
+                    onClick={function() { if (!isFull) onJoinRoom(room.id); }}
+                    disabled={isFull}
+                    style={{ padding: '7px 4px', borderRadius: 8, border: 'none', background: !isFull ? '#6366f1' : '#ccc', color: '#fff', fontWeight: 700, fontSize: 11, cursor: isFull ? 'not-allowed' : 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                    {isFull ? 'Dolu' : 'Katıl →'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div
         style={{
