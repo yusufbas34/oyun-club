@@ -1495,9 +1495,10 @@ function move2048(grid, dir) {
   } else if (dir === 'right') {
     for (let r = 0; r < 4; r++) {
       const orig = getRow(r).join();
-      const { row, score } = slide2048Row(getRow(r).reverse());
-      if (row.reverse().join() !== orig) changed = true;
-      setRow(r, row.reverse()); totalScore += score;
+      const { row, score } = slide2048Row([...getRow(r)].reverse());
+      const result = [...row].reverse();
+      if (result.join() !== orig) changed = true;
+      setRow(r, result); totalScore += score;
     }
   } else if (dir === 'up') {
     for (let c = 0; c < 4; c++) {
@@ -1509,9 +1510,10 @@ function move2048(grid, dir) {
   } else if (dir === 'down') {
     for (let c = 0; c < 4; c++) {
       const orig = getCol(c).join();
-      const { row, score } = slide2048Row(getCol(c).reverse());
-      if (row.reverse().join() !== orig) changed = true;
-      setCol(c, row.reverse()); totalScore += score;
+      const { row, score } = slide2048Row([...getCol(c)].reverse());
+      const result = [...row].reverse();
+      if (result.join() !== orig) changed = true;
+      setCol(c, result); totalScore += score;
     }
   }
   return { grid: flat, score: totalScore, changed };
@@ -3397,6 +3399,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
 // ============================================================
 // CONSTANTS & HELPERS
 // ============================================================
+// genre: 'strateji' | 'hız' | 'hafıza' | 'kelime'
 const GAMES = [
   {
     id: 'xox',
@@ -3404,6 +3407,7 @@ const GAMES = [
     desc: 'Klasik Tic-Tac-Toe',
     icon: '✕○',
     players: 2,
+    genre: 'strateji',
     color: '#E63946',
     bg: 'linear-gradient(135deg, #E63946 0%, #F4845F 100%)',
   },
@@ -3414,80 +3418,9 @@ const GAMES = [
     icon: '🔵',
     players: 2,
     local: true,
+    genre: 'strateji',
     color: '#1D4ED8',
     bg: 'linear-gradient(135deg, #1D4ED8 0%, #60A5FA 100%)',
-  },
-  {
-    id: 'rps',
-    name: 'Taş Kağıt Makas',
-    desc: 'En iyi 3 kazanır',
-    icon: '✊✋✌',
-    players: 2,
-    color: '#2A9D8F',
-    bg: 'linear-gradient(135deg, #2A9D8F 0%, #76C893 100%)',
-  },
-  {
-    id: 'minesweeper',
-    name: 'Mayın Tarlası',
-    desc: 'Mayınları bulmadan alanı temizle',
-    icon: '💣',
-    players: 1,
-    color: '#457B9D',
-    bg: 'linear-gradient(135deg, #457B9D 0%, #48CAE4 100%)',
-  },
-  {
-    id: 'memory',
-    name: 'Hafıza Kartları',
-    desc: 'Eşleri bul, hafızanı test et',
-    icon: '🃏',
-    players: 1,
-    color: '#7C3AED',
-    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
-  },
-  {
-    id: 'snake',
-    name: 'Yılan Oyunu',
-    desc: 'Klasik Snake',
-    icon: '🐍',
-    players: 1,
-    color: '#059669',
-    bg: 'linear-gradient(135deg, #059669 0%, #34D399 100%)',
-  },
-  {
-    id: '2048',
-    name: '2048',
-    desc: "Sayıları birleştir, 2048'e ulaş",
-    icon: '🔢',
-    players: 1,
-    color: '#F59563',
-    bg: 'linear-gradient(135deg, #BBADA0 0%, #F59563 100%)',
-  },
-  {
-    id: 'wordle',
-    name: 'Wordle TR',
-    desc: 'Türkçe kelime tahmin oyunu',
-    icon: '🔤',
-    players: 1,
-    color: '#538D4E',
-    bg: 'linear-gradient(135deg, #538D4E 0%, #6AAF5E 100%)',
-  },
-  {
-    id: 'dama',
-    name: 'Dama',
-    desc: 'Türk Dama - Bota karşı oyna',
-    icon: '⚫',
-    players: 1,
-    color: '#457B9D',
-    bg: 'linear-gradient(135deg, #457B9D 0%, #1D3557 100%)',
-  },
-  {
-    id: 'sudoku',
-    name: 'Sudoku',
-    desc: 'Rakamları yerleştir',
-    icon: '🔲',
-    players: 1,
-    color: '#7C3AED',
-    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
   {
     id: 'gomoku',
@@ -3496,9 +3429,19 @@ const GAMES = [
     icon: '⚫',
     players: 2,
     local: true,
-    category: 'multi',
+    genre: 'strateji',
     color: '#1F2937',
     bg: 'linear-gradient(135deg, #1F2937 0%, #4B5563 100%)',
+  },
+  {
+    id: 'rps',
+    name: 'Taş Kağıt Makas',
+    desc: 'En iyi 3 kazanır',
+    icon: '✊✋✌',
+    players: 2,
+    genre: 'hız',
+    color: '#2A9D8F',
+    bg: 'linear-gradient(135deg, #2A9D8F 0%, #76C893 100%)',
   },
   {
     id: 'reaction',
@@ -3507,7 +3450,7 @@ const GAMES = [
     icon: '⚡',
     players: 2,
     local: true,
-    category: 'multi',
+    genre: 'hız',
     color: '#D97706',
     bg: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)',
   },
@@ -3518,7 +3461,7 @@ const GAMES = [
     icon: '🧮',
     players: 2,
     local: true,
-    category: 'multi',
+    genre: 'hız',
     color: '#0369A1',
     bg: 'linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)',
   },
@@ -3529,7 +3472,7 @@ const GAMES = [
     icon: '🃏',
     players: 2,
     local: true,
-    category: 'multi',
+    genre: 'hafıza',
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #C084FC 100%)',
   },
@@ -3540,7 +3483,7 @@ const GAMES = [
     icon: '🧠',
     players: 2,
     local: true,
-    category: 'multi',
+    genre: 'hafıza',
     color: '#BE185D',
     bg: 'linear-gradient(135deg, #BE185D 0%, #F472B6 100%)',
   },
@@ -3551,9 +3494,79 @@ const GAMES = [
     icon: '🔤',
     players: 2,
     local: true,
-    category: 'multi',
+    genre: 'kelime',
     color: '#065F46',
     bg: 'linear-gradient(135deg, #065F46 0%, #34D399 100%)',
+  },
+  {
+    id: 'minesweeper',
+    name: 'Mayın Tarlası',
+    desc: 'Mayınları bulmadan alanı temizle',
+    icon: '💣',
+    players: 1,
+    genre: 'strateji',
+    color: '#457B9D',
+    bg: 'linear-gradient(135deg, #457B9D 0%, #48CAE4 100%)',
+  },
+  {
+    id: 'sudoku',
+    name: 'Sudoku',
+    desc: 'Rakamları yerleştir',
+    icon: '🔲',
+    players: 1,
+    genre: 'strateji',
+    color: '#7C3AED',
+    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
+  },
+  {
+    id: 'dama',
+    name: 'Dama',
+    desc: 'Türk Dama - Bota karşı oyna',
+    icon: '⚫',
+    players: 1,
+    genre: 'strateji',
+    color: '#457B9D',
+    bg: 'linear-gradient(135deg, #457B9D 0%, #1D3557 100%)',
+  },
+  {
+    id: 'snake',
+    name: 'Yılan Oyunu',
+    desc: 'Klasik Snake',
+    icon: '🐍',
+    players: 1,
+    genre: 'hız',
+    color: '#059669',
+    bg: 'linear-gradient(135deg, #059669 0%, #34D399 100%)',
+  },
+  {
+    id: '2048',
+    name: '2048',
+    desc: "Sayıları birleştir, 2048'e ulaş",
+    icon: '🔢',
+    players: 1,
+    genre: 'strateji',
+    color: '#F59563',
+    bg: 'linear-gradient(135deg, #BBADA0 0%, #F59563 100%)',
+  },
+  {
+    id: 'memory',
+    name: 'Hafıza Kartları',
+    desc: 'Eşleri bul, hafızanı test et',
+    icon: '🃏',
+    players: 1,
+    genre: 'hafıza',
+    color: '#7C3AED',
+    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
+  },
+  {
+    id: 'wordle',
+    name: 'Wordle TR',
+    desc: 'Türkçe kelime tahmin oyunu',
+    icon: '🔤',
+    players: 1,
+    genre: 'kelime',
+    color: '#538D4E',
+    bg: 'linear-gradient(135deg, #538D4E 0%, #6AAF5E 100%)',
   },
 ];
 
@@ -4873,6 +4886,8 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
   const [joinError, setJoinError] = useState('');
   const [showJoin, setShowJoin] = useState(false);
   const [publicRooms, setPublicRooms] = useState([]);
+  const [filterPlayers, setFilterPlayers] = useState('all');
+  const [filterGenre, setFilterGenre] = useState('all');
 
   useEffect(function() {
     function fetchRooms() {
@@ -5115,108 +5130,83 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
         )}
       </div>
 
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
-          textTransform: 'uppercase',
-          letterSpacing: 1,
-          marginBottom: 14,
-        }}
-      >
-        Oyunlar
+      {/* Filter bar */}
+      <div style={{ marginBottom: 20 }}>
+        {/* Player count filter */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          {[
+            { key: 'all', label: 'Tümü', count: GAMES.length },
+            { key: 1, label: '👤 Tek Kişilik', count: GAMES.filter(g => g.players === 1).length },
+            { key: 2, label: '👥 2 Kişilik', count: GAMES.filter(g => g.players === 2).length },
+          ].map(function(f) {
+            const active = filterPlayers === f.key;
+            return (
+              <button key={f.key} onClick={function() { setFilterPlayers(f.key); setFilterGenre('all'); }}
+                style={{ padding: '7px 14px', borderRadius: 20, border: active ? 'none' : '1px solid var(--border)', background: active ? 'var(--accent)' : 'var(--surface)', color: active ? '#fff' : 'var(--text)', fontWeight: active ? 700 : 500, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
+                {f.label} <span style={{ opacity: 0.7, fontSize: 11 }}>{f.count}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Genre filter */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {[
+            { key: 'all', label: '🎮 Hepsi' },
+            { key: 'strateji', label: '♟️ Strateji' },
+            { key: 'hız', label: '⚡ Hız' },
+            { key: 'hafıza', label: '🧠 Hafıza' },
+            { key: 'kelime', label: '🔤 Kelime' },
+          ].map(function(f) {
+            const active = filterGenre === f.key;
+            return (
+              <button key={f.key} onClick={function() { setFilterGenre(f.key); }}
+                style={{ padding: '5px 12px', borderRadius: 16, border: active ? 'none' : '1px solid var(--border)', background: active ? '#6366f1' : 'var(--surface)', color: active ? '#fff' : 'var(--text-secondary)', fontWeight: active ? 700 : 400, fontSize: 12, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: 16,
-        }}
-      >
-        {GAMES.map((game, i) => (
-          <Card
-            key={game.id}
-            onClick={() => onSelectGame(game)}
-            hoverable
-            style={{
-              padding: 0,
-              overflow: 'hidden',
-              animation: 'fadeUp 0.5s ease',
-              animationDelay: `${(i + 1) * 0.1}s`,
-              animationFillMode: 'both',
-            }}
-          >
-            <div
-              style={{
-                background: game.bg,
-                padding: '28px 20px',
-                color: '#fff',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
+
+      {/* Game grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+        {GAMES.filter(function(g) {
+          if (filterPlayers !== 'all' && g.players !== filterPlayers) return false;
+          if (filterGenre !== 'all' && g.genre !== filterGenre) return false;
+          return true;
+        }).map(function(game, i) {
+          const gs = stats.games[game.id];
+          return (
+            <Card
+              key={game.id}
+              onClick={() => onSelectGame(game)}
+              hoverable
+              style={{ padding: 0, overflow: 'hidden', animation: 'fadeUp 0.4s ease', animationDelay: `${i * 0.05}s`, animationFillMode: 'both' }}
             >
-              <div
-                style={{
-                  position: 'absolute',
-                  right: -10,
-                  top: -10,
-                  fontSize: 80,
-                  opacity: 0.15,
-                  fontWeight: 800,
-                }}
-              >
-                {game.icon}
-              </div>
-              <span
-                style={{
-                  fontSize: 32,
-                  display: 'block',
-                  marginBottom: 4,
-                  animation: 'float 3s ease-in-out infinite',
-                  animationDelay: `${i * 0.5}s`,
-                }}
-              >
-                {game.icon}
-              </span>
-            </div>
-            <div style={{ padding: '14px 18px' }}>
-              <h3
-                style={{
-                  fontFamily: "'Sora', sans-serif",
-                  fontSize: 17,
-                  fontWeight: 700,
-                  marginBottom: 3,
-                }}
-              >
-                {game.name}
-              </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                {game.desc}
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginTop: 10,
-                }}
-              >
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  👤 {game.players === 1 ? 'Tek' : `${game.players} kişi`}
-                </span>
-                {stats.games[game.id]?.played > 0 && (
-                  <span
-                    style={{ fontSize: 11, color: game.color, fontWeight: 600 }}
-                  >
-                    {stats.games[game.id].wins}G / {stats.games[game.id].losses}
-                    M
+              <div style={{ background: game.bg, padding: '20px 16px', color: '#fff', position: 'relative', overflow: 'hidden', minHeight: 80 }}>
+                <div style={{ position: 'absolute', right: -8, top: -8, fontSize: 64, opacity: 0.15, fontWeight: 800 }}>{game.icon}</div>
+                <span style={{ fontSize: 28, display: 'block', marginBottom: 2 }}>{game.icon}</span>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                  <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px' }}>
+                    {game.players === 1 ? '👤 Tek' : '👥 2 Kişi'}
                   </span>
+                  <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px', textTransform: 'capitalize' }}>
+                    {game.genre === 'strateji' ? '♟️' : game.genre === 'hız' ? '⚡' : game.genre === 'hafıza' ? '🧠' : '🔤'} {game.genre}
+                  </span>
+                </div>
+              </div>
+              <div style={{ padding: '12px 14px' }}>
+                <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{game.name}</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: 0 }}>{game.desc}</p>
+                {gs && gs.played > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: game.color, fontWeight: 600 }}>
+                    {gs.wins}G / {gs.losses}M · {gs.played} oyun
+                  </div>
                 )}
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
