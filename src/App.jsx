@@ -4609,14 +4609,15 @@ const SoundToggle = ({ soundOn, onToggle }) => (
   </button>
 );
 
-const Avatar = ({ name, size = 36, gradient, style = {} }) => (
+const AVATAR_EMOJIS = ['🎮','🏆','🦁','🐯','🦊','🐧','🚀','🌟','🎯','🎸','🔥','💎','🦄','🐉','🎪','⚡','🌈','🎭','🤖','👾','🎲','🏄','🦅','🐺','🌙'];
+const Avatar = ({ name, size = 36, gradient, style = {}, emoji }) => (
   <div
     style={{
       width: size,
       height: size,
       borderRadius: '50%',
       flexShrink: 0,
-      background:
+      background: emoji ? 'var(--surface-hover)' :
         gradient ||
         AVATAR_COLORS[(name?.charCodeAt(0) || 0) % AVATAR_COLORS.length],
       display: 'flex',
@@ -4624,12 +4625,13 @@ const Avatar = ({ name, size = 36, gradient, style = {} }) => (
       justifyContent: 'center',
       color: '#fff',
       fontWeight: 700,
-      fontSize: size * 0.38,
+      fontSize: emoji ? size * 0.55 : size * 0.38,
       fontFamily: "'Sora', sans-serif",
+      border: emoji ? '2px solid var(--border)' : 'none',
       ...style,
     }}
   >
-    {name?.charAt(0).toUpperCase()}
+    {emoji || name?.charAt(0).toUpperCase()}
   </div>
 );
 
@@ -4992,7 +4994,17 @@ const LoginPage = ({ onLogin, dark, onToggleDark }) => {
 // ============================================================
 // PROFILE PAGE
 // ============================================================
-const ProfilePage = ({ user, stats, onLogout }) => {
+const RANKS = [
+  { min:0,   max:4,   icon:'🌱', label:'Acemi',        color:'#6B7280', bg:'#F3F4F6' },
+  { min:5,   max:24,  icon:'⚡', label:'Oyuncu',        color:'#2563EB', bg:'#DBEAFE' },
+  { min:25,  max:59,  icon:'🔥', label:'Usta',          color:'#D97706', bg:'#FEF3C7' },
+  { min:60,  max:99,  icon:'💎', label:'Profesyonel',   color:'#7C3AED', bg:'#EDE9FE' },
+  { min:100, max:Infinity, icon:'👑', label:'Doktor',   color:'#B45309', bg:'#FEF3C7' },
+];
+function getRank(wins) { return RANKS.find(r => wins >= r.min && wins <= r.max) || RANKS[0]; }
+
+const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange }) => {
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const totalGames = Object.values(stats.games).reduce(
     (a, g) => a + g.played,
     0
@@ -5000,6 +5012,7 @@ const ProfilePage = ({ user, stats, onLogout }) => {
   const totalWins = Object.values(stats.games).reduce((a, g) => a + g.wins, 0);
   const winRate =
     totalGames > 0 ? Math.round((totalWins / totalGames) * 100) : 0;
+  const rank = getRank(totalWins);
 
   return (
     <div
@@ -5013,7 +5026,21 @@ const ProfilePage = ({ user, stats, onLogout }) => {
       <Card
         style={{ textAlign: 'center', padding: '36px 24px', marginBottom: 20 }}
       >
-        <Avatar name={user.name} size={80} style={{ margin: '0 auto 16px' }} />
+        <div style={{position:'relative',width:80,margin:'0 auto 16px',cursor:'pointer'}} onClick={()=>setShowAvatarPicker(true)}>
+          <Avatar name={user.name} size={80} emoji={userAvatar||undefined} />
+          <div style={{position:'absolute',bottom:0,right:0,width:24,height:24,borderRadius:'50%',background:'#863bff',color:'#fff',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',border:'2px solid var(--surface)'}}>✏️</div>
+        </div>
+        {showAvatarPicker && (
+          <div style={{background:'var(--surface-hover)',borderRadius:16,padding:'16px',marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:'var(--text-secondary)'}}>Avatar seç:</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8}}>
+              <button onClick={()=>{onAvatarChange('');setShowAvatarPicker(false);}} style={{fontSize:24,padding:6,borderRadius:10,border:'2px solid var(--border)',background:'var(--surface)',cursor:'pointer'}}>🔤</button>
+              {AVATAR_EMOJIS.map(e=>(
+                <button key={e} onClick={()=>{onAvatarChange(e);setShowAvatarPicker(false);}} style={{fontSize:24,padding:6,borderRadius:10,border:`2px solid ${userAvatar===e?'#863bff':'var(--border)'}`,background:userAvatar===e?'rgba(134,59,255,0.1)':'var(--surface)',cursor:'pointer'}}>{e}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <h2
           style={{
             fontFamily: "'Sora', sans-serif",
@@ -5029,41 +5056,18 @@ const ProfilePage = ({ user, stats, onLogout }) => {
             {user.email}
           </p>
         )}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            marginTop: 12,
-          }}
-        >
-          <span
-            style={{
-              padding: '4px 12px',
-              borderRadius: 20,
-              fontSize: 12,
-              fontWeight: 600,
-              background:
-                winRate >= 60
-                  ? '#DCFCE7'
-                  : winRate >= 40
-                  ? '#FEF9C3'
-                  : '#FEE2E2',
-              color:
-                winRate >= 60
-                  ? '#16A34A'
-                  : winRate >= 40
-                  ? '#CA8A04'
-                  : '#DC2626',
-            }}
-          >
-            {winRate >= 60
-              ? '🔥 Pro Oyuncu'
-              : winRate >= 40
-              ? '⚡ Orta Seviye'
-              : '🌱 Başlangıç'}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:12,flexWrap:'wrap'}}>
+          <span style={{padding:'4px 14px',borderRadius:20,fontSize:13,fontWeight:700,background:rank.bg,color:rank.color}}>
+            {rank.icon} {rank.label}
           </span>
+          <span style={{padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,background:'#F3F4F6',color:'#6B7280'}}>
+            {totalWins} galibiyet
+          </span>
+        </div>
+        <div style={{marginTop:12,padding:'8px 16px',borderRadius:12,background:'var(--surface-hover)',display:'inline-flex',gap:16,fontSize:12,color:'var(--text-secondary)'}}>
+          {RANKS.map((r,i)=>(
+            <span key={i} style={{opacity:totalWins>=r.min?1:0.35,fontWeight:totalWins>=r.min&&totalWins<=r.max?700:400}}>{r.icon}</span>
+          ))}
         </div>
       </Card>
 
@@ -5628,6 +5632,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
         >
           <span>🎮 {totalGames} oyun</span>
           <span>🏆 {totalWins} galibiyet</span>
+          <span style={{padding:'2px 10px',borderRadius:20,background:'rgba(134,59,255,0.12)',color:'#863bff',fontWeight:600,fontSize:12}}>{getRank(totalWins).icon} {getRank(totalWins).label}</span>
         </div>
       </div>
 
@@ -5895,6 +5900,33 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
           );
         })}
       </div>
+
+      {/* Davet Linki */}
+      <div style={{marginTop:24,padding:'16px 20px',borderRadius:16,background:'linear-gradient(135deg,#1e1b4b,#2d1b69)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>🔗 Arkadaşını Davet Et</div>
+          <div style={{fontSize:12,opacity:0.8}}>Linki paylaş, birlikte oynayın!</div>
+        </div>
+        <button onClick={()=>{
+          const url = window.location.origin;
+          if(navigator.share){navigator.share({title:'oyun.club',text:'Benimle oyna! 🎮',url});}
+          else{navigator.clipboard?.writeText(url);alert('Link kopyalandı!');}
+        }} style={{padding:'10px 18px',borderRadius:12,border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',backdropFilter:'blur(10px)'}}>
+          📤 Paylaş
+        </button>
+      </div>
+
+      {/* Bağış / Kahve */}
+      <div style={{marginTop:16,padding:'16px 20px',borderRadius:16,background:'var(--surface)',border:'1px solid var(--border)',textAlign:'center'}}>
+        <div style={{fontSize:24,marginBottom:6}}>☕</div>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Daha iyi oyunlar için destek ol!</div>
+        <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:12}}>Bir kahve ısmarlayarak geliştirmeye katkıda bulunabilirsin.</div>
+        <a href="https://ko-fi.com" target="_blank" rel="noopener noreferrer"
+          style={{display:'inline-block',padding:'10px 24px',borderRadius:12,background:'linear-gradient(135deg,#FF5E5B,#FF9A3C)',color:'#fff',fontWeight:700,fontSize:14,textDecoration:'none'}}>
+          ☕ Kahve Ismarla
+        </a>
+      </div>
+
     </div>
   );
 };
@@ -7591,6 +7623,57 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 };
 
 // ============================================================
+// GAME HELP TEXTS
+// ============================================================
+const GAME_HELP = {
+  xox:         { icon:'❌⭕', title:'XOX (Tic-Tac-Toe)',    rules:['3×3 ızgaraya sırayla X ve O koy.','Yatay, dikey veya çapraz 3 aynı işareti diz — kazanırsın.','Tüm hücreler dolup kimse dizemezse berabere.'] },
+  minesweeper: { icon:'💣',  title:'Mayın Tarlası',         rules:['Karelere tıkla, mayın olmayan tüm kareleri aç.','Sayılar o kareye komşu kaç mayın olduğunu gösterir.','Mayına basarsan kaybedersin. Bayrak koymak için uzun bas (mobil) veya sağ tıkla.'] },
+  rps:         { icon:'✊',  title:'Taş Kağıt Makas',       rules:['Taş makası, makas kağıdı, kağıt taşı yener.','Aynı anda seçim yap, kazanmak için rakibi yen.','5 raundda daha fazla galibiyet alan oyunu kazanır.'] },
+  memory:      { icon:'🃏',  title:'Hafıza (Eşleştirme)',   rules:['Kartlar yüzü aşağı sıralı. Her turda 2 kart çevir.','Aynı çiftse kartlar açık kalır, puan alırsın.','Tüm çiftleri bul — oyunu bitir!'] },
+  snake:       { icon:'🐍',  title:'Yılan',                 rules:['Yılanı ok tuşları veya ekrana kaydırarak yönet.','Her yenen elma yılanı uzatır.','Duvara veya kendi kuyruğuna çarparsan oyun biter.'] },
+  '2048':      { icon:'🔢',  title:'2048',                  rules:['Ok tuşları veya kaydırmayla tüm taşları bir yöne it.','Aynı sayılı iki taş birleşince toplamları olur.','2048 sayısına ulaş — kazanırsın!'] },
+  wordle:      { icon:'🟩',  title:'Wordle',                rules:['5 harfli Türkçe kelimeyi 6 denemede bul.','Yeşil: doğru harf, doğru yer. Sarı: doğru harf, yanlış yer. Gri: kelimede yok.','Her tahmin gerçek bir kelime olmalı.'] },
+  connectfour: { icon:'🔵',  title:'Dört Sıra',             rules:['Sırayla sütunlara disk bırak, yatay/dikey/çapraz 4 disk diz.','Tahta dolarsa berabere.','Bota karşı veya aynı cihazda 2 kişi oyna.'] },
+  dama:        { icon:'⚫',  title:'Dama',                  rules:['Taşları çapraz ilerlet. Rakip taşını atlayarak ye.','Karşı sıraya ulaşan taş "dama" olur, her yöne gidebilir.','Tüm rakip taşlarını yen veya tıkandır — kazanırsın.'] },
+  sudoku:      { icon:'🔲',  title:'Sudoku',                rules:['9×9 ızgarayı 1-9 rakamlarıyla doldur.','Her satır, sütun ve 3×3 kutuda rakamlar tekrarsız olmalı.','Hatalı rakamlar kırmızıyla gösterilir.'] },
+  gomoku:      { icon:'⚫',  title:'Beş Taş (Gomoku)',      rules:['Sırayla taş koy, yatay/dikey/çapraz 5 taşı diz — kazanırsın.','Siyah taşlar senin, beyaz taşlar bot/rakip.','Bota karşı veya aynı cihazda 2 kişi oyna.'] },
+  reaction:    { icon:'⚡',  title:'Refleks Savaşı',        rules:['Yeşil ışık yandığında mümkün olduğunca hızlı dokun/tıkla.','En hızlı 5 turda en çok turu kazanan galip.','Erken basarsan tur kaybedebilirsin!'] },
+  mathduel:    { icon:'🧮',  title:'Matematik Düellosu',    rules:['Ekranda bir matematik sorusu çıkar.','Doğru cevabı rakibinden önce seç.','10 soruda en çok doğru yapan kazanır.'] },
+  cardbattle:  { icon:'🃏',  title:'Kart Savaşı',           rules:['Her turda iki karta bakılır, yüksek kart turu kazanır.','13 turda en çok turu kazanan oyunu kazanır.','Beraberlik o turda puan yok.'] },
+  memorybattle:{ icon:'🧠',  title:'Hafıza Savaşı',         rules:['Kendi sırandayken 2 kart çevir, eşleştirirsen yeniden hamle hakkı kazanırsın.','12 çifti kim önce eşleştirirse kazanır.','2 kişilik strateji: rakibinin açtığı kartları aklında tut.'] },
+  wordrace:    { icon:'🔤',  title:'Kelime Yarışı',          rules:['Ekranda karışık harfler görünür — doğru kelimeyi bul.','Rakibinden önce doğru yazarsan puan alırsın.','En çok tura kazanan kazanır.'] },
+  mangala:     { icon:'🪨',  title:'Mangala',               rules:['Her tur bir çukurdan taşları al, sola doğru tek tek dağıt.','Son taş kendi haznene düşerse tekrar oynarsın.','Son taş boş rakip çukuruna düşerse karşısındaki taşları alırsın.','Tüm çukurlar boşaldığında haznesinde daha fazla taş olan kazanır.'] },
+  simon:       { icon:'🔴',  title:'Simon Söylüyor',         rules:['Renkli düğmeler sırayla yanıp söner — diziyi ezberle.','Sıra sende: aynı renkli düğmelere aynı sırada bas.','Her turda dizi bir adım uzar. Hata yaparsan oyun biter.'] },
+  lightsout:   { icon:'💡',  title:'Işığı Söndür',           rules:['Bir kareye tıkladığında o kare ve 4 komşusu (yukarı/aşağı/sol/sağ) durumunu değiştirir.','Amaç tüm ışıkları söndürmek.','Az hamleyle bitirmek için kafanı kullan!'] },
+  brickbreaker:{ icon:'🧱',  title:'Top Patlatma',           rules:['Paddle\'ı hareket ettir (fare/parmak veya ok tuşları).','Top fırlatmak için tıkla/dokun veya Boşluk tuşuna bas.','Tüm tuğlaları topla kır — ama topu düşürme!'] },
+  nim:         { icon:'🪵',  title:'Çubuk Oyunu (Nim)',      rules:['3 sıra var (3, 5 ve 7 çubuk). Sırayla bir sıradan istediğin kadar çubuk al.','Ama hepsini bir anda sadece bir sıradan alabilirsin.','Son çubuğu almak zorunda kalan KAYBEDER.'] },
+};
+
+function HelpModal({ gameId, onClose }) {
+  const h = GAME_HELP[gameId];
+  if (!h) return null;
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',maxWidth:380,width:'100%',maxHeight:'80vh',overflowY:'auto'}}>
+        <div style={{textAlign:'center',marginBottom:20}}>
+          <div style={{fontSize:48,marginBottom:8}}>{h.icon}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:22,marginBottom:0}}>{h.title}</h2>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:24}}>
+          {h.rules.map((r,i)=>(
+            <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+              <div style={{width:24,height:24,borderRadius:'50%',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flexShrink:0}}>{i+1}</div>
+              <p style={{margin:0,fontSize:14,lineHeight:1.6,color:'var(--text)'}}>{r}</p>
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} style={{width:'100%',padding:'13px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontSize:15,fontWeight:700,cursor:'pointer'}}>Anladım, Oynayalım! 🎮</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // AD OVERLAY
 // ============================================================
 // AdSense publisher ID buraya gelecek — adsense.google.com'dan al
@@ -7687,6 +7770,8 @@ export default function App() {
   const [showAd, setShowAd] = useState(false);
   const [pendingGame, setPendingGame] = useState(null);
   const adGameCountRef = useRef(0);
+  const [showHelp, setShowHelp] = useState(false);
+  const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
   const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0} };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) return JSON.parse(s); } catch {} return { games: EMPTY_STATS, history: [] }; });
 
@@ -7768,7 +7853,8 @@ export default function App() {
   };
   const handleBack = () => {
     if (page === 'game') {
-      if (selectedGame?.players > 1) setPage('room');
+      // Only go to room for online multiplayer setup, not local 2-player games
+      if (selectedGame?.online && players.length > 1 && page !== 'game') setPage('room');
       else {
         setPage('lobby');
         setSelectedGame(null);
@@ -7993,6 +8079,22 @@ export default function App() {
           setPendingGame(null);
         }} />
       )}
+      {showHelp && selectedGame && (
+        <HelpModal gameId={selectedGame.id} onClose={() => setShowHelp(false)} />
+      )}
+      {page === 'game' && selectedGame && GAME_HELP[selectedGame.id] && (
+        <button
+          onClick={() => setShowHelp(true)}
+          style={{
+            position: 'fixed', bottom: 80, right: 16, zIndex: 500,
+            width: 44, height: 44, borderRadius: '50%',
+            background: 'linear-gradient(135deg,#863bff,#5b21b6)',
+            color: '#fff', fontSize: 20, fontWeight: 800,
+            border: 'none', cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(134,59,255,0.5)',
+          }}
+        >?</button>
+      )}
       <div
         style={{
           minHeight: '100vh',
@@ -8025,6 +8127,8 @@ export default function App() {
           <ProfilePage
             user={user}
             stats={stats}
+            userAvatar={userAvatar}
+            onAvatarChange={(e) => { setUserAvatar(e); try { localStorage.setItem('oyunclub_avatar', e); } catch {} }}
             onLogout={() => {
               setUser(null);
               setPage('login');
