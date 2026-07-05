@@ -7932,6 +7932,8 @@ const AD_INTERVAL = 4;
 
 function AdOverlay({ onClose }) {
   const [seconds, setSeconds] = React.useState(5);
+  const [adLoaded, setAdLoaded] = React.useState(false);
+  const insRef = React.useRef(null);
   const canClose = seconds <= 0;
 
   React.useEffect(() => {
@@ -7940,63 +7942,75 @@ function AdOverlay({ onClose }) {
     return () => clearTimeout(t);
   }, [seconds]);
 
-  // AdSense script'i varsa reklam alanını başlat
   React.useEffect(() => {
     try {
-      if (window.adsbygoogle) (window.adsbygoogle = window.adsbygoogle || []).push({});
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch {}
+    // Check if ad actually rendered after a short delay
+    const check = setTimeout(() => {
+      if (insRef.current && insRef.current.offsetHeight > 50) setAdLoaded(true);
+    }, 2000);
+    return () => clearTimeout(check);
   }, []);
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.85)',
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.88)',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       padding: '20px',
+      WebkitOverflowScrolling: 'touch',
     }}>
       <div style={{
-        background: 'var(--surface)', borderRadius: 20, padding: '24px 20px',
-        maxWidth: 360, width: '100%', textAlign: 'center',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+        background: '#1A1A2E', borderRadius: 20, padding: '24px 20px',
+        maxWidth: 340, width: '100%', textAlign: 'center',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+        border: '1px solid rgba(134,59,255,0.3)',
       }}>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>Reklam</div>
+        <div style={{ fontSize: 11, color: '#8B8BA3', marginBottom: 12, letterSpacing: 1.5, textTransform: 'uppercase' }}>Reklam Desteği</div>
 
-        {/* AdSense reklam alanı — gerçek publisher ID eklenince otomatik dolar */}
-        <ins
-          className="adsbygoogle"
-          style={{ display: 'block', minHeight: 250 }}
-          data-ad-client={ADSENSE_CLIENT}
-          data-ad-slot={ADSENSE_SLOT}
-          data-ad-format="auto"
-          data-full-width-responsive="true"
-        />
-
-        {/* AdSense onaylanana kadar gösterilen placeholder — ID aktif olunca otomatik kapanır */}
-        {ADSENSE_CLIENT.includes('XXXX') && (
+        {adLoaded ? (
+          <ins
+            ref={insRef}
+            className="adsbygoogle"
+            style={{ display: 'block', minHeight: 250 }}
+            data-ad-client={ADSENSE_CLIENT}
+            data-ad-slot={ADSENSE_SLOT}
+            data-ad-format="rectangle"
+            data-full-width-responsive="false"
+          />
+        ) : (
           <div style={{
-            minHeight: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg,#1e1b4b,#312e81)', borderRadius: 12, marginBottom: 4,
-            flexDirection: 'column', gap: 8,
+            minHeight: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(135deg,#0F0F17,#1e1b4b)', borderRadius: 12, marginBottom: 4,
+            flexDirection: 'column', gap: 10,
           }}>
-            <div style={{ fontSize: 32 }}>🎮</div>
-            <div style={{ fontSize: 13, color: '#a5b4fc', fontWeight: 600 }}>Reklam Alanı</div>
-            <div style={{ fontSize: 11, color: '#6366f1', opacity: 0.7 }}>adsense.google.com'dan publisher ID al</div>
+            <div style={{ fontSize: 40 }}>🎮</div>
+            <div style={{ fontSize: 15, color: '#E8E8ED', fontWeight: 700 }}>oyun.club</div>
+            <div style={{ fontSize: 12, color: '#8B8BA3' }}>Reklam desteğin için teşekkürler!</div>
           </div>
         )}
+
+        <div style={{ marginTop: 16, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          {[...Array(5)].map((_,i) => (
+            <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i < (5 - seconds) ? '#863bff' : '#2A2A45', transition: 'background 0.4s' }} />
+          ))}
+        </div>
 
         <button
           onClick={canClose ? onClose : undefined}
           style={{
-            marginTop: 16, padding: '12px 32px', borderRadius: 12, border: 'none',
-            background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : '#4B5563',
-            color: '#FFF', fontSize: 15, fontWeight: 700,
-            cursor: canClose ? 'pointer' : 'not-allowed',
-            transition: 'background 0.3s ease',
+            padding: '13px 32px', borderRadius: 12, border: 'none',
+            background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : 'rgba(134,59,255,0.2)',
+            color: canClose ? '#FFF' : '#8B8BA3', fontSize: 15, fontWeight: 700,
+            cursor: canClose ? 'pointer' : 'default',
+            transition: 'all 0.3s ease',
             width: '100%',
+            WebkitTapHighlightColor: 'transparent',
           }}
         >
-          {canClose ? 'Oyuna Başla →' : `${seconds} saniye bekle...`}
+          {canClose ? '▶ Oyuna Başla' : `${seconds} saniye...`}
         </button>
       </div>
     </div>
