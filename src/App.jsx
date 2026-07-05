@@ -5916,15 +5916,21 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
         </button>
       </div>
 
-      {/* Bağış / Kahve */}
-      <div style={{marginTop:16,padding:'16px 20px',borderRadius:16,background:'var(--surface)',border:'1px solid var(--border)',textAlign:'center'}}>
-        <div style={{fontSize:24,marginBottom:6}}>☕</div>
+      {/* Bağış */}
+      <div style={{marginTop:16,padding:'20px',borderRadius:16,background:'var(--surface)',border:'1px solid var(--border)',textAlign:'center'}}>
+        <div style={{fontSize:28,marginBottom:6}}>🙏</div>
         <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Daha iyi oyunlar için destek ol!</div>
-        <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:12}}>Bir kahve ısmarlayarak geliştirmeye katkıda bulunabilirsin.</div>
-        <a href="https://ko-fi.com" target="_blank" rel="noopener noreferrer"
-          style={{display:'inline-block',padding:'10px 24px',borderRadius:12,background:'linear-gradient(135deg,#FF5E5B,#FF9A3C)',color:'#fff',fontWeight:700,fontSize:14,textDecoration:'none'}}>
-          ☕ Kahve Ismarla
-        </a>
+        <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:16}}>Küçük bir katkı yeni oyunlar eklememize yardımcı olur.</div>
+        <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
+          <a href="https://patreon.com/oyunclub" target="_blank" rel="noopener noreferrer"
+            style={{display:'inline-flex',alignItems:'center',gap:6,padding:'10px 20px',borderRadius:12,background:'linear-gradient(135deg,#FF424D,#FF7A45)',color:'#fff',fontWeight:700,fontSize:14,textDecoration:'none'}}>
+            🎗️ Patreon
+          </a>
+          <a href="https://papara.com/personal/payment/oyunclub" target="_blank" rel="noopener noreferrer"
+            style={{display:'inline-flex',alignItems:'center',gap:6,padding:'10px 20px',borderRadius:12,background:'linear-gradient(135deg,#6B21A8,#A855F7)',color:'#fff',fontWeight:700,fontSize:14,textDecoration:'none'}}>
+            💜 Papara
+          </a>
+        </div>
       </div>
 
     </div>
