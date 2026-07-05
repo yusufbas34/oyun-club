@@ -7595,7 +7595,7 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 // ============================================================
 // AdSense publisher ID buraya gelecek — adsense.google.com'dan al
 const ADSENSE_CLIENT = 'ca-pub-4692358549981436';
-const ADSENSE_SLOT   = 'XXXXXXXXXX';
+const ADSENSE_SLOT   = '8053490650';
 // Kaç oyunda bir reklam göster (1 = her oyun, 4 = her 4 oyunda bir)
 const AD_INTERVAL = 4;
 
