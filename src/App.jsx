@@ -7932,8 +7932,6 @@ const AD_INTERVAL = 4;
 
 function AdOverlay({ onClose }) {
   const [seconds, setSeconds] = React.useState(5);
-  const [adLoaded, setAdLoaded] = React.useState(false);
-  const insRef = React.useRef(null);
   const canClose = seconds <= 0;
 
   React.useEffect(() => {
@@ -7943,69 +7941,49 @@ function AdOverlay({ onClose }) {
   }, [seconds]);
 
   React.useEffect(() => {
-    try {
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch {}
-    // Check if ad actually rendered after a short delay
-    const check = setTimeout(() => {
-      if (insRef.current && insRef.current.offsetHeight > 50) setAdLoaded(true);
-    }, 2000);
-    return () => clearTimeout(check);
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
   }, []);
 
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.88)',
+      backgroundColor: 'rgba(0,0,0,0.82)',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      padding: '20px',
-      WebkitOverflowScrolling: 'touch',
+      padding: '24px 16px',
     }}>
       <div style={{
-        background: '#1A1A2E', borderRadius: 20, padding: '24px 20px',
-        maxWidth: 340, width: '100%', textAlign: 'center',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
-        border: '1px solid rgba(134,59,255,0.3)',
+        backgroundColor: '#ffffff', borderRadius: 20, padding: '28px 20px',
+        width: '100%', maxWidth: 320, textAlign: 'center',
+        boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
       }}>
-        <div style={{ fontSize: 11, color: '#8B8BA3', marginBottom: 12, letterSpacing: 1.5, textTransform: 'uppercase' }}>Reklam Desteği</div>
+        <div style={{ fontSize: 44, marginBottom: 8 }}>🎮</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 4, fontFamily: "'Sora', sans-serif" }}>oyun.club</div>
+        <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 20 }}>Reklam desteğin için teşekkürler!</div>
 
-        {adLoaded ? (
-          <ins
-            ref={insRef}
-            className="adsbygoogle"
-            style={{ display: 'block', minHeight: 250 }}
-            data-ad-client={ADSENSE_CLIENT}
-            data-ad-slot={ADSENSE_SLOT}
-            data-ad-format="rectangle"
-            data-full-width-responsive="false"
-          />
-        ) : (
-          <div style={{
-            minHeight: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg,#0F0F17,#1e1b4b)', borderRadius: 12, marginBottom: 4,
-            flexDirection: 'column', gap: 10,
-          }}>
-            <div style={{ fontSize: 40 }}>🎮</div>
-            <div style={{ fontSize: 15, color: '#E8E8ED', fontWeight: 700 }}>oyun.club</div>
-            <div style={{ fontSize: 12, color: '#8B8BA3' }}>Reklam desteğin için teşekkürler!</div>
-          </div>
-        )}
+        <ins
+          className="adsbygoogle"
+          style={{ display: 'block' }}
+          data-ad-client={ADSENSE_CLIENT}
+          data-ad-slot={ADSENSE_SLOT}
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        />
 
-        <div style={{ marginTop: 16, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          {[...Array(5)].map((_,i) => (
-            <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i < (5 - seconds) ? '#863bff' : '#2A2A45', transition: 'background 0.4s' }} />
-          ))}
+        <div style={{ margin: '20px 0 4px', fontSize: 28, fontWeight: 900, color: canClose ? '#863bff' : '#1A1A2E', fontFamily: "'Sora', sans-serif", minHeight: 40 }}>
+          {canClose ? '✓' : seconds}
+        </div>
+        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>
+          {canClose ? 'Hazır!' : 'saniye sonra oyun başlıyor'}
         </div>
 
         <button
           onClick={canClose ? onClose : undefined}
           style={{
-            padding: '13px 32px', borderRadius: 12, border: 'none',
-            background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : 'rgba(134,59,255,0.2)',
-            color: canClose ? '#FFF' : '#8B8BA3', fontSize: 15, fontWeight: 700,
+            padding: '14px', borderRadius: 12, border: 'none',
+            background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : '#E5E7EB',
+            color: canClose ? '#FFF' : '#9CA3AF', fontSize: 15, fontWeight: 700,
             cursor: canClose ? 'pointer' : 'default',
-            transition: 'all 0.3s ease',
             width: '100%',
             WebkitTapHighlightColor: 'transparent',
           }}
