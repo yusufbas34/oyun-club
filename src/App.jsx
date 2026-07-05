@@ -3727,7 +3727,14 @@ const GlobalStyle = ({ dark }) => (
       --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       --header-bg: ${dark ? 'rgba(15,15,23,0.85)' : 'rgba(255,255,255,0.85)'};
     }
-    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; transition: background 0.3s ease, color 0.3s ease; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; transition: background 0.3s ease, color 0.3s ease; overscroll-behavior: none; }
+    button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    input, select, textarea { touch-action: manipulation; font-size: 16px !important; }
+    * { -webkit-tap-highlight-color: transparent; }
+    @media (max-width: 480px) {
+      body { font-size: 15px; }
+    }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
     @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
@@ -5669,7 +5676,9 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
   const [won, setWon] = useState(false);
   const [time, setTime] = useState(0);
   const [started, setStarted] = useState(false);
+  const [flagMode, setFlagMode] = useState(false);
   const timerRef = useRef(null);
+  const longPressRef = useRef(null);
   useEffect(() => {
     if (started && !gameOver && !won)
       timerRef.current = setInterval(() => setTime((t) => t + 1), 1000);
@@ -5690,15 +5699,22 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
         }
     }
   };
+  const doFlag = (idx) => {
+    if (gameOver || won || cells[idx].revealed) return;
+    if (soundOn) playSound('flip');
+    const nc = cells.map((c) => ({ ...c }));
+    nc[idx].flagged = !nc[idx].flagged;
+    setCells(nc);
+  };
   const handleClick = (idx) => {
-    if (gameOver || won || cells[idx].flagged) return;
+    if (gameOver || won) return;
+    if (flagMode) { doFlag(idx); return; }
+    if (cells[idx].flagged) return;
     if (!started) setStarted(true);
     if (soundOn) playSound('click');
     const nc = cells.map((c) => ({ ...c }));
     if (nc[idx].mine) {
-      nc.forEach((c) => {
-        if (c.mine) c.revealed = true;
-      });
+      nc.forEach((c) => { if (c.mine) c.revealed = true; });
       setCells(nc);
       setGameOver(true);
       clearInterval(timerRef.current);
@@ -5717,11 +5733,13 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
   };
   const handleRC = (e, idx) => {
     e.preventDefault();
-    if (gameOver || won || cells[idx].revealed) return;
-    if (soundOn) playSound('flip');
-    const nc = cells.map((c) => ({ ...c }));
-    nc[idx].flagged = !nc[idx].flagged;
-    setCells(nc);
+    doFlag(idx);
+  };
+  const handleTouchStart = (idx) => {
+    longPressRef.current = setTimeout(function() { doFlag(idx); longPressRef.current = null; }, 500);
+  };
+  const handleTouchEnd = () => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
   };
   const reset = () => {
     setCells(initBoard());
@@ -5729,6 +5747,7 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
     setWon(false);
     setTime(0);
     setStarted(false);
+    setFlagMode(false);
     clearInterval(timerRef.current);
   };
   const flagCount = cells.filter((c) => c.flagged).length;
@@ -5774,20 +5793,14 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
         >
           💣 {MINES - flagCount}
         </div>
-        <Button
-          variant="secondary"
-          onClick={reset}
-          style={{ padding: '8px 16px', fontSize: 13 }}
-        >
-          🔄 Yeni
-        </Button>
-        <div
-          style={{
-            fontFamily: "'Sora', sans-serif",
-            fontWeight: 700,
-            fontSize: 18,
-          }}
-        >
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => setFlagMode(f => !f)}
+            title="Bayrak modu (uzun bas ya da tıkla)"
+            style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: flagMode ? '#ef4444' : 'var(--border)', color: flagMode ? '#fff' : 'var(--text)', fontSize: 16, cursor: 'pointer' }}>🚩</button>
+          <Button variant="secondary" onClick={reset} style={{ padding: '8px 14px', fontSize: 13 }}>🔄</Button>
+        </div>
+        <div style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 18 }}>
           ⏱ {time}s
         </div>
       </div>
@@ -5806,6 +5819,8 @@ const MinesweeperGame = ({ game, onGameEnd, soundOn, dark }) => {
             key={i}
             onClick={() => handleClick(i)}
             onContextMenu={(e) => handleRC(e, i)}
+            onTouchStart={() => handleTouchStart(i)}
+            onTouchEnd={handleTouchEnd}
             style={{
               width: '100%',
               aspectRatio: '1',
