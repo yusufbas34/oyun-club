@@ -28,6 +28,18 @@ function useSocket(username) {
   var s8 = useState(null);
   var myUserId = s8[0];
   var setMyUserId = s8[1];
+  var s9 = useState([]);
+  var friendList = s9[0]; // [{userId, name, online}]
+  var setFriendList = s9[1];
+  var s10 = useState([]);
+  var friendRequests = s10[0]; // [{fromId, fromName}]
+  var setFriendRequests = s10[1];
+  var s11 = useState(null);
+  var friendToast = s11[0];
+  var setFriendToast = s11[1];
+  var s12 = useState(null);
+  var gameInvite = s12[0]; // {fromId, fromName, roomId, gameId}
+  var setGameInvite = s12[1];
 
   useEffect(
     function () {
@@ -55,10 +67,16 @@ function useSocket(username) {
             retryCount = 0;
             setIsConnected(true);
             setSocketError(null);
-            socket.emit('register', { name: username }, function (res) {
+            // Daha önce kaydedilmiş userId varsa gönder — sunucu arkadaş listesini geri yükler
+            var storedUserId = null;
+            try { storedUserId = localStorage.getItem('oyunclub_userid'); } catch(e){}
+            socket.emit('register', { name: username, userId: storedUserId }, function (res) {
               if (res && res.success) {
                 setIsRegistered(true);
-                if (res.user && res.user.id) setMyUserId(res.user.id);
+                if (res.user && res.user.id) {
+                  setMyUserId(res.user.id);
+                  try { localStorage.setItem('oyunclub_userid', res.user.id); } catch(e){}
+                }
               } else {
                 setSocketError(res ? res.error : 'Kayit basarisiz');
               }
@@ -211,6 +229,34 @@ function useSocket(username) {
           socket.on('rooms_updated', function(data) {
             if (data && data.rooms) setPublicRooms(data.rooms);
           });
+
+          // --- ARKADAŞ SİSTEMİ EVENTLERİ ---
+          socket.on('friend_online', function(data) {
+            setFriendList(function(prev) {
+              return prev.map(function(f) { return f.userId === data.userId ? Object.assign({},f,{online:true,name:data.name}) : f; });
+            });
+          });
+          socket.on('friend_offline', function(data) {
+            setFriendList(function(prev) {
+              return prev.map(function(f) { return f.userId === data.userId ? Object.assign({},f,{online:false}) : f; });
+            });
+          });
+          socket.on('friend_request_received', function(data) {
+            setFriendRequests(function(prev) { return prev.concat([data]); });
+            setFriendToast('🤝 ' + data.fromName + ' arkadaşlık isteği gönderdi!');
+            setTimeout(function(){ setFriendToast(null); }, 4000);
+          });
+          socket.on('friend_accepted', function(data) {
+            setFriendList(function(prev) { return prev.concat([{userId:data.userId,name:data.name,online:true}]); });
+            setFriendToast('✅ ' + data.name + ' arkadaşlık isteğini kabul etti!');
+            setTimeout(function(){ setFriendToast(null); }, 4000);
+          });
+          socket.on('friend_removed', function(data) {
+            setFriendList(function(prev) { return prev.filter(function(f){return f.userId!==data.userId;}); });
+          });
+          socket.on('game_invite', function(data) {
+            setGameInvite(data);
+          });
         })
         .catch(function () {
           setSocketError('Socket.io yuklenemedi');
@@ -343,6 +389,59 @@ function useSocket(username) {
       .catch(function() {});
   }, []);
 
+  var getFriends = useCallback(function(cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('get_friends', null, function(res) {
+      if (res && res.friends) {
+        setFriendList(res.friends);
+        setFriendRequests(res.requests || []);
+      }
+      if (cb) cb(res);
+    });
+  }, []);
+
+  var sendFriendRequest = useCallback(function(toUserId, cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('friend_request', { toUserId }, cb || function(){});
+  }, []);
+
+  var acceptFriend = useCallback(function(fromId, cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('accept_friend', { fromId }, function(res) {
+      if (res && res.success) {
+        setFriendRequests(function(prev){ return prev.filter(function(r){ return r.fromId !== fromId; }); });
+        if (res.friendId) setFriendList(function(prev){ return prev.concat([{userId:res.friendId,name:res.friendName,online:true}]); });
+      }
+      if (cb) cb(res);
+    });
+  }, []);
+
+  var rejectFriend = useCallback(function(fromId, cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('reject_friend', { fromId }, function(res) {
+      if (res && res.success) setFriendRequests(function(prev){ return prev.filter(function(r){ return r.fromId !== fromId; }); });
+      if (cb) cb(res);
+    });
+  }, []);
+
+  var removeFriend = useCallback(function(friendId, cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('remove_friend', { friendId }, function(res) {
+      if (res && res.success) setFriendList(function(prev){ return prev.filter(function(f){ return f.userId !== friendId; }); });
+      if (cb) cb(res);
+    });
+  }, []);
+
+  var searchUser = useCallback(function(query, cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('search_user', { query }, cb || function(){});
+  }, []);
+
+  var inviteFriend = useCallback(function(toUserId, roomId, gameId, cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('invite_friend', { toUserId, roomId, gameId }, cb || function(){});
+  }, []);
+
   return {
     isConnected: isConnected,
     isRegistered: isRegistered,
@@ -363,6 +462,19 @@ function useSocket(username) {
     publicRooms: publicRooms,
     fetchPublicRooms: fetchPublicRooms,
     myUserId: myUserId,
+    friendList: friendList,
+    friendRequests: friendRequests,
+    friendToast: friendToast,
+    gameInvite: gameInvite,
+    setGameInvite: setGameInvite,
+    clearGameInvite: function() { setGameInvite(null); },
+    getFriends: getFriends,
+    sendFriendRequest: sendFriendRequest,
+    acceptFriend: acceptFriend,
+    rejectFriend: rejectFriend,
+    removeFriend: removeFriend,
+    searchUser: searchUser,
+    inviteFriend: inviteFriend,
   };
 }
 
@@ -4994,6 +5106,127 @@ const LoginPage = ({ onLogin, dark, onToggleDark }) => {
 // ============================================================
 // PROFILE PAGE
 // ============================================================
+// ============================================================
+// FRIEND PANEL
+// ============================================================
+function FriendPanel({ sock, myUserId }) {
+  const [tab, setTab] = useState('friends'); // 'friends' | 'requests' | 'search'
+  const [searchQ, setSearchQ] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchMsg, setSearchMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { if (sock && myUserId) sock.getFriends(); }, [myUserId]);
+
+  const doSearch = () => {
+    if (!searchQ.trim() || searchQ.trim().length < 2) return setSearchMsg('En az 2 karakter gir');
+    setLoading(true); setSearchMsg('');
+    sock.searchUser(searchQ.trim(), (res) => {
+      setLoading(false);
+      setSearchResults((res?.results || []).filter(u => u.userId !== myUserId));
+      if (!res?.results?.length) setSearchMsg('Kullanıcı bulunamadı');
+    });
+  };
+
+  const sendReq = (toUserId, name) => {
+    sock.sendFriendRequest(toUserId, (res) => {
+      if (res?.success) setSearchMsg('✅ ' + name + ' için istek gönderildi');
+      else setSearchMsg('❌ ' + (res?.error || 'Hata'));
+    });
+  };
+
+  const friends = sock?.friendList || [];
+  const requests = sock?.friendRequests || [];
+  const onlineFriends = friends.filter(f => f.online);
+
+  return (
+    <div style={{marginTop:20}}>
+      <div style={{display:'flex',gap:6,marginBottom:14}}>
+        {[['friends','👥 Arkadaşlar',friends.length],['requests','🤝 İstekler',requests.length],['search','🔍 Ara',0]].map(([t,label,count])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'8px 4px',borderRadius:10,border:'none',background:tab===t?'linear-gradient(135deg,#863bff,#5b21b6)':'var(--surface-hover)',color:tab===t?'#fff':'var(--text)',fontWeight:700,fontSize:12,cursor:'pointer',position:'relative'}}>
+            {label}{count>0&&<span style={{marginLeft:4,background:'#ef4444',color:'#fff',borderRadius:10,padding:'1px 5px',fontSize:10}}>{count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'friends' && (
+        <div>
+          {onlineFriends.length > 0 && (
+            <div style={{marginBottom:10,fontSize:12,color:'#22c55e',fontWeight:600}}>🟢 {onlineFriends.length} arkadaş online</div>
+          )}
+          {friends.length === 0 ? (
+            <div style={{textAlign:'center',padding:'24px',color:'var(--text-secondary)',fontSize:13}}>
+              <div style={{fontSize:32,marginBottom:8}}>👤</div>
+              Henüz arkadaşın yok. "Ara" sekmesinden arkadaş ekle!
+            </div>
+          ) : friends.map(f => (
+            <div key={f.userId} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
+              <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#863bff,#5b21b6)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0,position:'relative'}}>
+                {f.name.charAt(0).toUpperCase()}
+                <div style={{position:'absolute',bottom:0,right:0,width:10,height:10,borderRadius:'50%',background:f.online?'#22c55e':'#6b7280',border:'2px solid var(--surface-hover)'}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:14}}>{f.name}</div>
+                <div style={{fontSize:11,color:f.online?'#22c55e':'var(--text-secondary)'}}>{f.online?'Online':'Çevrimdışı'}</div>
+              </div>
+              <button onClick={()=>sock.removeFriend(f.userId)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--text-secondary)',fontSize:11,cursor:'pointer'}}>Çıkar</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'requests' && (
+        <div>
+          {requests.length === 0 ? (
+            <div style={{textAlign:'center',padding:'24px',color:'var(--text-secondary)',fontSize:13}}>
+              <div style={{fontSize:32,marginBottom:8}}>📭</div>
+              Bekleyen istek yok
+            </div>
+          ) : requests.map(r => (
+            <div key={r.fromId} style={{display:'flex',alignItems:'center',gap:10,padding:'12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
+              <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#f59e0b,#d97706)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0}}>
+                {r.fromName.charAt(0).toUpperCase()}
+              </div>
+              <div style={{flex:1,fontSize:14,fontWeight:600}}>{r.fromName}</div>
+              <button onClick={()=>sock.acceptFriend(r.fromId)} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#22c55e',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✓ Kabul</button>
+              <button onClick={()=>sock.rejectFriend(r.fromId)} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--text-secondary)',fontSize:12,cursor:'pointer'}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'search' && (
+        <div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()} placeholder="Kullanıcı adı ara..."
+              style={{flex:1,padding:'10px 12px',borderRadius:10,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:14,outline:'none'}}/>
+            <button onClick={doSearch} disabled={loading} style={{padding:'10px 16px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+              {loading?'...':'Ara'}
+            </button>
+          </div>
+          {searchMsg && <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:8,textAlign:'center'}}>{searchMsg}</div>}
+          {searchResults.map(u => {
+            const already = friends.some(f=>f.userId===u.userId);
+            return (
+              <div key={u.userId} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
+                <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0}}>
+                  {u.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
+                  <div style={{fontSize:11,color:u.online?'#22c55e':'var(--text-secondary)'}}>{u.online?'Online':'Çevrimdışı'}</div>
+                </div>
+                {already ? <span style={{fontSize:11,color:'#22c55e',fontWeight:600}}>✓ Arkadaş</span>
+                  : <button onClick={()=>sendReq(u.userId,u.name)} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Ekle</button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const RANKS = [
   { min:0,   max:4,   icon:'🌱', label:'Acemi',        color:'#6B7280', bg:'#F3F4F6' },
   { min:5,   max:24,  icon:'⚡', label:'Oyuncu',        color:'#2563EB', bg:'#DBEAFE' },
@@ -5003,7 +5236,7 @@ const RANKS = [
 ];
 function getRank(wins) { return RANKS.find(r => wins >= r.min && wins <= r.max) || RANKS[0]; }
 
-const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange }) => {
+const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock }) => {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const totalGames = Object.values(stats.games).reduce(
     (a, g) => a + g.played,
@@ -5275,6 +5508,15 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange }) => {
                 </div>
               );
             })}
+        </Card>
+      )}
+
+      {sock && sock.myUserId && (
+        <Card style={{ padding: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            Arkadaşlar
+          </div>
+          <FriendPanel sock={sock} myUserId={sock.myUserId} />
         </Card>
       )}
 
@@ -5922,7 +6164,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
         <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Daha iyi oyunlar için destek ol!</div>
         <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:16}}>Küçük bir katkı yeni oyunlar eklememize yardımcı olur.</div>
         <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
-          <a href="https://patreon.com/oyunclub" target="_blank" rel="noopener noreferrer"
+          <a href="https://www.patreon.com/oyunclup" target="_blank" rel="noopener noreferrer"
             style={{display:'inline-flex',alignItems:'center',gap:6,padding:'10px 20px',borderRadius:12,background:'linear-gradient(135deg,#FF424D,#FF7A45)',color:'#fff',fontWeight:700,fontSize:14,textDecoration:'none'}}>
             🎗️ Patreon
           </a>
@@ -8101,6 +8343,24 @@ export default function App() {
           }}
         >?</button>
       )}
+      {sock.gameInvite && (
+        <div style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 600, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', borderRadius: 16, padding: '16px 20px', boxShadow: '0 8px 32px rgba(134,59,255,0.4)', display: 'flex', alignItems: 'center', gap: 14, maxWidth: 340, width: 'calc(100vw - 40px)' }}>
+          <div style={{ fontSize: 28 }}>🎮</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{sock.gameInvite.fromName} seni oyuna davet etti!</div>
+            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{GAMES.find(g => g.id === sock.gameInvite.gameId)?.name || 'Oyun'}</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button onClick={() => { setRoomId(sock.gameInvite.roomId); setPage('multiplayer'); sock.clearGameInvite && sock.clearGameInvite(); }} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#fff', color: '#863bff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Katıl</button>
+            <button onClick={() => sock.clearGameInvite && sock.clearGameInvite()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.4)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Reddet</button>
+          </div>
+        </div>
+      )}
+      {sock.friendToast && (
+        <div style={{ position: 'fixed', top: 70, right: 16, zIndex: 600, background: 'var(--surface)', color: 'var(--text)', borderRadius: 12, padding: '12px 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: '1px solid #863bff', fontSize: 13, fontWeight: 600, maxWidth: 260, animation: 'fadeUp 0.3s ease' }}>
+          {sock.friendToast}
+        </div>
+      )}
       <div
         style={{
           minHeight: '100vh',
@@ -8134,6 +8394,7 @@ export default function App() {
             user={user}
             stats={stats}
             userAvatar={userAvatar}
+            sock={sock}
             onAvatarChange={(e) => { setUserAvatar(e); try { localStorage.setItem('oyunclub_avatar', e); } catch {} }}
             onLogout={() => {
               setUser(null);
