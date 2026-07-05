@@ -7591,6 +7591,88 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 };
 
 // ============================================================
+// AD OVERLAY
+// ============================================================
+// AdSense publisher ID buraya gelecek — adsense.google.com'dan al
+const ADSENSE_CLIENT = 'ca-pub-XXXXXXXXXXXXXXXX';
+const ADSENSE_SLOT   = 'XXXXXXXXXX';
+// Kaç oyunda bir reklam göster (1 = her oyun, 4 = her 4 oyunda bir)
+const AD_INTERVAL = 4;
+
+function AdOverlay({ onClose }) {
+  const [seconds, setSeconds] = React.useState(5);
+  const canClose = seconds <= 0;
+
+  React.useEffect(() => {
+    if (seconds <= 0) return;
+    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [seconds]);
+
+  // AdSense script'i varsa reklam alanını başlat
+  React.useEffect(() => {
+    try {
+      if (window.adsbygoogle) (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch {}
+  }, []);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.85)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '20px',
+    }}>
+      <div style={{
+        background: 'var(--surface)', borderRadius: 20, padding: '24px 20px',
+        maxWidth: 360, width: '100%', textAlign: 'center',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>Reklam</div>
+
+        {/* AdSense reklam alanı — gerçek publisher ID eklenince otomatik dolar */}
+        <ins
+          className="adsbygoogle"
+          style={{ display: 'block', minHeight: 250 }}
+          data-ad-client={ADSENSE_CLIENT}
+          data-ad-slot={ADSENSE_SLOT}
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        />
+
+        {/* AdSense onaylanana kadar gösterilen placeholder */}
+        {ADSENSE_CLIENT.includes('XXXX') && (
+          <div style={{
+            minHeight: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(135deg,#1e1b4b,#312e81)', borderRadius: 12, marginBottom: 4,
+            flexDirection: 'column', gap: 8,
+          }}>
+            <div style={{ fontSize: 32 }}>🎮</div>
+            <div style={{ fontSize: 13, color: '#a5b4fc', fontWeight: 600 }}>Reklam Alanı</div>
+            <div style={{ fontSize: 11, color: '#6366f1', opacity: 0.7 }}>adsense.google.com'dan publisher ID al</div>
+          </div>
+        )}
+
+        <button
+          onClick={canClose ? onClose : undefined}
+          style={{
+            marginTop: 16, padding: '12px 32px', borderRadius: 12, border: 'none',
+            background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : '#4B5563',
+            color: '#FFF', fontSize: 15, fontWeight: 700,
+            cursor: canClose ? 'pointer' : 'not-allowed',
+            transition: 'background 0.3s ease',
+            width: '100%',
+          }}
+        >
+          {canClose ? 'Oyuna Başla →' : `${seconds} saniye bekle...`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN APP
 // ============================================================
 export default function App() {
@@ -7602,6 +7684,9 @@ export default function App() {
   const [toast, setToast] = useState({ message: '', visible: false });
   const [soundOn, setSoundOn] = useState(() => { try { const s = localStorage.getItem('oyunclub_sound'); return s !== null ? s === 'true' : true; } catch { return true; } });
   const [dark, setDark] = useState(() => { try { return localStorage.getItem('oyunclub_dark') === 'true'; } catch { return false; } });
+  const [showAd, setShowAd] = useState(false);
+  const [pendingGame, setPendingGame] = useState(null);
+  const adGameCountRef = useRef(0);
   const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0} };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) return JSON.parse(s); } catch {} return { games: EMPTY_STATS, history: [] }; });
 
@@ -7645,13 +7730,23 @@ export default function App() {
     setUser(userData);
     setPage('lobby');
   };
-  const handleSelectGame = (game) => {
+  const launchGame = (game) => {
     const fullGame = GAMES.find(g => g.id === game.id) || game;
     setSelectedGame(fullGame);
     const id = generateRoomId();
     setRoomId(id);
     setPlayers([user.name]);
-    setPage('game'); // All games now show their own mode selection screen
+    setPage('game');
+  };
+  const handleSelectGame = (game) => {
+    adGameCountRef.current += 1;
+    const shouldShowAd = adGameCountRef.current === 1 || adGameCountRef.current % AD_INTERVAL === 1;
+    if (shouldShowAd) {
+      setPendingGame(game);
+      setShowAd(true);
+    } else {
+      launchGame(game);
+    }
   };
   const handleGoOnline = (gameId) => {
     const fullGame = GAMES.find(g => g.id === gameId);
@@ -7891,6 +7986,13 @@ export default function App() {
   return (
     <>
       <GlobalStyle dark={dark} />
+      {showAd && pendingGame && (
+        <AdOverlay onClose={() => {
+          setShowAd(false);
+          launchGame(pendingGame);
+          setPendingGame(null);
+        }} />
+      )}
       <div
         style={{
           minHeight: '100vh',
