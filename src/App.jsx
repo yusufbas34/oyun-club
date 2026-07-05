@@ -2089,7 +2089,7 @@ const SUDOKU_PUZZLES = [
 ];
 
 function SudokuGame({ game, onGameEnd, soundOn }) {
-  const [puzzleIdx] = useState(() => Math.floor(Math.random() * SUDOKU_PUZZLES.length));
+  const [puzzleIdx, setPuzzleIdx] = useState(() => Math.floor(Math.random() * SUDOKU_PUZZLES.length));
   const { puzzle, solution } = SUDOKU_PUZZLES[puzzleIdx];
   const initial = puzzle.split('').map(Number);
   const sol = solution.split('').map(Number);
@@ -2133,7 +2133,10 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
   };
 
   const restart = () => {
-    setValues([...initial]);
+    const ni = (puzzleIdx + 1) % SUDOKU_PUZZLES.length;
+    const np = SUDOKU_PUZZLES[ni].puzzle.split('').map(Number);
+    setPuzzleIdx(ni);
+    setValues([...np]);
     setSelected(null);
     setErrors(new Set());
     setWon(false);
@@ -2725,10 +2728,9 @@ function genMathQ() {
   if(op==='+'){a=Math.floor(Math.random()*50)+1;b=Math.floor(Math.random()*50)+1;ans=a+b;}
   else if(op==='-'){a=Math.floor(Math.random()*50)+10;b=Math.floor(Math.random()*a)+1;ans=a-b;}
   else{a=Math.floor(Math.random()*12)+2;b=Math.floor(Math.random()*12)+2;ans=a*b;}
-  const w1=ans+(Math.floor(Math.random()*5)+1)*(Math.random()<0.5?1:-1);
-  const w2=ans+(Math.floor(Math.random()*8)+3)*(Math.random()<0.5?1:-1);
-  const opts=[ans,Math.abs(w1),Math.abs(w2)].filter((v,i,a)=>a.indexOf(v)===i).slice(0,3).sort(()=>Math.random()-0.5);
-  if(!opts.includes(ans))opts[0]=ans;
+  const wrongs=new Set();
+  while(wrongs.size<2){const d=(Math.floor(Math.random()*9)+1)*(Math.random()<0.5?1:-1);const w=ans+d;if(w!==ans&&w>0)wrongs.add(w);}
+  const opts=[ans,...wrongs].sort(()=>Math.random()-0.5);
   return {q:`${a} ${op} ${b} = ?`,ans,opts};
 }
 function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
@@ -2961,7 +2963,7 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       const c1=d[mv.idx*2],c2=d[mv.idx*2+1];
       const w=c1&&c2?(c1.value>c2.value?0:c2.value>c1.value?1:-1):-1;
       setRw(w);setScores(mv.scores);
-      if(mv.idx+1>=TOTAL){setTimeout(()=>{onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');if(soundOn)playSound('win');},1500);}
+      if(mv.idx+1>=TOTAL){setTimeout(()=>{const ms=mv.scores[onlineProps.myIndex],os=mv.scores[1-onlineProps.myIndex];onGameEnd(ms>os?'win':ms<os?'loss':'draw');if(soundOn)playSound('win');},1500);}
     } else if(mv.type==='cb_next'){
       setIdx(mv.idx);setRev(false);setRw(null);
     } else if(mv.type==='cb_restart'&&mv.deck){
@@ -3007,7 +3009,7 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     const ns=[...scores];if(w===0)ns[0]++;else if(w===1)ns[1]++;
     setScores(ns);
     if(isOnline)onlineProps.onMove({type:'cb_reveal',idx,scores:ns,_ts:Date.now()});
-    if(idx+1>=TOTAL){setTimeout(()=>{onGameEnd(ns[isOnline?onlineProps.myIndex:0]>=ns[isOnline?1-onlineProps.myIndex:1]?'win':'loss');if(soundOn)playSound('win');},1500);}
+    if(idx+1>=TOTAL){setTimeout(()=>{const mi=isOnline?onlineProps.myIndex:0,oi=isOnline?1-onlineProps.myIndex:1;onGameEnd(ns[mi]>ns[oi]?'win':ns[mi]<ns[oi]?'loss':'draw');if(soundOn)playSound('win');},1500);}
   };
   const next=()=>{
     const ni=idx+1;setIdx(ni);setRev(false);setRw(null);
@@ -3116,7 +3118,7 @@ function MemoryBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
             setTimeout(()=>{
               setCs(c=>c.map((card,ci)=>ci===a||ci===b?{...card,matched:true,flipped:true}:card));
               setScores(sc=>{const nsc=[...sc];nsc[flippingTurn]++;
-                if(nsc.reduce((s,v)=>s+v,0)===12){onGameEnd(nsc[0]>=nsc[1]?'win':'loss');if(soundOn)playSound('win');}
+                if(nsc.reduce((s,v)=>s+v,0)===12){const mi=onlineProps?.myIndex??0,oi=1-mi;const r=nsc[mi]>nsc[oi]?'win':nsc[mi]<nsc[oi]?'loss':'draw';onGameEnd(r);if(soundOn)playSound('win');}
                 return nsc;});
               setFlipped([]);setLocked(false);
             },500);
@@ -3311,7 +3313,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     }
   };
 
-  const localScr=isOnline?scr:scrmbl(item.word);
+  const localScr=useMemo(()=>isOnline?scr:scrmbl(item.word),[ri,isOnline,scr]);
 
   if(isOnline)return(
     <div style={{maxWidth:440,margin:'0 auto',padding:'16px 12px',touchAction:'manipulation'}}>
@@ -3392,6 +3394,632 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: MANGALA (Traditional Turkish Board Game)
+// ============================================================
+function MangalaGame({ onGameEnd, soundOn }) {
+  // pits[0..5] = player 0 bottom row (left to right), pits[6..11] = player 1 top row (right to left)
+  // hazne[0] = player 0 store, hazne[1] = player 1 store
+  const initState = () => ({ pits: Array(12).fill(3), hazne: [0, 0] });
+  const [state, setState] = useState(initState);
+  const [turn, setTurn] = useState(0); // 0 or 1
+  const [lastCapture, setLastCapture] = useState(null);
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState(null);
+
+  const endGame = (pits, hazne) => {
+    const total = [...hazne];
+    for (let i = 0; i < 6; i++) total[0] += pits[i];
+    for (let i = 6; i < 12; i++) total[1] += pits[i];
+    setGameOver(true);
+    const w = total[0] > total[1] ? 0 : total[0] < total[1] ? 1 : 2;
+    setWinner(w);
+    onGameEnd(w === 0 ? 'win' : w === 1 ? 'loss' : 'draw');
+  };
+
+  const handlePit = (pitIdx) => {
+    if (gameOver) return;
+    const { pits, hazne } = state;
+    const np = [...pits]; const nh = [...hazne];
+    // pitIdx 0-5 = player 0, 6-11 = player 1
+    const owner = pitIdx < 6 ? 0 : 1;
+    if (owner !== turn || np[pitIdx] === 0) return;
+    let stones = np[pitIdx]; np[pitIdx] = 0;
+    let cur = pitIdx;
+    let extraTurn = false;
+    while (stones > 0) {
+      cur = (cur + 1) % 14;
+      if (cur === 12 + (1 - turn)) { cur = (cur + 1) % 14; } // skip opponent's hazne (12=p0 hazne, 13=p1 hazne)
+      if (cur === 12 + turn) { nh[turn]++; } // own hazne
+      else { np[cur % 12]++; }
+      stones--;
+    }
+    // extra turn if last stone in own hazne
+    if (cur === 12 + turn) extraTurn = true;
+    // capture: last stone in own empty pit → capture mirror
+    if (!extraTurn && cur < 12 && owner === turn) {
+      const isOwnPit = (turn === 0 && cur < 6) || (turn === 1 && cur >= 6);
+      if (isOwnPit && np[cur] === 1) {
+        const mirror = 11 - cur;
+        if (np[mirror] > 0) {
+          nh[turn] += np[mirror] + 1; np[cur] = 0; np[mirror] = 0;
+          setLastCapture(cur);
+          setTimeout(() => setLastCapture(null), 600);
+        }
+      }
+    }
+    if (soundOn) playSound('place');
+    // check end: either row empty
+    const p0empty = np.slice(0, 6).every(v => v === 0);
+    const p1empty = np.slice(6, 12).every(v => v === 0);
+    if (p0empty || p1empty) { setState({ pits: np, hazne: nh }); endGame(np, nh); return; }
+    setState({ pits: np, hazne: nh });
+    if (!extraTurn) setTurn(1 - turn);
+  };
+
+  const restart = () => { setState(initState()); setTurn(0); setGameOver(false); setWinner(null); };
+
+  const { pits, hazne } = state;
+  const cellStyle = (pitIdx, disabled) => ({
+    width: 48, height: 48, borderRadius: '50%', border: '2px solid',
+    borderColor: disabled ? 'var(--border)' : turn === (pitIdx < 6 ? 0 : 1) ? '#F59E0B' : 'var(--border)',
+    background: disabled ? 'var(--surface)' : 'linear-gradient(135deg,#92400E,#F59E0B)',
+    color: '#fff', fontSize: 16, fontWeight: 700, cursor: disabled ? 'default' : 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2,
+    outline: lastCapture === pitIdx ? '3px solid #ef4444' : 'none',
+  });
+
+  return (
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 22 }}>🪨 Mangala</h2>
+        <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+      </div>
+      <div style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+        {gameOver ? (winner === 2 ? 'Berabere!' : `Oyuncu ${winner + 1} kazandı!`) : `Sıra: Oyuncu ${turn + 1}`}
+      </div>
+      {/* Board */}
+      <div style={{ background: '#78350F', borderRadius: 16, padding: 12, userSelect: 'none' }}>
+        {/* Player 1 row (top, reversed) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, justifyContent: 'center' }}>
+          <div style={{ width: 52, height: 52, borderRadius: 8, background: '#1A1A2E', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, border: '2px solid #F59E0B' }}>{hazne[1]}</div>
+          {[11, 10, 9, 8, 7, 6].map(i => (
+            <div key={i} onClick={() => handlePit(i)} style={cellStyle(i, gameOver || turn !== 1 || pits[i] === 0)}>
+              <span style={{ fontSize: 11, lineHeight: 1 }}>🪨</span>
+              <span>{pits[i]}</span>
+            </div>
+          ))}
+          <div style={{ width: 52, height: 52, borderRadius: 8, background: '#1A1A2E', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, border: '2px solid #F59E0B' }}>{hazne[0]}</div>
+        </div>
+        {/* Player 0 row (bottom) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+          <div style={{ width: 52 }} />
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div key={i} onClick={() => handlePit(i)} style={cellStyle(i, gameOver || turn !== 0 || pits[i] === 0)}>
+              <span>{pits[i]}</span>
+              <span style={{ fontSize: 11, lineHeight: 1 }}>🪨</span>
+            </div>
+          ))}
+          <div style={{ width: 52 }} />
+        </div>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+        P1: {hazne[0]} taş &nbsp;|&nbsp; P2: {hazne[1]} taş
+      </div>
+      {gameOver && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{winner === 0 ? '🏆' : winner === 1 ? '😔' : '🤝'}</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+              {winner === 2 ? 'Berabere!' : `Oyuncu ${winner + 1} Kazandı!`}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>{hazne[0]} - {hazne[1]}</p>
+            <Button onClick={restart}>Tekrar Oyna</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: SIMON (Color Sequence Memory)
+// ============================================================
+const SIMON_COLORS = [
+  { id: 0, name: 'Kırmızı', bg: '#DC2626', active: '#F87171', freq: 262 },
+  { id: 1, name: 'Mavi', bg: '#1D4ED8', active: '#60A5FA', freq: 330 },
+  { id: 2, name: 'Sarı', bg: '#D97706', active: '#FDE68A', freq: 392 },
+  { id: 3, name: 'Yeşil', bg: '#059669', active: '#34D399', freq: 523 },
+];
+function SimonGame({ onGameEnd, soundOn }) {
+  const [seq, setSeq] = useState([]);
+  const [playerIdx, setPlayerIdx] = useState(0);
+  const [phase, setPhase] = useState('idle'); // idle|showing|input|over
+  const [activeColor, setActiveColor] = useState(null);
+  const [level, setLevel] = useState(0);
+
+  const playTone = (freq) => {
+    if (!soundOn) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = freq; o.type = 'sine';
+      g.gain.setValueAtTime(0.4, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      o.start(); o.stop(ctx.currentTime + 0.4);
+    } catch(e) {}
+  };
+
+  const showSeq = (sequence) => {
+    setPhase('showing');
+    let i = 0;
+    const step = () => {
+      if (i >= sequence.length) { setActiveColor(null); setPhase('input'); return; }
+      const c = sequence[i];
+      setActiveColor(c);
+      playTone(SIMON_COLORS[c].freq);
+      setTimeout(() => { setActiveColor(null); setTimeout(() => { i++; step(); }, 200); }, 500);
+    };
+    setTimeout(step, 500);
+  };
+
+  const start = () => {
+    const first = [Math.floor(Math.random() * 4)];
+    setSeq(first); setPlayerIdx(0); setLevel(1);
+    showSeq(first);
+  };
+
+  const handleTap = (colorId) => {
+    if (phase !== 'input') return;
+    playTone(SIMON_COLORS[colorId].freq);
+    setActiveColor(colorId);
+    setTimeout(() => setActiveColor(null), 200);
+    if (colorId !== seq[playerIdx]) {
+      if (soundOn) playSound('lose');
+      setPhase('over');
+      onGameEnd('loss');
+      return;
+    }
+    const next = playerIdx + 1;
+    if (next === seq.length) {
+      if (soundOn) playSound('match');
+      const newSeq = [...seq, Math.floor(Math.random() * 4)];
+      setSeq(newSeq); setPlayerIdx(0); setLevel(newSeq.length);
+      setTimeout(() => showSeq(newSeq), 800);
+    } else {
+      setPlayerIdx(next);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 360, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 22 }}>🔴 Simon</h2>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-secondary)' }}>Seviye {level}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 300, margin: '0 auto 20px' }}>
+        {SIMON_COLORS.map(c => (
+          <button key={c.id} onClick={() => handleTap(c.id)}
+            disabled={phase !== 'input'}
+            style={{ height: 120, borderRadius: 16, border: 'none', cursor: phase === 'input' ? 'pointer' : 'default',
+              background: activeColor === c.id ? c.active : c.bg,
+              transform: activeColor === c.id ? 'scale(0.95)' : 'scale(1)',
+              transition: 'all 0.1s', boxShadow: activeColor === c.id ? '0 0 24px rgba(255,255,255,0.4)' : 'none',
+              fontSize: 28, color: 'rgba(255,255,255,0.9)' }}>
+            {c.name}
+          </button>
+        ))}
+      </div>
+      {phase === 'idle' && (
+        <Button onClick={start} style={{ width: '100%', maxWidth: 200, padding: '14px' }}>Başla</Button>
+      )}
+      {phase === 'showing' && (
+        <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Diziyi izle...</div>
+      )}
+      {phase === 'input' && (
+        <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Şimdi sıra sende! ({playerIdx + 1}/{seq.length})</div>
+      )}
+      {phase === 'over' && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>💥</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Yanlış!</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>Seviye {level}'e ulaştın</p>
+            <Button onClick={start}>Tekrar Oyna</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: LIGHTS OUT (Işığı Söndür)
+// ============================================================
+function LightsOutGame({ onGameEnd, soundOn }) {
+  const DIFFICULTIES = [
+    { label: 'Kolay', moves: 8 },
+    { label: 'Normal', moves: 14 },
+    { label: 'Zor', moves: 20 },
+  ];
+  const genPuzzle = (n) => {
+    const g = Array(25).fill(false);
+    const toggle = (idx) => {
+      const r = Math.floor(idx / 5), c = idx % 5;
+      [[0,0],[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr,dc]) => {
+        const nr = r+dr, nc = c+dc;
+        if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5) g[nr*5+nc] = !g[nr*5+nc];
+      });
+    };
+    for (let i = 0; i < n; i++) toggle(Math.floor(Math.random() * 25));
+    return [...g];
+  };
+  const [diff, setDiff] = useState(null);
+  const [grid, setGrid] = useState(null);
+  const [moves, setMoves] = useState(0);
+  const [won, setWon] = useState(false);
+
+  const startGame = (d) => {
+    setDiff(d); setGrid(genPuzzle(d.moves)); setMoves(0); setWon(false);
+  };
+
+  const handleClick = (idx) => {
+    if (!grid || won) return;
+    const r = Math.floor(idx / 5), c = idx % 5;
+    const ng = [...grid];
+    [[0,0],[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr,dc]) => {
+      const nr = r+dr, nc = c+dc;
+      if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5) ng[nr*5+nc] = !ng[nr*5+nc];
+    });
+    if (soundOn) playSound('click');
+    setGrid(ng); setMoves(m => m + 1);
+    if (ng.every(v => !v)) { setWon(true); if (soundOn) playSound('win'); onGameEnd('win'); }
+  };
+
+  if (!diff) return (
+    <div style={{ maxWidth: 360, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>💡</div>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24, marginBottom: 8 }}>Işığı Söndür</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 24, fontSize: 14 }}>Tüm lambaları kapatmak için bir lamba seçince çevresi de değişir!</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 240, margin: '0 auto' }}>
+        {DIFFICULTIES.map(d => (
+          <button key={d.label} onClick={() => startGame(d)}
+            style={{ padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#D97706,#FDE68A)', color: '#1A1A2E', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            {d.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 340, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 20 }}>💡 {diff.label}</h2>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{moves} hamle</span>
+          <Button onClick={() => setDiff(null)} style={{ fontSize: 12, padding: '4px 10px' }}>Menü</Button>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6, maxWidth: 300, margin: '0 auto' }}>
+        {grid.map((on, i) => (
+          <button key={i} onClick={() => handleClick(i)}
+            style={{ aspectRatio: '1', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: on ? '#FDE68A' : '#374151',
+              boxShadow: on ? '0 0 12px rgba(253,230,138,0.6)' : 'none',
+              transition: 'all 0.15s', fontSize: on ? 20 : 12 }}>
+            {on ? '💡' : ''}
+          </button>
+        ))}
+      </div>
+      {won && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>🎉</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Tebrikler!</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>{moves} hamlede tamamladın</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <Button onClick={() => startGame(diff)}>Tekrar</Button>
+              <Button variant="secondary" onClick={() => setDiff(null)}>Menü</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: NIM (Çubuk Oyunu)
+// ============================================================
+function NimGame({ onGameEnd, soundOn }) {
+  const INIT = [3, 5, 7];
+  const [rows, setRows] = useState([...INIT]);
+  const [turn, setTurn] = useState(0);
+  const [selectedRow, setSelectedRow] = useState(null);
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [removing, setRemoving] = useState(0);
+
+  const nimValue = (r) => r.reduce((xor, v) => xor ^ v, 0);
+
+  const applyMove = (r, rowIdx, count) => {
+    const nr = [...r];
+    nr[rowIdx] = Math.max(0, nr[rowIdx] - count);
+    // last stick taken = loser
+    if (nr.every(v => v === 0)) return { rows: nr, loser: turn };
+    return { rows: nr, loser: null };
+  };
+
+  const botMove = (r) => {
+    const nv = nimValue(r);
+    // optimal: find a move that sets xor to 0
+    for (let i = 0; i < r.length; i++) {
+      const target = r[i] ^ nv;
+      if (target < r[i]) return { row: i, count: r[i] - target };
+    }
+    // no winning move: remove 1 from largest row
+    const maxRow = r.indexOf(Math.max(...r));
+    return { row: maxRow, count: 1 };
+  };
+
+  const confirm = () => {
+    if (removing === 0 || selectedRow === null) return;
+    const { rows: nr, loser } = applyMove(rows, selectedRow, removing);
+    if (soundOn) playSound('place');
+    setRows(nr); setSelectedRow(null); setRemoving(0);
+    if (loser !== null) {
+      setGameOver(true); setWinner(1 - loser);
+      onGameEnd(loser === 0 ? 'loss' : 'win'); return;
+    }
+    const next = 1 - turn; setTurn(next);
+    if (mode === 'bot' && next === 1) {
+      setTimeout(() => {
+        const { row, count } = botMove(nr);
+        const { rows: nr2, loser: l2 } = applyMove(nr, row, count);
+        if (soundOn) playSound('place');
+        setRows(nr2); setTurn(0);
+        if (l2 !== null) { setGameOver(true); setWinner(0); onGameEnd('win'); }
+      }, 700);
+    }
+  };
+
+  const restart = () => { setRows([...INIT]); setTurn(0); setSelectedRow(null); setRemoving(0); setGameOver(false); setWinner(null); };
+
+  if (!mode) return (
+    <div style={{ maxWidth: 360, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>🪵</div>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24, marginBottom: 8 }}>Çubuk Oyunu (Nim)</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 6, fontSize: 14 }}>Son çubuğu alan <strong>kaybeder</strong>. Her sırada istediğin kadar al.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 260, margin: '0 auto 0' }}>
+        <button onClick={() => setMode('bot')} style={{ padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#065F46,#34D399)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>🤖 Bota Karşı</button>
+        <button onClick={() => setMode('2p')} style={{ padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#0369A1,#38BDF8)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>📱 2 Kişi</button>
+      </div>
+    </div>
+  );
+
+  const isMyTurn = !gameOver && (mode === '2p' || turn === 0);
+
+  return (
+    <div style={{ maxWidth: 380, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 22 }}>🪵 Çubuk Oyunu</h2>
+        <Button onClick={() => { restart(); setMode(null); }} style={{ fontSize: 12, padding: '6px 10px' }}>Menü</Button>
+      </div>
+      <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--text-secondary)' }}>
+        {gameOver ? `Oyuncu ${winner + 1} kazandı!` : mode === 'bot' && turn === 1 ? '🤖 Bot düşünüyor...' : `Sıra: Oyuncu ${turn + 1}`}
+      </div>
+      {INIT.map((_, ri) => (
+        <div key={ri} onClick={() => isMyTurn && rows[ri] > 0 && setSelectedRow(ri === selectedRow ? null : ri)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, padding: '10px 12px', background: selectedRow === ri ? 'rgba(6,95,70,0.15)' : 'var(--surface)', borderRadius: 12, border: '2px solid ' + (selectedRow === ri ? '#34D399' : 'var(--border)'), cursor: isMyTurn && rows[ri] > 0 ? 'pointer' : 'default' }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 20 }}>S{ri + 1}</span>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
+            {Array(INIT[ri]).fill(0).map((_, si) => (
+              <span key={si} style={{ fontSize: 20, opacity: si < rows[ri] ? 1 : 0.12 }}>🪵</span>
+            ))}
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{rows[ri]}</span>
+        </div>
+      ))}
+      {selectedRow !== null && isMyTurn && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Kaç tane al? (Sıra {selectedRow + 1}, max {rows[selectedRow]})</div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            {Array(rows[selectedRow]).fill(0).map((_, n) => (
+              <button key={n} onClick={() => setRemoving(n + 1)}
+                style={{ width: 44, height: 44, borderRadius: 8, border: removing === n + 1 ? '2px solid #34D399' : '1px solid var(--border)', background: removing === n + 1 ? 'rgba(52,211,153,0.15)' : 'var(--surface)', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>
+                {n + 1}
+              </button>
+            ))}
+          </div>
+          {removing > 0 && <Button onClick={confirm} style={{ background: '#065F46', padding: '10px 24px' }}>{removing} tane al ✓</Button>}
+        </div>
+      )}
+      {gameOver && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{winner === 0 ? '🏆' : '😔'}</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+              {mode === 'bot' ? (winner === 0 ? 'Kazandın!' : 'Bot Kazandı!') : `Oyuncu ${winner + 1} Kazandı!`}
+            </h2>
+            <Button onClick={restart}>Tekrar Oyna</Button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// GAME: BRICK BREAKER (Top Patlatma)
+// ============================================================
+const BB_COLS = 8, BB_ROWS = 5, PADDLE_W = 80, BALL_R = 8;
+function BrickBreakerGame({ onGameEnd, soundOn }) {
+  const canvasRef = useRef(null);
+  const stateRef = useRef(null);
+  const rafRef = useRef(null);
+  const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
+  const [phase, setPhase] = useState('idle'); // idle|playing|over|won
+  const [level, setLevel] = useState(1);
+
+  const canvasSize = Math.min(380, typeof window !== 'undefined' ? window.innerWidth - 32 : 380);
+  const CH = Math.round(canvasSize * 0.7);
+
+  const initState = (lv) => {
+    const bh = 18, bgap = 4, btop = 40;
+    const bw = (canvasSize - (BB_COLS + 1) * bgap) / BB_COLS;
+    const bricks = [];
+    for (let r = 0; r < BB_ROWS; r++) {
+      for (let c = 0; c < BB_COLS; c++) {
+        bricks.push({ x: bgap + c*(bw+bgap), y: btop + r*(bh+bgap), w: bw, h: bh, alive: true,
+          color: ['#E63946','#E76F51','#F4A261','#2A9D8F','#457B9D'][r] });
+      }
+    }
+    return {
+      paddle: { x: canvasSize/2 - PADDLE_W/2, y: CH - 28, w: PADDLE_W, h: 12 },
+      ball: { x: canvasSize/2, y: CH - 60, vx: 3 + lv*0.5, vy: -(3 + lv*0.5) },
+      bricks, scoreInc: 0, launched: false, lives: 3,
+    };
+  };
+
+  const drawFrame = (ctx, s) => {
+    ctx.clearRect(0, 0, canvasSize, CH);
+    ctx.fillStyle = '#0F0F17';
+    ctx.fillRect(0, 0, canvasSize, CH);
+    // bricks
+    s.bricks.forEach(b => {
+      if (!b.alive) return;
+      ctx.fillStyle = b.color; ctx.beginPath();
+      ctx.roundRect(b.x, b.y, b.w, b.h, 4); ctx.fill();
+    });
+    // paddle
+    ctx.fillStyle = '#E8E8ED'; ctx.beginPath();
+    ctx.roundRect(s.paddle.x, s.paddle.y, s.paddle.w, s.paddle.h, 6); ctx.fill();
+    // ball
+    ctx.fillStyle = '#FCD34D'; ctx.beginPath();
+    ctx.arc(s.ball.x, s.ball.y, BALL_R, 0, Math.PI*2); ctx.fill();
+  };
+
+  const loop = () => {
+    const s = stateRef.current;
+    if (!s || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!s.launched) { drawFrame(ctx, s); rafRef.current = requestAnimationFrame(loop); return; }
+    const b = s.ball; const p = s.paddle;
+    b.x += b.vx; b.y += b.vy;
+    // wall bounce
+    if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx); }
+    if (b.x + BALL_R > canvasSize) { b.x = canvasSize - BALL_R; b.vx = -Math.abs(b.vx); }
+    if (b.y - BALL_R < 0) { b.y = BALL_R; b.vy = Math.abs(b.vy); }
+    // paddle bounce
+    if (b.vy > 0 && b.y + BALL_R >= p.y && b.y - BALL_R <= p.y + p.h && b.x >= p.x && b.x <= p.x + p.w) {
+      const hit = (b.x - (p.x + p.w/2)) / (p.w/2);
+      b.vy = -Math.abs(b.vy); b.vx = hit * 5;
+      const speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+      const cap = 8 + level; b.vx = b.vx/speed*Math.min(speed, cap); b.vy = b.vy/speed*Math.min(speed, cap);
+    }
+    // brick collision
+    let brokeBrick = false;
+    for (const br of s.bricks) {
+      if (!br.alive) continue;
+      if (b.x + BALL_R > br.x && b.x - BALL_R < br.x+br.w && b.y + BALL_R > br.y && b.y - BALL_R < br.y+br.h) {
+        br.alive = false; brokeBrick = true;
+        const overlapL = b.x+BALL_R - br.x, overlapR = br.x+br.w - (b.x-BALL_R);
+        const overlapT = b.y+BALL_R - br.y, overlapB = br.y+br.h - (b.y-BALL_R);
+        if (Math.min(overlapL,overlapR) < Math.min(overlapT,overlapB)) b.vx = -b.vx;
+        else b.vy = -b.vy;
+        s.scoreInc += 10; setScore(sc => sc + 10);
+        break;
+      }
+    }
+    // ball lost
+    if (b.y - BALL_R > CH) {
+      s.lives--; setLives(s.lives);
+      if (s.lives <= 0) { cancelAnimationFrame(rafRef.current); setPhase('over'); onGameEnd('loss'); return; }
+      b.x = canvasSize/2; b.y = p.y - 20; b.vx = 3+level*0.5; b.vy = -(3+level*0.5); s.launched = false;
+    }
+    // level won
+    if (s.bricks.every(br => !br.alive)) { cancelAnimationFrame(rafRef.current); setPhase('won'); onGameEnd('win'); return; }
+    drawFrame(ctx, s);
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  const start = () => {
+    stateRef.current = initState(level);
+    setScore(0); setLives(3); setPhase('playing');
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    const handleTouch = (e) => {
+      const s = stateRef.current; if (!s) return;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const tx = e.touches[0].clientX - rect.left;
+      s.paddle.x = Math.max(0, Math.min(canvasSize - PADDLE_W, tx - PADDLE_W/2));
+      if (!s.launched) { s.launched = true; }
+    };
+    const handleKey = (e) => {
+      const s = stateRef.current; if (!s) return;
+      if (e.key === ' ' || e.key === 'Enter') { s.launched = true; return; }
+      if (e.key === 'ArrowLeft') s.paddle.x = Math.max(0, s.paddle.x - 20);
+      if (e.key === 'ArrowRight') s.paddle.x = Math.min(canvasSize - PADDLE_W, s.paddle.x + 20);
+    };
+    const handleMouseMove = (e) => {
+      const s = stateRef.current; if (!s) return;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      s.paddle.x = Math.max(0, Math.min(canvasSize - PADDLE_W, e.clientX - rect.left - PADDLE_W/2));
+    };
+    const handleClick = () => { const s = stateRef.current; if (s && !s.launched) s.launched = true; };
+    window.addEventListener('keydown', handleKey);
+    canvasRef.current?.addEventListener('touchmove', handleTouch, { passive: true });
+    canvasRef.current?.addEventListener('touchstart', handleTouch, { passive: true });
+    canvasRef.current?.addEventListener('mousemove', handleMouseMove);
+    canvasRef.current?.addEventListener('click', handleClick);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      canvasRef.current?.removeEventListener('touchmove', handleTouch);
+      canvasRef.current?.removeEventListener('touchstart', handleTouch);
+      canvasRef.current?.removeEventListener('mousemove', handleMouseMove);
+      canvasRef.current?.removeEventListener('click', handleClick);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [phase, level]);
+
+  return (
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: '12px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontWeight: 700 }}>🧱 {score}</div>
+        <div style={{ fontWeight: 700 }}>{'❤️'.repeat(lives)}</div>
+        <div style={{ fontWeight: 700 }}>Lvl {level}</div>
+      </div>
+      <canvas ref={canvasRef} width={canvasSize} height={CH}
+        style={{ borderRadius: 12, border: '2px solid var(--border)', display: 'block', margin: '0 auto', touchAction: 'none' }} />
+      {phase === 'idle' && (
+        <Button onClick={start} style={{ marginTop: 16, padding: '12px 28px' }}>Başla</Button>
+      )}
+      {(phase === 'playing' && stateRef.current && !stateRef.current?.launched) && (
+        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>Tıkla veya dokun → başla</div>
+      )}
+      {(phase === 'over' || phase === 'won') && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{phase === 'won' ? '🎉' : '💥'}</div>
+            <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>{phase === 'won' ? 'Tebrikler!' : 'Oyun Bitti'}</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>Skor: {score}</p>
+            <Button onClick={() => { setPhase('idle'); cancelAnimationFrame(rafRef.current); }}>Tekrar</Button>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -3567,6 +4195,58 @@ const GAMES = [
     genre: 'kelime',
     color: '#538D4E',
     bg: 'linear-gradient(135deg, #538D4E 0%, #6AAF5E 100%)',
+  },
+  {
+    id: 'mangala',
+    name: 'Mangala',
+    desc: 'Türklerin binlerce yıllık geleneksel taş oyunu',
+    icon: '🪨',
+    players: 2,
+    local: true,
+    genre: 'strateji',
+    color: '#92400E',
+    bg: 'linear-gradient(135deg, #92400E 0%, #F59E0B 100%)',
+  },
+  {
+    id: 'simon',
+    name: 'Simon Söylüyor',
+    desc: 'Renk dizisini hafızanda tut ve tekrar et',
+    icon: '🔴',
+    players: 1,
+    genre: 'hafıza',
+    color: '#BE185D',
+    bg: 'linear-gradient(135deg, #BE185D 0%, #F472B6 100%)',
+  },
+  {
+    id: 'lightsout',
+    name: 'Işığı Söndür',
+    desc: 'Tüm lambaları kapatmak için ızgaraya dokun',
+    icon: '💡',
+    players: 1,
+    genre: 'strateji',
+    color: '#D97706',
+    bg: 'linear-gradient(135deg, #D97706 0%, #FDE68A 100%)',
+  },
+  {
+    id: 'brickbreaker',
+    name: 'Top Patlatma',
+    desc: 'Topu paddledan sektirerek tuğlaları kır',
+    icon: '🧱',
+    players: 1,
+    genre: 'hız',
+    color: '#0369A1',
+    bg: 'linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)',
+  },
+  {
+    id: 'nim',
+    name: 'Çubuk Oyunu',
+    desc: 'Son çubuğu alan kaybeder — klasik strateji',
+    icon: '🪵',
+    players: 2,
+    local: true,
+    genre: 'strateji',
+    color: '#065F46',
+    bg: 'linear-gradient(135deg, #065F46 0%, #6EE7B7 100%)',
   },
 ];
 
@@ -5612,7 +6292,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Button onClick={reset} style={{ background: game?.bg || '#E63946' }}>Tekrar Oyna</Button>
-              <button onClick={() => { reset(); setMode(null); }} style={{ padding: '10px 20px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Menü</button>
+              <button onClick={() => { reset(); setMode(null); setScores({x:0,o:0,draw:0}); }} style={{ padding: '10px 20px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Menü</button>
             </div>
           </div>
         ) : (
@@ -5620,7 +6300,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
             <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: 8 }}>
               {botThinking ? '🤖 Bot düşünüyor...' : <>Sıra: <strong style={{ color: isX ? '#E63946' : '#457B9D' }}>{isX ? 'Sen (X)' : (mode === 'bot' ? '🤖 Bot' : 'Oyuncu 2 (O)')}</strong></>}
             </p>
-            <button onClick={() => { reset(); setMode(null); }} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>Menü</button>
+            <button onClick={() => { reset(); setMode(null); setScores({x:0,o:0,draw:0}); }} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>Menü</button>
           </div>
         )}
       </div>
@@ -6570,7 +7250,7 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
         gameOverRef.current = true;
         setGameState('over');
         if (soundOnRef.current) playSound('explode');
-        onGameEndRef.current(scoreRef.current >= 5 ? 'win' : 'loss');
+        onGameEndRef.current('loss');
       }
       return;
     }
@@ -6580,7 +7260,7 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
         gameOverRef.current = true;
         setGameState('over');
         if (soundOnRef.current) playSound('explode');
-        onGameEndRef.current(scoreRef.current >= 5 ? 'win' : 'loss');
+        onGameEndRef.current('loss');
       }
       return;
     }
@@ -6922,7 +7602,7 @@ export default function App() {
   const [toast, setToast] = useState({ message: '', visible: false });
   const [soundOn, setSoundOn] = useState(() => { try { const s = localStorage.getItem('oyunclub_sound'); return s !== null ? s === 'true' : true; } catch { return true; } });
   const [dark, setDark] = useState(() => { try { return localStorage.getItem('oyunclub_dark') === 'true'; } catch { return false; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0} };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0} };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) return JSON.parse(s); } catch {} return { games: EMPTY_STATS, history: [] }; });
 
   useEffect(() => {
@@ -7161,6 +7841,46 @@ export default function App() {
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
             onGoOnline={() => handleGoOnline('wordrace')}
+          />
+        );
+      case 'mangala':
+        return (
+          <MangalaGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'simon':
+        return (
+          <SimonGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'lightsout':
+        return (
+          <LightsOutGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'brickbreaker':
+        return (
+          <BrickBreakerGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'nim':
+        return (
+          <NimGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
           />
         );
       default:
