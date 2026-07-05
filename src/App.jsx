@@ -7594,7 +7594,7 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
 // AD OVERLAY
 // ============================================================
 // AdSense publisher ID buraya gelecek — adsense.google.com'dan al
-const ADSENSE_CLIENT = 'ca-pub-XXXXXXXXXXXXXXXX';
+const ADSENSE_CLIENT = 'ca-pub-4692358549981436';
 const ADSENSE_SLOT   = 'XXXXXXXXXX';
 // Kaç oyunda bir reklam göster (1 = her oyun, 4 = her 4 oyunda bir)
 const AD_INTERVAL = 4;
@@ -7641,7 +7641,7 @@ function AdOverlay({ onClose }) {
           data-full-width-responsive="true"
         />
 
-        {/* AdSense onaylanana kadar gösterilen placeholder */}
+        {/* AdSense onaylanana kadar gösterilen placeholder — ID aktif olunca otomatik kapanır */}
         {ADSENSE_CLIENT.includes('XXXX') && (
           <div style={{
             minHeight: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
