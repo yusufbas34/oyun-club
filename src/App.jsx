@@ -8335,24 +8335,6 @@ export default function App() {
           }}
         >?</button>
       )}
-      {sock.gameInvite && (
-        <div style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 600, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', borderRadius: 16, padding: '16px 20px', boxShadow: '0 8px 32px rgba(134,59,255,0.4)', display: 'flex', alignItems: 'center', gap: 14, maxWidth: 340, width: 'calc(100vw - 40px)' }}>
-          <div style={{ fontSize: 28 }}>🎮</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{sock.gameInvite.fromName} seni oyuna davet etti!</div>
-            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{GAMES.find(g => g.id === sock.gameInvite.gameId)?.name || 'Oyun'}</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button onClick={() => { setRoomId(sock.gameInvite.roomId); setPage('multiplayer'); sock.clearGameInvite && sock.clearGameInvite(); }} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#fff', color: '#863bff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Katıl</button>
-            <button onClick={() => sock.clearGameInvite && sock.clearGameInvite()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.4)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Reddet</button>
-          </div>
-        </div>
-      )}
-      {sock.friendToast && (
-        <div style={{ position: 'fixed', top: 70, right: 16, zIndex: 600, background: 'var(--surface)', color: 'var(--text)', borderRadius: 12, padding: '12px 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: '1px solid #863bff', fontSize: 13, fontWeight: 600, maxWidth: 260, animation: 'fadeUp 0.3s ease' }}>
-          {sock.friendToast}
-        </div>
-      )}
       <div
         style={{
           minHeight: '100vh',
@@ -8386,7 +8368,6 @@ export default function App() {
             user={user}
             stats={stats}
             userAvatar={userAvatar}
-            sock={sock}
             onAvatarChange={(e) => { setUserAvatar(e); try { localStorage.setItem('oyunclub_avatar', e); } catch {} }}
             onLogout={() => {
               setUser(null);
