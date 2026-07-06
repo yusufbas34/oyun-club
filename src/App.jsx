@@ -54,6 +54,9 @@ function useSocket(username) {
   var s12 = useState(null);
   var gameInvite = s12[0]; // {fromId, fromName, roomId, gameId}
   var setGameInvite = s12[1];
+  var s13 = useState(null);
+  var playerJoinedToast = s13[0]; // {name: string}
+  var setPlayerJoinedToast = s13[1];
 
   useEffect(
     function () {
@@ -116,6 +119,19 @@ function useSocket(username) {
             console.log('Oda guncellendi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
+              if (data.players && prev.players && data.players.length > prev.players.length) {
+                var newPlayer = data.players.find(function(p) {
+                  return !prev.players.some(function(pp) {
+                    return (pp.id && p.id) ? pp.id === p.id : pp.name === p.name;
+                  });
+                });
+                if (newPlayer) {
+                  setPlayerJoinedToast({ name: newPlayer.name });
+                  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                    try { new Notification('Oyuncu katıldı! 🎮', { body: newPlayer.name + ' masaya katıldı', icon: '/icon-192x192.png' }); } catch(e) {}
+                  }
+                }
+              }
               if (
                 data.players &&
                 prev.players &&
@@ -482,6 +498,8 @@ function useSocket(username) {
     gameInvite: gameInvite,
     setGameInvite: setGameInvite,
     clearGameInvite: function() { setGameInvite(null); },
+    playerJoinedToast: playerJoinedToast,
+    clearPlayerJoinedToast: function() { setPlayerJoinedToast(null); },
     getFriends: getFriends,
     sendFriendRequest: sendFriendRequest,
     acceptFriend: acceptFriend,
@@ -1202,6 +1220,20 @@ function MultiplayerLobby(props) {
     if (props.initialGame) setSelectedMPGame(props.initialGame);
   }, [props.initialGame]);
 
+  // Request notification permission when joining/creating a room
+  useEffect(function() {
+    if (sock.roomData && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(function() {});
+    }
+  }, [!!sock.roomData]);
+
+  // Auto-dismiss player joined toast after 3s
+  useEffect(function() {
+    if (!sock.playerJoinedToast) return;
+    var t = setTimeout(sock.clearPlayerJoinedToast, 3000);
+    return function() { clearTimeout(t); };
+  }, [sock.playerJoinedToast]);
+
   // Fetch public rooms on mount; rooms_updated socket event handles real-time updates
   useEffect(function() {
     if (!sock.roomData) {
@@ -1255,6 +1287,13 @@ function MultiplayerLobby(props) {
 
     return (
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 16px' }}>
+        {/* Player joined toast */}
+        {sock.playerJoinedToast && (
+          <div style={{ position: 'fixed', top: 70, left: '50%', transform: 'translateX(-50%)', zIndex: 9998, background: 'linear-gradient(135deg,#059669,#34d399)', color: '#fff', borderRadius: 14, padding: '12px 22px', fontWeight: 700, fontSize: 15, boxShadow: '0 4px 24px rgba(5,150,105,0.35)', display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap', fontFamily: "'DM Sans',sans-serif", animation: 'fadeInDown 0.3s ease' }}>
+            <span style={{ fontSize: 22 }}>🎮</span>
+            {sock.playerJoinedToast.name} masaya katıldı!
+          </div>
+        )}
         {/* Room header */}
         <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, marginBottom: 16, border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
@@ -4542,6 +4581,7 @@ const GlobalStyle = ({ dark }) => (
       body { font-size: 15px; }
     }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeInDown { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
     @keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
     @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
     @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
