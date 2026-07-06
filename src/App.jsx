@@ -8695,7 +8695,11 @@ export default function App() {
     });
 
     const xpGain = calcXpGain(result, stats.currentWinStreak || 0);
-    setTimeout(() => setShareResult({ gameName: selectedGame.name, result, xpGain }), 600);
+    const gameName = selectedGame.name;
+    // Hemen lobby'ye geç — oyun ekranı kapansın, çift çağrı önlensin
+    setPage('lobby');
+    setSelectedGame(null);
+    setTimeout(() => setShareResult({ gameName, result, xpGain }), 400);
   };
 
   const handleLogin = (userData) => {
