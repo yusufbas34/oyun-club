@@ -4461,6 +4461,36 @@ const GAMES = [
     color: '#BE185D',
     bg: 'linear-gradient(135deg, #BE185D 0%, #FB7185 100%)',
   },
+  {
+    id: 'tavla',
+    name: 'Tavla',
+    desc: 'Klasik Türk tavlası — bota karşı oyna',
+    icon: '🎲',
+    players: 1,
+    genre: 'strateji',
+    color: '#92400E',
+    bg: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)',
+  },
+  {
+    id: 'kelimezinciri',
+    name: 'Kelime Zinciri',
+    desc: 'Son harften kelime üret, zinciri uzat',
+    icon: '🔗',
+    players: 1,
+    genre: 'kelime',
+    color: '#0F766E',
+    bg: 'linear-gradient(135deg, #0F766E 0%, #2DD4BF 100%)',
+  },
+  {
+    id: 'deyimtamamla',
+    name: 'Deyim Tamamla',
+    desc: 'Türk atasözü ve deyimlerini tamamla',
+    icon: '📖',
+    players: 1,
+    genre: 'kelime',
+    color: '#7C3AED',
+    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
+  },
 ];
 
 const generateRoomId = () =>
@@ -4582,6 +4612,28 @@ const playSound = (type) => {
   }
 };
 
+function playHaptic(type) {
+  try {
+    if (!navigator.vibrate) return;
+    if (type === 'correct') navigator.vibrate(35);
+    else if (type === 'wrong') navigator.vibrate([60,20,60]);
+    else if (type === 'win') navigator.vibrate([50,30,80,30,120]);
+    else if (type === 'tap') navigator.vibrate(12);
+  } catch(e) {}
+}
+
+function FloatingXP({ xp, onDone }) {
+  React.useEffect(function() {
+    var t = setTimeout(onDone, 1200);
+    return function() { clearTimeout(t); };
+  }, [onDone]);
+  return (
+    <div style={{ position:'fixed', top:'40%', left:'50%', transform:'translateX(-50%)', zIndex:9999, pointerEvents:'none', animation:'floatXP 1.2s ease forwards', fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:22, color:'#a855f7', textShadow:'0 2px 8px rgba(134,59,255,0.5)', whiteSpace:'nowrap' }}>
+      +{xp} XP ⚡
+    </div>
+  );
+}
+
 const AVATAR_COLORS = [
   'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -4642,6 +4694,7 @@ const GlobalStyle = ({ dark }) => (
     @keyframes glow { 0%, 100% { box-shadow: 0 0 8px rgba(230,57,70,0.3); } 50% { box-shadow: 0 0 20px rgba(230,57,70,0.6); } }
     @keyframes ripple { 0% { transform: scale(0); opacity: 0.5; } 100% { transform: scale(4); opacity: 0; } }
     @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+    @keyframes floatXP { 0% { transform: translateX(-50%) translateY(0); opacity: 1; } 80% { opacity: 1; } 100% { transform: translateX(-50%) translateY(-80px); opacity: 0; } }
     .header-nav-desktop { display: flex; align-items: center; gap: 2px; }
     .bottom-nav { display: none !important; }
     @media (max-width: 768px) {
@@ -5402,6 +5455,20 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
           ))}
         </div>
         <XPBar xp={stats.xp || 0} streakCount={stats.streak?.count || 0} />
+        {/* Season info */}
+        {stats.season && stats.season.month && (
+          <div style={{marginTop:10,padding:'10px 14px',background:'rgba(134,59,255,0.07)',borderRadius:12,border:'1px solid rgba(134,59,255,0.15)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{fontWeight:700,fontSize:13}}>📅 Sezon {stats.season.num || 1}</div>
+            <div style={{fontSize:13,color:'var(--text-secondary)'}}>Bu ay: <strong style={{color:'#a855f7'}}>{stats.season.xp || 0} XP</strong></div>
+          </div>
+        )}
+        {/* Streak freeze */}
+        <div style={{marginTop:8,padding:'8px 14px',background:'rgba(251,191,36,0.07)',borderRadius:12,border:'1px solid rgba(251,191,36,0.2)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontWeight:700,fontSize:13}}>🛡️ Seri Kalkanı</div>
+          <div style={{fontSize:13,color:(stats.streakFreeze?.count||0)>0?'#F59E0B':'var(--text-secondary)'}}>
+            {(stats.streakFreeze?.count||0)>0 ? '1 adet mevcut' : 'Bu hafta kullanıldı'}
+          </div>
+        </div>
       </Card>
 
       <Card style={{ padding: 20, marginBottom: 20 }}>
@@ -6634,6 +6701,7 @@ const RoomLobby = ({ game, roomId, players, onStart, onCopyLink }) => (
 // ============================================================
 const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
   const [mode, setMode] = useState(null); // null | 'bot' | '2p'
+  const [difficulty, setDifficulty] = useState(null); // null | 'easy' | 'medium' | 'hard'
   const [board, setBoard] = useState(Array(9).fill(null));
   const [isX, setIsX] = useState(true);
   const [winner, setWinner] = useState(null);
@@ -6652,8 +6720,14 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     return null;
   }, []);
 
-  // Simple bot: win > block > center > corner > random
-  const botMove = useCallback((b) => {
+  // Easy: random move
+  const botMoveEasy = useCallback((b) => {
+    const empty = b.map((v,i) => v ? null : i).filter(i => i !== null);
+    return empty[Math.floor(Math.random() * empty.length)];
+  }, []);
+
+  // Medium: win > block > center > corner > random
+  const botMoveMedium = useCallback((b) => {
     const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
     const empty = b.map((v,i) => v ? null : i).filter(i => i !== null);
     for (const mark of ['O','X']) {
@@ -6671,6 +6745,43 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     return empty[Math.floor(Math.random()*empty.length)];
   }, []);
 
+  // Hard: minimax
+  const botMoveHard = useCallback((b) => {
+    const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    function score(bd, depth, isMaximizing) {
+      for (const [a,bb,c] of lines) {
+        if (bd[a] && bd[a]===bd[bb] && bd[a]===bd[c]) {
+          return bd[a] === 'O' ? 10 - depth : depth - 10;
+        }
+      }
+      if (bd.every(Boolean)) return 0;
+      const empty = bd.map((v,i) => v?null:i).filter(i=>i!==null);
+      if (isMaximizing) {
+        let best = -Infinity;
+        for (const i of empty) { const nb=[...bd]; nb[i]='O'; best=Math.max(best, score(nb,depth+1,false)); }
+        return best;
+      } else {
+        let best = Infinity;
+        for (const i of empty) { const nb=[...bd]; nb[i]='X'; best=Math.min(best, score(nb,depth+1,true)); }
+        return best;
+      }
+    }
+    const empty = b.map((v,i) => v?null:i).filter(i=>i!==null);
+    let bestScore = -Infinity, bestMove = empty[0];
+    for (const i of empty) {
+      const nb=[...b]; nb[i]='O';
+      const s = score(nb,0,false);
+      if (s > bestScore) { bestScore=s; bestMove=i; }
+    }
+    return bestMove;
+  }, []);
+
+  const getBotMove = useCallback((b) => {
+    if (difficulty === 'easy') return botMoveEasy(b);
+    if (difficulty === 'hard') return botMoveHard(b);
+    return botMoveMedium(b);
+  }, [difficulty, botMoveEasy, botMoveMedium, botMoveHard]);
+
   const applyMove = useCallback((nb, currentIsX) => {
     const r = checkWinner(nb);
     if (r) {
@@ -6687,6 +6798,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     if (!mode || board[i] || winner || botThinking) return;
     if (mode === 'bot' && !isX) return; // O = bot's turn
     if (soundOn) playSound('place');
+    playHaptic('tap');
     const nb = [...board]; nb[i] = isX ? 'X' : 'O';
     setBoard(nb);
     const finished = applyMove(nb, isX);
@@ -6695,7 +6807,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
       if (mode === 'bot') {
         setBotThinking(true);
         setTimeout(() => {
-          const bi = botMove(nb);
+          const bi = getBotMove(nb);
           if (bi !== undefined) {
             const nb2 = [...nb]; nb2[bi] = 'O';
             setBoard(nb2);
@@ -6703,7 +6815,7 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
             setIsX(true);
           }
           setBotThinking(false);
-        }, 400);
+        }, difficulty === 'hard' ? 600 : 400);
       }
     }
   };
@@ -6722,7 +6834,22 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
             <div style={{fontSize:12,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
           </button>
         )}
-        <button onClick={()=>setMode('bot')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>🤖 Bota Karşı</button>
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(([d,label,color])=>(
+              <button key={d} onClick={()=>setDifficulty(d===difficulty?null:d)}
+                style={{flex:1,padding:'10px 4px',borderRadius:10,border:`2px solid ${difficulty===d?color:'var(--border)'}`,
+                  background:difficulty===d?color+'22':'transparent',color:difficulty===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>{ if(!difficulty)setDifficulty('medium'); setMode('bot'); }}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={()=>setMode('2p')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
@@ -8175,6 +8302,9 @@ const GAME_HELP = {
   tarihefsan: { icon:'📚',  title:'Tarih mi Efsane mi?',    rules:['Türk tarihi ve kültürüne dair ifadeler gösterilir.','Doğruysa "Tarih", yanlışsa "Efsane" düğmesine bas.','Hız bonusu var — ne kadar çabuk cevaplarsan o kadar fazla puan!'] },
   kelimeav:   { icon:'🔍',  title:'Kelime Avcısı',          rules:['Ekranda 12 Türkçe harf gösterilir.','Bu harfleri kullanarak en az 3 harfli Türkçe kelimeler yaz.','Daha uzun kelime = daha fazla puan. 90 sanijen içinde topla!'] },
   emojimuz:   { icon:'🎭',  title:'Emoji Müzayedesi',       rules:['Ekranda bir emoji dizisi çıkar.','Dizinin temsil ettiği Türkçe deyim, şarkı veya filmi yaz.','Ne kadar hızlı cevaplarsan o kadar yüksek puan!'] },
+  tavla:      { icon:'🎲',  title:'Tavla',                  rules:['Zar at, taşlarını kart üzerinde ilerlet.','Rakip taşı vu: tek taşı vurunca onu bara gönderirsin.','15 taşını önce evine toplayan ve sonra tahtadan çıkaran kazanır.'] },
+  kelimezinciri:{ icon:'🔗',title:'Kelime Zinciri',         rules:['Verilen kelimenin son harfiyle yeni kelime yaz.','60 saniyede zinciri uzat — 10+ kelime için mükemmel puan!','Aynı kelime tekrar kullanılamaz.'] },
+  deyimtamamla:{ icon:'📖', title:'Deyim Tamamla',          rules:['8 atasözü/deyim sorusu. Doğru şıkkı seç.','Hızlı cevap = bonus puan. 15+ saniye kaldıysa +3 puan.','Tüm soruları doğru yaparsan mükemmel puan alırsın!'] },
 };
 
 function HelpModal({ gameId, onClose }) {
@@ -8354,6 +8484,13 @@ var BADGE_DEFS = [
   // ── Günlük görev & özel ──
   { id: 'daily_done',     tier:'silver', name: 'Günlük Kahraman',   icon: '⚡',  check: function(s){ var ds=s.dailyStats||{}; return ds.played>=3&&ds.wins>=2; } },
   { id: 'daily_10',       tier:'gold',   name: 'Rutin Savaşçı',     icon: '📅',  check: function(s){ return (s.streak?.count||0)>=10&&Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=100; } },
+  // ── Özel ──
+  { id: 'welcome',        tier:'bronze', name: 'Hoş Geldin!',       icon: '🎉',  check: function(s){ return !!(s.badges&&s.badges.welcome); } },
+  { id: 'season_bronze',  tier:'silver', name: 'İlk Sezon',         icon: '🏅',  check: function(s){ return (s.season?.xp||0)>=100; } },
+  { id: 'season_silver',  tier:'gold',   name: 'Sezon Şampiyonu',   icon: '🥈',  check: function(s){ return (s.season?.xp||0)>=500; } },
+  { id: 'season_gold',    tier:'diamond',name: 'Sezon Efsanesi',    icon: '👑',  check: function(s){ return (s.season?.xp||0)>=2000; } },
+  { id: 'tavla_master',   tier:'silver', name: 'Tavla Ustası',      icon: '🎲',  check: function(s){ return (s.games?.tavla?.wins||0)>=5; } },
+  { id: 'freeze_used',    tier:'bronze', name: 'Seri Koruyucu',     icon: '🛡️', check: function(s){ return (s.streakFreeze?.weekUsed) != null; } },
 ];
 
 function checkNewBadges(newStats) {
@@ -8441,14 +8578,67 @@ function BadgeGrid({ badges }) {
   );
 }
 
-function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay }) {
+function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats }) {
   var resultEmoji = result === 'win' ? '🏆' : result === 'loss' ? '😅' : '🤝';
   var resultText = result === 'win' ? 'kazandım' : result === 'loss' ? 'kaybettim' : 'berabere kaldım';
   var shareText = 'oyun.club\'ta ' + gameName + ' oynadım ve ' + resultText + '! ' + resultEmoji + '\n\n+' + xpGain + ' XP kazandım 🎮\n\nSen de oyna: oyun.club';
-  function doShare() {
+
+  function generateShareCard(callback) {
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = 540; canvas.height = 300;
+      var ctx = canvas.getContext('2d');
+      // Background gradient
+      var grad = ctx.createLinearGradient(0, 0, 540, 300);
+      if (result === 'win') { grad.addColorStop(0, '#1a0a33'); grad.addColorStop(1, '#3d1a6e'); }
+      else if (result === 'loss') { grad.addColorStop(0, '#1a0a0a'); grad.addColorStop(1, '#3d1010'); }
+      else { grad.addColorStop(0, '#0a1a1a'); grad.addColorStop(1, '#0d3030'); }
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, 540, 300);
+      // Card shine overlay
+      ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.beginPath(); ctx.ellipse(270, -30, 260, 120, 0, 0, Math.PI*2); ctx.fill();
+      // Result emoji
+      ctx.font = '80px serif'; ctx.textAlign = 'center'; ctx.fillText(resultEmoji, 270, 105);
+      // Game name
+      ctx.font = 'bold 28px sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText(gameName, 270, 148);
+      // Result text
+      ctx.font = '20px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillText(result === 'win' ? 'Kazandım!' : result === 'loss' ? 'Kaybettim' : 'Berabere!', 270, 178);
+      // XP pill
+      ctx.fillStyle = 'rgba(168,85,247,0.3)'; ctx.beginPath(); ctx.roundRect(200, 195, 140, 36, 18); ctx.fill();
+      ctx.font = 'bold 17px sans-serif'; ctx.fillStyle = '#d8b4fe'; ctx.fillText('⚡ +' + xpGain + ' XP', 270, 219);
+      // Streak
+      var streak = (stats && stats.streak && stats.streak.count) || 0;
+      if (streak > 1) {
+        ctx.font = '14px sans-serif'; ctx.fillStyle = '#fbbf24';
+        ctx.fillText('🔥 ' + streak + ' günlük seri', 270, 250);
+      }
+      // Branding
+      ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText('oyun.club', 270, 282);
+      callback(canvas.toDataURL('image/png'));
+    } catch(e) { callback(null); }
+  }
+
+  function doShareCard() {
+    generateShareCard(function(dataUrl) {
+      if (!dataUrl) { doShareText(); return; }
+      if (navigator.share && navigator.canShare) {
+        fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob) {
+          var file = new File([blob], 'oyun-club-sonuc.png', { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], text: shareText, url: 'https://oyun.club' }).catch(function(){ doShareText(); });
+          } else { doShareText(); }
+        }).catch(function(){ doShareText(); });
+      } else {
+        var link = document.createElement('a'); link.download = 'oyun-club-sonuc.png'; link.href = dataUrl; link.click();
+      }
+    });
+  }
+
+  function doShareText() {
     if (navigator.share) { navigator.share({ text: shareText, url: 'https://oyun.club' }).catch(function(){}); }
     else { window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank'); }
   }
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
       <div style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', maxWidth: 320, width: '100%', textAlign: 'center', animation: 'fadeUp 0.3s ease' }} onClick={function(e){e.stopPropagation();}}>
@@ -8465,13 +8655,604 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay }) {
             🔄 Tekrar Oyna
           </button>
         )}
-        <button onClick={doShare} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
-          📱 Paylaş
+        <button onClick={doShareCard} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+          🖼️ Kart Paylaş
+        </button>
+        <button onClick={doShareText} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: 'rgba(37,211,102,0.15)', color: '#25D366', border: '1px solid rgba(37,211,102,0.3)', fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 10 }}>
+          📱 WhatsApp'ta Paylaş
         </button>
         <button onClick={onClose} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: 'var(--surface-hover)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
           Devam Et
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// KELIME ZİNCİRİ GAME
+// ============================================================
+var TR_WORD_SET = new Set(TR_WORDS);
+
+function KelimeZinciriGame({ game, onGameEnd, soundOn }) {
+  var s0 = useState(null); var phase = s0[0]; var setPhase = s0[1]; // null | 'playing' | 'over'
+  var s1 = useState([]); var chain = s1[0]; var setChain = s1[1];
+  var s2 = useState(''); var input = s2[0]; var setInput = s2[1];
+  var s3 = useState(60); var timeLeft = s3[0]; var setTimeLeft = s3[1];
+  var s4 = useState(''); var error = s4[0]; var setError = s4[1];
+  var s5 = useState(false); var ended = s5[0]; var setEnded = s5[1];
+  var timerRef = React.useRef(null);
+
+  var startWord = 'araba';
+  var lastLetter = chain.length > 0 ? chain[chain.length-1].slice(-1).toLowerCase() : startWord.slice(-1);
+
+  React.useEffect(function() {
+    if (phase !== 'playing') return;
+    timerRef.current = setInterval(function() {
+      setTimeLeft(function(t) {
+        if (t <= 1) {
+          clearInterval(timerRef.current);
+          if (!ended) { setEnded(true); setPhase('over'); }
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return function() { clearInterval(timerRef.current); };
+  }, [phase]);
+
+  function submit(e) {
+    e.preventDefault();
+    var word = input.trim().toLowerCase();
+    if (!word) return;
+    if (chain.includes(word)) { setError('Bu kelime zaten kullanıldı!'); playHaptic('wrong'); return; }
+    if (word[0] !== lastLetter) { setError('Kelime "' + lastLetter.toUpperCase() + '" harfiyle başlamalı!'); playHaptic('wrong'); return; }
+    if (!TR_WORD_SET.has(word) && word.length < 3) { setError('Geçerli bir Türkçe kelime giriniz.'); playHaptic('wrong'); return; }
+    playHaptic('correct');
+    if (soundOn) playSound('correct');
+    setChain(function(c) { return [...c, word]; });
+    setInput('');
+    setError('');
+  }
+
+  function handleEnd() {
+    clearInterval(timerRef.current);
+    var score = chain.length;
+    var result = score >= 10 ? 'win' : score >= 5 ? 'draw' : 'loss';
+    onGameEnd(result);
+  }
+
+  if (!phase) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:12}}>🔗</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Kelime Zinciri</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:12}}>Son harften yeni kelime üret. 60 saniyede ne kadar uzatabilirsin?</p>
+      <p style={{color:'var(--text-secondary)',fontSize:13,marginBottom:28}}>Başlangıç: <strong>"{startWord}"</strong> → "{startWord.slice(-1).toUpperCase()}" harfinden başla</p>
+      <button onClick={function(){setPhase('playing');}} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#0F766E,#2DD4BF)',color:'#FFF',fontSize:17,fontWeight:700,cursor:'pointer'}}>
+        Başla
+      </button>
+    </div>
+  );
+
+  if (phase === 'over') return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:8}}>{chain.length>=10?'🏆':chain.length>=5?'👍':'😅'}</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:8}}>Süre Doldu!</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:4}}>Zincir uzunluğu: <strong style={{color:'#0F766E'}}>{chain.length}</strong></p>
+      <p style={{color:'var(--text-secondary)',fontSize:13,marginBottom:20}}>{chain.join(' → ') || startWord}</p>
+      <button onClick={handleEnd} style={{padding:'14px 40px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#0F766E,#2DD4BF)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>
+        Devam Et
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{maxWidth:420,margin:'0 auto',padding:'24px 16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:15}}>🔗 Zincir: <span style={{color:'#0F766E'}}>{chain.length}</span></div>
+        <div style={{padding:'6px 16px',borderRadius:999,background:timeLeft<=10?'rgba(230,57,70,0.15)':'rgba(15,118,110,0.12)',color:timeLeft<=10?'#E63946':'#0F766E',fontWeight:700,fontSize:14}}>
+          ⏱ {timeLeft}s
+        </div>
+      </div>
+      <div style={{padding:'10px 14px',background:'var(--surface-hover)',borderRadius:12,marginBottom:12,fontSize:13,minHeight:44,color:'var(--text-secondary)',wordBreak:'break-all'}}>
+        {chain.length>0 ? chain.slice(-5).join(' → ') : 'Başlangıç: '+startWord}
+      </div>
+      <div style={{marginBottom:8,fontWeight:600,fontSize:14,color:'var(--text-secondary)'}}>
+        Sıradaki harf: <span style={{color:'#0F766E',fontWeight:800,fontSize:18}}>{lastLetter.toUpperCase()}</span>
+      </div>
+      <form onSubmit={submit} style={{display:'flex',gap:8}}>
+        <input value={input} onChange={function(e){setInput(e.target.value);setError('');}} placeholder={''+lastLetter.toUpperCase()+'... ile başlayan kelime'} autoFocus
+          style={{flex:1,padding:'12px 16px',borderRadius:12,border:'2px solid '+(error?'#E63946':'var(--border)'),background:'var(--surface)',color:'var(--text)',fontSize:16,outline:'none'}} />
+        <button type="submit" style={{padding:'12px 20px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#0F766E,#2DD4BF)',color:'#FFF',fontWeight:700,fontSize:16,cursor:'pointer'}}>
+          ✓
+        </button>
+      </form>
+      {error && <div style={{color:'#E63946',fontSize:13,marginTop:6}}>{error}</div>}
+    </div>
+  );
+}
+
+// ============================================================
+// DEYİM TAMAMLA GAME
+// ============================================================
+var DEYIMLER = [
+  { q: '"Damlaya damlaya ___"', opts: ['göl olur', 'taş biter', 'dağ aşar', 'nehir olur'], a: 1, tip: 'Küçük çabalar birikerek büyük şeyler yaratır.' },
+  { q: '"Ağaç yaşken ___"', opts: ['kurur', 'eğilir', 'büyür', 'düzelir'], a: 1, tip: 'Karakter gençken şekillenir.' },
+  { q: '"Boş durma, eline ___"', opts: ['bak', 'iş al', 'kalem al', 'taş al'], a: 1, tip: 'Her zaman meşgul ol.' },
+  { q: '"Dost kara günde ___"', opts: ['kaçar', 'belli olur', 'gelir', 'ağlar'], a: 1, tip: 'Gerçek dostluk zor zamanda görülür.' },
+  { q: '"Komşu komşunun ___"', opts: ['düşmanıdır', 'kapıcısıdır', 'gözünü oyar', 'evine bakar'], a: 2, tip: 'Kıskançlık komşular arasında yaygındır.' },
+  { q: '"Ne ekersen ___"', opts: ['biçersin', 'taşırsın', 'içersin', 'görürsün'], a: 0, tip: 'Yaptıklarının karşılığını görürsün.' },
+  { q: '"Sakla samanı, gelir ___"', opts: ['yaz günü', 'zamanı', 'gün olur', 'ihtiyacın'], a: 2, tip: 'İlerisi için biriktir.' },
+  { q: '"Bugünün işini yarına ___"', opts: ['sakla', 'bırakma', 'taşıma', 'gönder'], a: 1, tip: 'Erteleme.' },
+  { q: '"Bir elde ne var? ___"', opts: ['Az şey', 'İki elde var', 'Hiçbir şey', 'Güç var'], a: 2, tip: 'Birlik kuvvet getirir.' },
+  { q: '"Mum dibine ___"', opts: ['aydınlatır', 'yanar', 'ışık tutar', 'karanlık düşer'], a: 3, tip: 'En yakınlar zaman zaman körleşir.' },
+];
+
+function DeyimTamamlaGame({ game, onGameEnd, soundOn }) {
+  var qs = DEYIMLER.slice().sort(function(){ return Math.random()-0.5; }).slice(0,8);
+  var s0 = useState(null); var phase = s0[0]; var setPhase = s0[1];
+  var s1 = useState(0); var qi = s1[0]; var setQi = s1[1];
+  var s2 = useState(0); var score = s2[0]; var setScore = s2[1];
+  var s3 = useState(null); var chosen = s3[0]; var setChosen = s3[1];
+  var s4 = useState(null); var questions = s4[0]; var setQuestions = s4[1];
+  var s5 = useState(20); var timer = s5[0]; var setTimer = s5[1];
+  var timerRef = React.useRef(null);
+
+  React.useEffect(function() {
+    if (phase !== 'playing') return;
+    timerRef.current = setInterval(function() {
+      setTimer(function(t) {
+        if (t <= 1) {
+          clearInterval(timerRef.current);
+          // Time's up for this question — move on
+          setChosen(-1);
+          setTimeout(function() {
+            setChosen(null); setTimer(20);
+            setQi(function(q) { return q + 1; });
+          }, 1000);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return function() { clearInterval(timerRef.current); };
+  }, [phase, qi]);
+
+  function startGame() {
+    setQuestions(qs); setPhase('playing'); setQi(0); setScore(0); setChosen(null); setTimer(20);
+  }
+
+  function pickAnswer(idx) {
+    if (chosen !== null) return;
+    clearInterval(timerRef.current);
+    setChosen(idx);
+    var correct = questions[qi].a === idx;
+    var bonus = timer >= 15 ? 3 : timer >= 8 ? 2 : 1;
+    if (correct) {
+      playHaptic('correct');
+      if (soundOn) playSound('correct');
+      setScore(function(s) { return s + bonus; });
+    } else {
+      playHaptic('wrong');
+    }
+    setTimeout(function() {
+      setChosen(null); setTimer(20);
+      if (qi + 1 >= questions.length) {
+        setPhase('over');
+      } else {
+        setQi(function(q) { return q + 1; });
+      }
+    }, 1200);
+  }
+
+  function handleEnd() {
+    var result = score >= (questions ? questions.length * 2 : 10) ? 'win' : score >= (questions ? questions.length : 5) ? 'draw' : 'loss';
+    onGameEnd(result);
+  }
+
+  if (!phase) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:12}}>📖</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Deyim Tamamla</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:28}}>8 Türkçe atasözü ve deyim sorusu. Hızlı cevapla bonus puan kazan!</p>
+      <button onClick={startGame} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#A78BFA)',color:'#FFF',fontSize:17,fontWeight:700,cursor:'pointer'}}>
+        Başla
+      </button>
+    </div>
+  );
+
+  if (phase === 'over') return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:8}}>{score>=14?'🏆':score>=8?'👍':'😅'}</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:8}}>Tamamlandı!</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:4}}>Puan: <strong style={{color:'#7C3AED',fontSize:24}}>{score}</strong></p>
+      <p style={{color:'var(--text-secondary)',fontSize:13,marginBottom:24}}>{score>=14?'Mükemmel! Atasözlerine hakimsin.':score>=8?'İyi! Biraz daha pratik yapabilirsin.':'Dene dene öğrenilir!'}</p>
+      <button onClick={handleEnd} style={{padding:'14px 40px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#A78BFA)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>
+        Devam Et
+      </button>
+    </div>
+  );
+
+  if (!questions) return null;
+  var q = questions[qi];
+  return (
+    <div style={{maxWidth:420,margin:'0 auto',padding:'24px 16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:14,color:'var(--text-secondary)'}}>Soru {qi+1}/{questions.length}</div>
+        <div style={{padding:'4px 14px',borderRadius:999,background:timer<=5?'rgba(230,57,70,0.15)':'rgba(124,58,237,0.12)',color:timer<=5?'#E63946':'#7C3AED',fontWeight:700,fontSize:14}}>⏱ {timer}s</div>
+        <div style={{fontWeight:700,fontSize:14}}>🏆 {score}</div>
+      </div>
+      <div style={{background:'var(--surface-hover)',borderRadius:16,padding:'20px',marginBottom:20,textAlign:'center'}}>
+        <p style={{fontSize:17,fontWeight:600,lineHeight:1.5}}>{q.q}</p>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        {q.opts.map(function(opt,i) {
+          var bg = 'var(--surface)';
+          var border = 'var(--border)';
+          var color = 'var(--text)';
+          if (chosen !== null) {
+            if (i === q.a) { bg='rgba(52,211,153,0.15)'; border='#34d399'; color='#10b981'; }
+            else if (i === chosen && chosen !== q.a) { bg='rgba(230,57,70,0.1)'; border='#E63946'; color='#E63946'; }
+          }
+          return (
+            <button key={i} onClick={function(){pickAnswer(i);}}
+              style={{padding:'14px 10px',borderRadius:14,border:'2px solid '+border,background:bg,color:color,fontWeight:600,fontSize:14,cursor:chosen!==null?'default':'pointer',transition:'all 0.2s'}}>
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {chosen !== null && (
+        <div style={{marginTop:14,padding:'10px 14px',background:'rgba(124,58,237,0.08)',borderRadius:12,fontSize:13,color:'var(--text-secondary)',textAlign:'center'}}>
+          💡 {q.tip}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAVLA GAME
+// ============================================================
+function TavlaGame({ game, onGameEnd, soundOn }) {
+  // Simplified Tavla: 24 points, 2 players. White=1 moves 23→0, Black=-1 moves 0→23
+  var INITIAL = (function() {
+    var b = Array(24).fill(null).map(function(){ return {count:0,color:0}; });
+    // Standard backgammon starting position
+    b[0]  = {count:2,  color: 1};
+    b[5]  = {count:5,  color:-1};
+    b[7]  = {count:3,  color:-1};
+    b[11] = {count:5,  color: 1};
+    b[12] = {count:5,  color:-1};
+    b[16] = {count:3,  color: 1};
+    b[18] = {count:5,  color: 1};
+    b[23] = {count:2,  color:-1};
+    return b;
+  })();
+
+  var s0 = useState(null); var phase = s0[0]; var setPhase = s0[1];
+  var s1 = useState(JSON.parse(JSON.stringify(INITIAL))); var board = s1[0]; var setBoard = s1[1];
+  var s2 = useState(null); var dice = s2[0]; var setDice = s2[1];
+  var s3 = useState(null); var selected = s3[0]; var setSelected = s3[1];
+  var s4 = useState({ white:0, black:0 }); var bar = s4[0]; var setBar = s4[1];
+  var s5 = useState({ white:0, black:0 }); var borne = s5[0]; var setBorne = s5[1];
+  var s6 = useState(null); var winner = s6[0]; var setWinner = s6[1];
+  var s7 = useState([]); var moves = s7[0]; var setMoves = s7[1];
+  var s8 = useState(false); var botThinking = s8[0]; var setBotThinking = s8[1];
+
+  function rollDice() { return [Math.ceil(Math.random()*6), Math.ceil(Math.random()*6)]; }
+
+  function startGame() {
+    var d = rollDice();
+    setPhase('white'); // White goes first
+    setDice(d);
+    setMoves(d[0]===d[1] ? [d[0],d[0],d[0],d[0]] : [...d]);
+    setBoard(JSON.parse(JSON.stringify(INITIAL)));
+    setBar({white:0,black:0});
+    setBorne({white:0,black:0});
+    setSelected(null);
+    setWinner(null);
+  }
+
+  function getLegalMoves(fromPoint, currentPhase, currentDice, currentBoard, currentBar) {
+    var color = currentPhase === 'white' ? 1 : -1;
+    var dir = color; // white moves toward lower index (dir -1), black toward higher (+1)
+    var legal = [];
+    var remainingDice = [...new Set(currentDice)];
+    remainingDice.forEach(function(d) {
+      var to = fromPoint + (color === 1 ? -d : d);
+      if (to >= 0 && to <= 23) {
+        var pt = currentBoard[to];
+        if (pt.count === 0 || pt.color === color || pt.count === 1) {
+          legal.push({die:d, to:to});
+        }
+      } else if ((color === 1 && to < 0) || (color === -1 && to > 23)) {
+        // bearing off — simplified: allow if all pieces in home
+        legal.push({die:d, to: color===1 ? -1 : 24});
+      }
+    });
+    return legal;
+  }
+
+  function applyMove(from, to, currentPhase, currentBoard, currentBar, currentBorne, currentDice) {
+    var color = currentPhase === 'white' ? 1 : -1;
+    var nb = currentBoard.map(function(p){ return {count:p.count, color:p.color}; });
+    var nBar = {...currentBar};
+    var nBorne = {...currentBorne};
+    var dieUsed = Math.abs(to - from);
+    if (to === -1 || to === 24) dieUsed = Math.max(...currentDice);
+
+    // Remove from source
+    if (from >= 0 && from <= 23) {
+      nb[from].count--;
+      if (nb[from].count === 0) nb[from].color = 0;
+    } else {
+      // from bar
+      if (color===1) nBar.white = Math.max(0, nBar.white-1);
+      else nBar.black = Math.max(0, nBar.black-1);
+    }
+
+    // Apply to destination
+    if (to >= 0 && to <= 23) {
+      if (nb[to].count === 1 && nb[to].color !== color) {
+        // Hit — send to bar
+        if (nb[to].color === 1) nBar.white++;
+        else nBar.black++;
+        nb[to] = {count:1, color:color};
+      } else {
+        nb[to].count++;
+        nb[to].color = color;
+      }
+    } else {
+      // Borne off
+      if (color === 1) nBorne.white++;
+      else nBorne.black++;
+    }
+
+    // Remove used die
+    var newDice = [...currentDice];
+    var idx = newDice.indexOf(dieUsed);
+    if (idx === -1) idx = newDice.indexOf(Math.max(...currentDice));
+    if (idx !== -1) newDice.splice(idx, 1);
+
+    return {board: nb, bar: nBar, borne: nBorne, dice: newDice};
+  }
+
+  function checkWin(currentBorne) {
+    if (currentBorne.white >= 15) return 'white';
+    if (currentBorne.black >= 15) return 'black';
+    return null;
+  }
+
+  function endTurn(newDice, nextPhase, newBoard, newBar, newBorne) {
+    var w = checkWin(newBorne);
+    if (w) {
+      setWinner(w);
+      onGameEnd(w === 'white' ? 'win' : 'loss');
+      return;
+    }
+    if (newDice.length === 0) {
+      var d = rollDice();
+      var nm = d[0]===d[1] ? [d[0],d[0],d[0],d[0]] : [...d];
+      setDice(d); setMoves(nm); setPhase(nextPhase);
+      // Bot move
+      if (nextPhase === 'black') {
+        setBotThinking(true);
+        setTimeout(function() {
+          doBotMove(newBoard, newBar, newBorne, nm);
+        }, 700);
+      }
+    } else {
+      setMoves(newDice);
+      setPhase(newPhase => newPhase); // keep same phase
+    }
+  }
+
+  function doBotMove(brd, br, bn, remainDice) {
+    var color = -1; // black
+    var myDice = [...remainDice];
+    var myBoard = brd.map(function(p){ return {count:p.count,color:p.color}; });
+    var myBar = {...br};
+    var myBorne = {...bn};
+
+    while (myDice.length > 0) {
+      var moved = false;
+      // Try from bar first
+      if (myBar.black > 0) {
+        var from = 24; // bar notation
+        for (var di = 0; di < myDice.length; di++) {
+          var to = myDice[di] - 1; // 0-indexed entry
+          var pt = myBoard[to];
+          if (pt.count === 0 || pt.color === color || pt.count === 1) {
+            var res = applyMove(from, to, 'black', myBoard, myBar, myBorne, myDice);
+            myBoard = res.board; myBar = res.bar; myBorne = res.borne; myDice = res.dice;
+            moved = true; break;
+          }
+        }
+        if (!moved) break;
+        continue;
+      }
+      // Find all legal moves
+      var allMoves = [];
+      for (var i = 0; i < 24; i++) {
+        if (myBoard[i].color !== color || myBoard[i].count === 0) continue;
+        var legal = getLegalMoves(i, 'black', myDice, myBoard, myBar);
+        legal.forEach(function(m){ allMoves.push({from:i, to:m.to, die:m.die}); });
+      }
+      if (allMoves.length === 0) break;
+      // Pick highest-value move (prefer hitting, prefer advancing)
+      var pick = allMoves[Math.floor(Math.random() * allMoves.length)];
+      var r = applyMove(pick.from, pick.to, 'black', myBoard, myBar, myBorne, myDice);
+      myBoard = r.board; myBar = r.bar; myBorne = r.borne; myDice = r.dice;
+      moved = true;
+    }
+
+    setBoard(myBoard); setBar(myBar); setBorne(myBorne);
+    var w = checkWin(myBorne);
+    if (w) {
+      setWinner(w); onGameEnd(w==='white'?'win':'loss');
+      setBotThinking(false); return;
+    }
+    var d2 = rollDice();
+    var nm2 = d2[0]===d2[1] ? [d2[0],d2[0],d2[0],d2[0]] : [...d2];
+    setDice(d2); setMoves(nm2); setPhase('white');
+    setBotThinking(false);
+  }
+
+  function handlePointClick(idx) {
+    if (phase !== 'white' || botThinking || winner) return;
+    var color = 1;
+    if (selected === null) {
+      // Select a piece
+      if (bar.white > 0) {
+        // Must enter from bar
+        var legal = getLegalMoves(24, 'white', moves, board, bar);
+        if (legal.length === 0) return;
+        setSelected(24);
+        return;
+      }
+      if (board[idx].color === color && board[idx].count > 0) {
+        setSelected(idx);
+      }
+    } else {
+      // Move selected piece to idx
+      var fromIdx = selected;
+      var legal2 = getLegalMoves(fromIdx, 'white', moves, board, bar);
+      var move = legal2.find(function(m){ return m.to === idx; });
+      if (move) {
+        playHaptic('tap');
+        if (soundOn) playSound('place');
+        var res = applyMove(fromIdx, idx, 'white', board, bar, borne, moves);
+        setBoard(res.board); setBar(res.bar); setBorne(res.borne);
+        setSelected(null);
+        if (res.dice.length === 0) {
+          var w = checkWin(res.borne);
+          if (w) { setWinner(w); onGameEnd(w==='white'?'win':'loss'); return; }
+          var d3 = rollDice();
+          var nm3 = d3[0]===d3[1]?[d3[0],d3[0],d3[0],d3[0]]:[...d3];
+          setDice(d3); setMoves(nm3); setPhase('black');
+          setBotThinking(true);
+          setTimeout(function() {
+            doBotMove(res.board, res.bar, res.borne, nm3);
+          }, 700);
+        } else {
+          setMoves(res.dice);
+        }
+      } else {
+        // Re-select or deselect
+        if (board[idx] && board[idx].color === color) setSelected(idx);
+        else setSelected(null);
+      }
+    }
+  }
+
+  function handleBearOff() {
+    if (phase !== 'white' || botThinking || winner || moves.length === 0) return;
+    var legal3 = getLegalMoves(selected !== null ? selected : -99, 'white', moves, board, bar);
+    var bearMove = legal3.find(function(m){ return m.to === -1; });
+    if (bearMove) {
+      var res2 = applyMove(selected, -1, 'white', board, bar, borne, moves);
+      setBoard(res2.board); setBar(res2.bar); setBorne(res2.borne); setSelected(null);
+      if (res2.dice.length === 0) {
+        var w2 = checkWin(res2.borne);
+        if (w2) { setWinner(w2); onGameEnd(w2==='white'?'win':'loss'); return; }
+        var d4 = rollDice();
+        var nm4 = d4[0]===d4[1]?[d4[0],d4[0],d4[0],d4[0]]:[...d4];
+        setDice(d4); setMoves(nm4); setPhase('black');
+        setBotThinking(true);
+        setTimeout(function() { doBotMove(res2.board, res2.bar, res2.borne, nm4); }, 700);
+      } else {
+        setMoves(res2.dice);
+      }
+    }
+  }
+
+  var POINT_SIZE = 28;
+
+  if (!phase) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:12}}>🎲</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Tavla</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:12}}>Klasik Türk tavlası. Bot'a karşı oyna.</p>
+      <p style={{color:'var(--text-secondary)',fontSize:13,marginBottom:28}}>Sen <strong style={{color:'#fff'}}>⬜ Beyaz</strong>'sın (→ sola). İlk zar otomatik atılır.</p>
+      <button onClick={startGame} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#92400E,#D97706)',color:'#FFF',fontSize:17,fontWeight:700,cursor:'pointer'}}>
+        Oyna
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{maxWidth:440,margin:'0 auto',padding:'16px',overflowX:'auto'}}>
+      {/* Status */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
+        <div style={{fontWeight:700,fontSize:13}}>
+          {winner ? (winner==='white'?'🏆 Sen kazandın!':'😅 Bot kazandı!') :
+           botThinking ? '🤖 Bot düşünüyor...' :
+           phase==='white' ? '⬜ Senin hamlen' : '⬛ Bot hamle yapıyor'}
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          {moves.map(function(d,i){return(
+            <div key={i} style={{width:28,height:28,borderRadius:6,background:'var(--surface-hover)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:14}}>{d}</div>
+          );})}
+        </div>
+      </div>
+      {/* Board */}
+      <div style={{background:'#2D5A27',borderRadius:12,padding:'10px 8px',userSelect:'none'}}>
+        {/* Top: points 12–23 (left to right) */}
+        <div style={{display:'flex',gap:2,justifyContent:'center',marginBottom:4}}>
+          {Array.from({length:12},function(_,i){return i+12;}).map(function(idx){
+            var pt = board[idx];
+            var isLegal = selected !== null && getLegalMoves(selected,'white',moves,board,bar).some(function(m){return m.to===idx;});
+            return (
+              <div key={idx} onClick={function(){handlePointClick(idx);}}
+                style={{width:POINT_SIZE,minHeight:80,borderRadius:4,cursor:'pointer',background:isLegal?'rgba(255,255,0,0.2)':idx%2===0?'#8B4513':'#DEB887',display:'flex',flexDirection:'column',alignItems:'center',paddingTop:4,gap:2,position:'relative'}}>
+                {Array.from({length:Math.min(pt.count,5)}).map(function(_,j){
+                  return <div key={j} style={{width:22,height:22,borderRadius:'50%',background:pt.color===1?'#fff':'#111',border:'1px solid rgba(255,255,255,0.3)',flexShrink:0}} />;
+                })}
+                {pt.count>5 && <div style={{fontSize:9,color:'#fff',fontWeight:700}}>+{pt.count-5}</div>}
+                <div style={{position:'absolute',bottom:2,fontSize:8,color:'rgba(255,255,255,0.5)'}}>{idx}</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Bar */}
+        <div style={{display:'flex',justifyContent:'center',gap:16,margin:'4px 0',padding:'4px',background:'rgba(0,0,0,0.3)',borderRadius:8}}>
+          <div>⬜ Bar: {bar.white}</div>
+          <div>⬛ Bar: {bar.black}</div>
+        </div>
+        {/* Bottom: points 11–0 (left to right displayed as 11,10,...0) */}
+        <div style={{display:'flex',gap:2,justifyContent:'center',marginTop:4}}>
+          {Array.from({length:12},function(_,i){return 11-i;}).map(function(idx){
+            var pt = board[idx];
+            var isLegal = selected !== null && getLegalMoves(selected,'white',moves,board,bar).some(function(m){return m.to===idx;});
+            return (
+              <div key={idx} onClick={function(){handlePointClick(idx);}}
+                style={{width:POINT_SIZE,minHeight:80,borderRadius:4,cursor:'pointer',background:isLegal?'rgba(255,255,0,0.2)':idx%2===0?'#8B4513':'#DEB887',display:'flex',flexDirection:'column-reverse',alignItems:'center',paddingBottom:4,gap:2,position:'relative'}}>
+                {Array.from({length:Math.min(pt.count,5)}).map(function(_,j){
+                  return <div key={j} style={{width:22,height:22,borderRadius:'50%',background:pt.color===1?'#fff':'#111',border:'1px solid rgba(255,255,255,0.3)',flexShrink:0}} />;
+                })}
+                {pt.count>5 && <div style={{fontSize:9,color:'#fff',fontWeight:700}}>+{pt.count-5}</div>}
+                <div style={{position:'absolute',top:2,fontSize:8,color:'rgba(255,255,255,0.5)'}}>{idx}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* Bear-off zone */}
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:10,padding:'8px 12px',background:'var(--surface-hover)',borderRadius:10,fontSize:13}}>
+        <span>⬜ Çıkan: {borne.white}/15</span>
+        <span>⬛ Çıkan: {borne.black}/15</span>
+        {selected !== null && phase==='white' && (
+          <button onClick={handleBearOff} style={{padding:'4px 12px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#D97706,#F59E0B)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+            Çıkar
+          </button>
+        )}
+      </div>
+      {selected !== null && (
+        <div style={{marginTop:6,fontSize:12,color:'var(--text-secondary)',textAlign:'center'}}>
+          Taş seçildi: Puan {selected === 24 ? 'Bar' : selected} — gitmek istediğin noktaya dokun
+        </div>
+      )}
     </div>
   );
 }
@@ -8988,8 +9769,8 @@ export default function App() {
   const adGameCountRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0} };
-  const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 } };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0} };
+  const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 }, streakFreeze: { count: 1, weekUsed: null }, season: { num: 0, xp: 0, month: null } };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { ...PROG_DEFAULTS, history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }; });
 
   useEffect(() => {
@@ -9009,6 +9790,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('oyunclub_sound', soundOn); }, [soundOn]);
 
   const [shareResult, setShareResult] = useState(null);
+  const [floatingXP, setFloatingXP] = useState(null);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -9020,6 +9802,11 @@ export default function App() {
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86400000).toDateString();
     const gid = selectedGame.id;
+
+    // Haptic feedback
+    if (result === 'win') playHaptic('win');
+    else if (result === 'loss') playHaptic('wrong');
+    else playHaptic('tap');
 
     setStats((prev) => {
       const gs = { ...(prev.games?.[gid] || { played: 0, wins: 0, losses: 0 }) };
@@ -9033,17 +9820,53 @@ export default function App() {
       const newXp = (prev.xp || 0) + xpGain;
       const newLevel = getLevelInfo(newXp).level;
 
+      // Streak with freeze auto-apply
       const prevS = prev.streak || { count: 0, lastPlayDate: null };
+      const prevFreeze = prev.streakFreeze || { count: 1, weekUsed: null };
       let newStreak = { ...prevS };
+      let newFreeze = { ...prevFreeze };
       if (prevS.lastPlayDate !== today) {
-        newStreak.count = (prevS.lastPlayDate === yesterday) ? (prevS.count || 0) + 1 : 1;
-        newStreak.lastPlayDate = today;
+        const isConsecutive = prevS.lastPlayDate === yesterday;
+        if (!isConsecutive && prevS.lastPlayDate !== null) {
+          // Streak would break — auto-apply freeze if available
+          const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          const weekKey = weekStart.toDateString();
+          if ((prevFreeze.count || 0) > 0 && prevFreeze.weekUsed !== weekKey) {
+            newStreak.count = (prevS.count || 0) + 1;
+            newStreak.lastPlayDate = today;
+            newFreeze = { count: (prevFreeze.count || 1) - 1, weekUsed: weekKey };
+            setTimeout(() => showToast('🛡️ Seri kalkanı kullanıldı! Serin korundu.'), 600);
+          } else {
+            newStreak.count = 1;
+            newStreak.lastPlayDate = today;
+          }
+        } else {
+          newStreak.count = isConsecutive ? (prevS.count || 0) + 1 : 1;
+          newStreak.lastPlayDate = today;
+        }
+      }
+
+      // Recharge freeze weekly
+      const weekStart2 = new Date(); weekStart2.setDate(weekStart2.getDate() - weekStart2.getDay());
+      const weekKey2 = weekStart2.toDateString();
+      if (newFreeze.weekUsed !== weekKey2 && newFreeze.count === 0) {
+        newFreeze = { count: 1, weekUsed: null };
       }
 
       const prevDs = prev.dailyStats || { date: null, played: 0, wins: 0 };
       const newDs = prevDs.date === today
         ? { ...prevDs, played: prevDs.played + 1, wins: prevDs.wins + (result === 'win' ? 1 : 0) }
         : { date: today, played: 1, wins: result === 'win' ? 1 : 0 };
+
+      // Season XP — monthly reset
+      const curMonth = new Date().toISOString().slice(0,7); // "2026-07"
+      const prevSeason = prev.season || { num: 0, xp: 0, month: null };
+      let newSeason;
+      if (prevSeason.month === curMonth) {
+        newSeason = { ...prevSeason, xp: (prevSeason.xp || 0) + xpGain };
+      } else {
+        newSeason = { num: (prevSeason.num || 0) + 1, xp: xpGain, month: curMonth };
+      }
 
       const draft = {
         ...prev,
@@ -9052,10 +9875,12 @@ export default function App() {
         xp: newXp,
         level: newLevel,
         streak: newStreak,
+        streakFreeze: newFreeze,
         currentWinStreak: wsNow,
         bestWinStreak: bestWs,
         badges: prev.badges || {},
         dailyStats: newDs,
+        season: newSeason,
       };
 
       const nb = checkNewBadges(draft);
@@ -9080,12 +9905,27 @@ export default function App() {
     // Hemen lobby'ye geç — oyun ekranı kapansın, çift çağrı önlensin
     setPage('lobby');
     setSelectedGame(null);
-    setTimeout(() => setShareResult({ gameName, result, xpGain, game: gameToReplay }), 400);
+    setTimeout(() => {
+      setShareResult({ gameName, result, xpGain, game: gameToReplay });
+      setFloatingXP(xpGain);
+    }, 400);
   };
 
   const handleLogin = (userData) => {
     setUser(userData);
     setPage('lobby');
+    // Welcome bonus for brand-new users (no existing stats)
+    try {
+      const existing = localStorage.getItem('oyunclub_stats');
+      if (!existing) {
+        const welcomeXp = 50;
+        setStats((prev) => {
+          const newBadges = { ...prev.badges, welcome: true };
+          return { ...prev, xp: (prev.xp || 0) + welcomeXp, badges: newBadges };
+        });
+        setTimeout(() => showToast('🎉 Hoş geldin! +50 XP ve Hoş Geldin rozeti kazandın!'), 800);
+      }
+    } catch(e) {}
   };
   const launchGame = (game) => {
     const fullGame = GAMES.find(g => g.id === game.id) || game;
@@ -9370,6 +10210,30 @@ export default function App() {
             soundOn={soundOn}
           />
         );
+      case 'tavla':
+        return (
+          <TavlaGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'kelimezinciri':
+        return (
+          <KelimeZinciriGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'deyimtamamla':
+        return (
+          <DeyimTamamlaGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
       default:
         return null;
     }
@@ -9378,6 +10242,7 @@ export default function App() {
   return (
     <>
       <GlobalStyle dark={dark} />
+      {floatingXP && <FloatingXP xp={floatingXP} onDone={() => setFloatingXP(null)} />}
       {shareResult && (
         <ShareResultOverlay
           gameName={shareResult.gameName}
@@ -9385,6 +10250,7 @@ export default function App() {
           xpGain={shareResult.xpGain}
           onClose={() => setShareResult(null)}
           onReplay={shareResult.game ? () => { setShareResult(null); handleSelectGame(shareResult.game); } : undefined}
+          stats={stats}
         />
       )}
       {showAd && pendingGame && (
