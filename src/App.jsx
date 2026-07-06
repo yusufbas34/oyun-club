@@ -4441,6 +4441,26 @@ const GAMES = [
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
+  {
+    id: 'kelimeav',
+    name: 'Kelime Avcısı',
+    desc: '12 harften kelime bul, puan topla',
+    icon: '🔍',
+    players: 1,
+    genre: 'kelime',
+    color: '#0F766E',
+    bg: 'linear-gradient(135deg, #0F766E 0%, #2DD4BF 100%)',
+  },
+  {
+    id: 'emojimuz',
+    name: 'Emoji Müzayedesi',
+    desc: 'Emoji dizisinin anlamını bul',
+    icon: '🎭',
+    players: 1,
+    genre: 'kelime',
+    color: '#BE185D',
+    bg: 'linear-gradient(135deg, #BE185D 0%, #FB7185 100%)',
+  },
 ];
 
 const generateRoomId = () =>
@@ -6082,6 +6102,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
           </button>
         </div>
       )}
+      <DailyQuestBanner stats={stats} />
       <div style={{ marginBottom: 24, animation: 'fadeUp 0.4s ease' }}>
         <h1
           style={{
@@ -8150,6 +8171,10 @@ const GAME_HELP = {
   lightsout:   { icon:'💡',  title:'Işığı Söndür',           rules:['Bir kareye tıkladığında o kare ve 4 komşusu (yukarı/aşağı/sol/sağ) durumunu değiştirir.','Amaç tüm ışıkları söndürmek.','Az hamleyle bitirmek için kafanı kullan!'] },
   brickbreaker:{ icon:'🧱',  title:'Top Patlatma',           rules:['Paddle\'ı hareket ettir (fare/parmak veya ok tuşları).','Top fırlatmak için tıkla/dokun veya Boşluk tuşuna bas.','Tüm tuğlaları topla kır — ama topu düşürme!'] },
   nim:         { icon:'🪵',  title:'Çubuk Oyunu (Nim)',      rules:['3 sıra var (3, 5 ve 7 çubuk). Sırayla bir sıradan istediğin kadar çubuk al.','Ama hepsini bir anda sadece bir sıradan alabilirsin.','Son çubuğu almak zorunda kalan KAYBEDER.'] },
+  hizcarpim:  { icon:'🚀',  title:'Hız Çarpım',             rules:['60 saniye içinde çarpım sorularını çöz.','Cevabı yazınca otomatik kontrol edilir, Enter\'a gerek yok.','Art arda doğru cevaplar seri bonusu kazandırır!'] },
+  tarihefsan: { icon:'📚',  title:'Tarih mi Efsane mi?',    rules:['Türk tarihi ve kültürüne dair ifadeler gösterilir.','Doğruysa "Tarih", yanlışsa "Efsane" düğmesine bas.','Hız bonusu var — ne kadar çabuk cevaplarsan o kadar fazla puan!'] },
+  kelimeav:   { icon:'🔍',  title:'Kelime Avcısı',          rules:['Ekranda 12 Türkçe harf gösterilir.','Bu harfleri kullanarak en az 3 harfli Türkçe kelimeler yaz.','Daha uzun kelime = daha fazla puan. 90 sanijen içinde topla!'] },
+  emojimuz:   { icon:'🎭',  title:'Emoji Müzayedesi',       rules:['Ekranda bir emoji dizisi çıkar.','Dizinin temsil ettiği Türkçe deyim, şarkı veya filmi yaz.','Ne kadar hızlı cevaplarsan o kadar yüksek puan!'] },
 };
 
 function HelpModal({ gameId, onClose }) {
@@ -8304,6 +8329,9 @@ var BADGE_DEFS = [
   { id: 'winstreak_5',    name: '5 Art Arda',         icon: '🔥', check: function(s){ return (s.bestWinStreak||0)>=5; } },
   { id: 'hizcarpim',      name: 'Hız Çarpım Ustası', icon: '🚀', check: function(s){ return (s.games.hizcarpim?.played||0)>=1; } },
   { id: 'tarih_first',    name: 'Tarih Meraklısı',   icon: '📚', check: function(s){ return (s.games.tarihefsan?.played||0)>=1; } },
+  { id: 'kelimeav_first', name: 'Kelime Avcısı',     icon: '🔍', check: function(s){ return (s.games.kelimeav?.played||0)>=1; } },
+  { id: 'emojimuz_first', name: 'Emoji Ustası',      icon: '🎭', check: function(s){ return (s.games.emojimuz?.played||0)>=1; } },
+  { id: 'daily_done',     name: 'Günlük Kahraman',   icon: '⚡', check: function(s){ var ds=s.dailyStats||{}; return ds.played>=3&&ds.wins>=2; } },
 ];
 
 function checkNewBadges(newStats) {
@@ -8400,6 +8428,308 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose }) {
           Devam Et
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// DAILY QUEST BANNER
+// ============================================================
+function DailyQuestBanner({ stats }) {
+  var today = new Date().toDateString();
+  var ds = stats.dailyStats || {};
+  var dayPlayed = (ds.date === today) ? (ds.played || 0) : 0;
+  var dayWins   = (ds.date === today) ? (ds.wins   || 0) : 0;
+  var variety   = Object.keys(stats.games || {}).filter(function(k){ return (stats.games[k].played||0)>0; }).length;
+
+  var quests = [
+    { icon:'🎮', label:'Bugün 3 oyun oyna',      cur: Math.min(dayPlayed,3),  goal:3,  xp:15 },
+    { icon:'🏆', label:'Bugün 2 galibiyet al',   cur: Math.min(dayWins,2),    goal:2,  xp:20 },
+    { icon:'🎯', label:'5 farklı oyun dene',      cur: Math.min(variety,5),    goal:5,  xp:25 },
+  ];
+  var allDone = quests.every(function(q){ return q.cur>=q.goal; });
+  return (
+    <div style={{ background: allDone ? 'linear-gradient(135deg,rgba(52,211,153,0.08),rgba(134,59,255,0.08))' : 'linear-gradient(135deg,rgba(134,59,255,0.07),rgba(99,102,241,0.07))', border: '1px solid '+(allDone?'rgba(52,211,153,0.25)':'rgba(134,59,255,0.18)'), borderRadius:16, padding:'16px 18px', marginBottom:20, animation:'fadeUp 0.4s ease' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+        <div style={{ fontWeight:800, fontSize:15, display:'flex', alignItems:'center', gap:8 }}>
+          <span>⚡</span> Günlük Görevler
+        </div>
+        {allDone && <span style={{ background:'rgba(52,211,153,0.18)', color:'#34d399', fontWeight:700, fontSize:11, padding:'3px 10px', borderRadius:20 }}>✅ Tamamlandı</span>}
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {quests.map(function(q,i){
+          var pct = Math.round((q.cur/q.goal)*100);
+          var done = q.cur>=q.goal;
+          return (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:18, flexShrink:0 }}>{q.icon}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, fontWeight:600, marginBottom:4 }}>
+                  <span style={{ color: done?'#34d399':'var(--text)' }}>{q.label}</span>
+                  <span style={{ color:'var(--text-secondary)', fontVariantNumeric:'tabular-nums' }}>{q.cur}/{q.goal}</span>
+                </div>
+                <div style={{ height:5, background:'var(--border)', borderRadius:999, overflow:'hidden' }}>
+                  <div style={{ width:pct+'%', height:'100%', background: done?'linear-gradient(90deg,#34d399,#10b981)':'linear-gradient(90deg,#863bff,#a855f7)', borderRadius:999, transition:'width 0.5s ease' }} />
+                </div>
+              </div>
+              <span style={{ fontSize:11, fontWeight:700, color:'#a855f7', flexShrink:0 }}>+{q.xp}XP</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// KELIME AVCI GAME
+// ============================================================
+var TR_WORDS = ['araba','elma','masa','kalem','kitap','okul','ev','yol','su','ot','gül','kar','dağ','deniz','göl','nehir','orman','park','kale','taş','ağaç','yaprak','çiçek','kuş','balık','kedi','köpek','at','inek','koyun','arı','böcek','ipek','pamuk','yün','bez','elbise','ayak','el','baş','göz','kulak','burun','diş','dil','kol','omuz','sırt','yüz','saç','bel','diz','parmak','tırnak','kemik','ten','deri','kan','nefes','ses','renk','mavi','kırmızı','sarı','yeşil','beyaz','siyah','mor','pembe','turuncu','gri','kahve','altın','gümüş','bakır','demir','çelik','taş','kaya','toprak','kum','çamur','buz','ateş','rüzgar','yağmur','kar','fırtına','güneş','ay','yıldız','gök','bulut','gökkuşağı','sabah','akşam','gece','gündüz','hafta','ay','yıl','mevsim','ilkbahar','yaz','sonbahar','kış','sıcak','soğuk','ılık','kapalı','açık','büyük','küçük','uzun','kısa','ince','kalın','dolu','boş','hızlı','yavaş','güzel','çirkin','iyi','kötü','doğru','yanlış','kolay','zor','tatlı','ekşi','acı','tuzlu','sert','yumuşak','parlak','karanlık','sessiz','gürültülü','düz','eğri','oval','kare','daire','üçgen','beş','altı','yedi','sekiz','dokuz','on','yüz','bin','milyon','yarım','çeyrek','tüm','hep','hiç','çok','az','daha','en','bile','ya','da','de','ki','mi','mı','mu','mü','biz','siz','onlar','ben','sen','o','bu','şu','ne','kim','nerede','nasıl','neden','kaç','hangi','her','bazı','bir','iki','üç','dört','beş'];
+
+var TR_POOL = 'ABCDEFGHIİJKLMNOÖPRSTUÜVYZ'.split('');
+var POOL_WEIGHTS = { A:8,B:3,C:4,D:4,E:9,F:2,G:4,H:3,I:5,İ:8,J:1,K:6,L:5,M:5,N:6,O:4,Ö:2,P:2,R:6,S:6,T:6,U:4,Ü:2,V:2,Y:4,Z:3 };
+
+function pickLetters(n) {
+  var letters = [];
+  for (var k in POOL_WEIGHTS) { for (var i=0;i<POOL_WEIGHTS[k];i++) letters.push(k); }
+  var result = [];
+  var pool = letters.slice();
+  for (var j=0;j<n;j++) {
+    var idx = Math.floor(Math.random()*pool.length);
+    result.push(pool[idx]);
+    pool.splice(idx,1);
+  }
+  return result;
+}
+
+function canMakeWord(word, letters) {
+  var pool = letters.map(function(l){ return l.toLowerCase(); });
+  var chars = word.toUpperCase().replace('İ','İ').toLowerCase().split('');
+  for (var i=0;i<chars.length;i++) {
+    var pos = pool.indexOf(chars[i]);
+    if (pos===-1) return false;
+    pool.splice(pos,1);
+  }
+  return true;
+}
+
+function KelimeAvciGame({ game, onGameEnd, soundOn }) {
+  var TOTAL_TIME = 90;
+  var s1=useState(TOTAL_TIME); var timeLeft=s1[0]; var setTimeLeft=s1[1];
+  var s2=useState(0); var score=s2[0]; var setScore=s2[1];
+  var s3=useState(function(){ return pickLetters(12); }); var letters=s3[0];
+  var s4=useState(''); var input=s4[0]; var setInput=s4[1];
+  var s5=useState([]); var found=s5[0]; var setFound=s5[1];
+  var s6=useState(null); var msg=s6[0]; var setMsg=s6[1];
+  var s7=useState(false); var done=s7[0]; var setDone=s7[1];
+  var inputRef=useRef(null);
+  var scoreRef=useRef(0); scoreRef.current=score;
+
+  useEffect(function(){
+    if(done)return;
+    var t=setInterval(function(){
+      setTimeLeft(function(p){ if(p<=1){clearInterval(t);setDone(true);return 0;} return p-1; });
+    },1000);
+    return function(){clearInterval(t);};
+  },[done]);
+
+  useEffect(function(){ if(inputRef.current&&!done)inputRef.current.focus(); });
+
+  function handleSubmit(e) {
+    e&&e.preventDefault();
+    var word=input.trim().toLowerCase().replace(/i/g,'i').replace(/ı/g,'ı');
+    if(word.length<3){ setMsg('⚠️ En az 3 harf!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
+    if(found.indexOf(word)!==-1){ setMsg('✋ Zaten bulundu!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
+    var wordUpper = word.toUpperCase();
+    if(!canMakeWord(wordUpper, letters)){ setMsg('❌ Bu harfler yok!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
+    var inList = TR_WORDS.indexOf(word)!==-1;
+    if(!inList){ setMsg('🤔 Geçersiz kelime!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
+    var pts = word.length*10;
+    setFound(function(f){ return f.concat([word]); });
+    setScore(function(s){ return s+pts; });
+    setMsg('✅ +'+pts+' puan!');
+    setTimeout(function(){setMsg(null);},900);
+    setInput('');
+  }
+
+  if(done){
+    var rank = score>=200?'win':score>=80?'draw':'loss';
+    return (
+      <div style={{maxWidth:400,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+        <div style={{fontSize:64,marginBottom:12}}>{score>=200?'🦅':score>=80?'🦉':'🐦'}</div>
+        <h2 style={{fontSize:28,fontWeight:800,marginBottom:8}}>{score>=200?'Kelime Ustası!':score>=80?'Fena Değil!':'Devam Et!'}</h2>
+        <div style={{fontSize:48,fontWeight:900,color:'#863bff',marginBottom:4}}>{score}</div>
+        <div style={{color:'var(--text-secondary)',fontSize:15,marginBottom:16}}>puan · {found.length} kelime bulundu</div>
+        {found.length>0&&<div style={{background:'var(--surface-hover)',borderRadius:12,padding:'12px 16px',marginBottom:20,maxHeight:120,overflowY:'auto',textAlign:'left'}}>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--text-secondary)',marginBottom:6}}>Bulunan kelimeler:</div>
+          <div style={{fontSize:13,lineHeight:1.8}}>{found.join(', ')}</div>
+        </div>}
+        <button onClick={function(){onGameEnd(rank);}} style={{display:'block',width:'100%',padding:14,borderRadius:12,background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>Bitir</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{maxWidth:440,margin:'0 auto',padding:'24px 20px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div style={{fontWeight:800,fontSize:32,color:timeLeft<=15?'#EF4444':'var(--text)',fontVariantNumeric:'tabular-nums'}}>{timeLeft}s</div>
+        <div style={{textAlign:'center'}}><div style={{fontWeight:800,fontSize:22,color:'#863bff'}}>{score}</div><div style={{fontSize:11,color:'var(--text-secondary)'}}>puan</div></div>
+        <div style={{fontSize:14,color:'var(--text-secondary)'}}>{found.length} kelime</div>
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center',marginBottom:20}}>
+        {letters.map(function(l,i){
+          return <div key={i} style={{width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--surface)',border:'2px solid var(--border)',borderRadius:10,fontWeight:800,fontSize:18,userSelect:'none'}}>{l}</div>;
+        })}
+      </div>
+      <form onSubmit={handleSubmit} style={{display:'flex',gap:10,marginBottom:12}}>
+        <input ref={inputRef} value={input} onChange={function(e){setInput(e.target.value);}}
+          placeholder="Kelime yaz..."
+          style={{flex:1,padding:'12px 16px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontFamily:'inherit',outline:'none'}}
+        />
+        <button type="submit" style={{padding:'12px 20px',borderRadius:12,background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>↵</button>
+      </form>
+      {msg&&<div style={{textAlign:'center',fontSize:14,fontWeight:700,color:'var(--text)',padding:'8px',borderRadius:10,background:'var(--surface-hover)',marginBottom:8,animation:'fadeUp 0.2s ease'}}>{msg}</div>}
+      {found.length>0&&<div style={{fontSize:12,color:'var(--text-secondary)',textAlign:'center'}}>{found.slice(-4).join(' · ')}</div>}
+    </div>
+  );
+}
+
+// ============================================================
+// EMOJI MUZAYEDE GAME
+// ============================================================
+var EMOJI_SORULAR = [
+  { emoji:'🌹🔫', answer:'gülüm', hint:'Bir şarkı' },
+  { emoji:'🐺🔴', answer:'kurtlar vadisi', hint:'Dizi/Film' },
+  { emoji:'⭐🌊🌊', answer:'yıldız deniz', hint:'Şarkı' },
+  { emoji:'🏠❤️', answer:'ev sevgisi', hint:'Deyim' },
+  { emoji:'🐦🆓', answer:'kuş gibi özgür', hint:'Deyim' },
+  { emoji:'🌙☀️', answer:'gece gündüz', hint:'Deyim' },
+  { emoji:'💎🙌', answer:'elmas eller', hint:'Deyim' },
+  { emoji:'🐍🪴', answer:'yılan hikayesi', hint:'Deyim' },
+  { emoji:'👁️🗡️', answer:'göz kırpmak', hint:'Deyim' },
+  { emoji:'🌹🌹🌹', answer:'güller', hint:'Şarkı / Dizi' },
+  { emoji:'🔥💃', answer:'ateşli dans', hint:'İfade' },
+  { emoji:'🎭🌃', answer:'gece maskesi', hint:'Film' },
+  { emoji:'🦁👑', answer:'aslan kral', hint:'Film' },
+  { emoji:'🌊🏃', answer:'dalgaları aş', hint:'İfade' },
+  { emoji:'🌙⭐🌙', answer:'hilal', hint:'Sembol' },
+  { emoji:'🎵❤️', answer:'aşk şarkısı', hint:'İfade' },
+  { emoji:'🏔️⛅', answer:'dağ başını duman almış', hint:'Marş' },
+  { emoji:'🐺🌕', answer:'kurt ay', hint:'Türk kültürü' },
+  { emoji:'🌺🌸🌼', answer:'çiçek bahçesi', hint:'İfade' },
+  { emoji:'🗡️⚖️', answer:'kılıç kalkan', hint:'Sembol' },
+];
+
+function shuffle(arr) {
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}
+  return a;
+}
+
+function normalizeAnswer(s) {
+  return s.toLowerCase()
+    .replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ş/g,'s')
+    .replace(/ç/g,'c').replace(/ö/g,'o').replace(/ü/g,'u')
+    .replace(/\s+/g,' ').trim();
+}
+
+function EmojiMuzayedeGame({ game, onGameEnd, soundOn }) {
+  var TOTAL_Q = 8;
+  var Q_TIME = 15;
+  var s1=useState(function(){ return shuffle(EMOJI_SORULAR).slice(0,TOTAL_Q); }); var questions=s1[0];
+  var s2=useState(0); var qIdx=s2[0]; var setQIdx=s2[1];
+  var s3=useState(Q_TIME); var timeLeft=s3[0]; var setTimeLeft=s3[1];
+  var s4=useState(0); var score=s4[0]; var setScore=s4[1];
+  var s5=useState(''); var input=s5[0]; var setInput=s5[1];
+  var s6=useState(null); var feedback=s6[0]; var setFeedback=s6[1];
+  var s7=useState(false); var done=s7[0]; var setDone=s7[1];
+  var s8=useState(false); var showHint=s8[0]; var setShowHint=s8[1];
+  var inputRef=useRef(null);
+  var timeRef=useRef(timeLeft); timeRef.current=timeLeft;
+
+  var q = questions[qIdx];
+
+  useEffect(function(){
+    if(done||feedback)return;
+    var t=setInterval(function(){
+      setTimeLeft(function(p){
+        if(p<=1){
+          clearInterval(t);
+          advance(false);
+          return Q_TIME;
+        }
+        return p-1;
+      });
+    },1000);
+    return function(){clearInterval(t);};
+  },[qIdx,done,!!feedback]);
+
+  useEffect(function(){ if(inputRef.current&&!done&&!feedback)inputRef.current.focus(); },[qIdx,feedback]);
+
+  function advance(correct) {
+    var nextIdx = qIdx+1;
+    if(correct) setScore(function(s){ return s + Math.ceil((timeRef.current/Q_TIME)*100); });
+    setFeedback(correct?'correct':'wrong');
+    setTimeout(function(){
+      setFeedback(null);
+      setInput('');
+      setShowHint(false);
+      if(nextIdx>=TOTAL_Q){ setDone(true); }
+      else { setQIdx(nextIdx); setTimeLeft(Q_TIME); }
+    },1100);
+  }
+
+  function handleSubmit(e) {
+    e&&e.preventDefault();
+    if(!input.trim()||feedback)return;
+    var guess=normalizeAnswer(input);
+    var ans=normalizeAnswer(q.answer);
+    var correct = guess===ans || ans.indexOf(guess)!==-1 || (guess.length>4&&ans.indexOf(guess.substring(0,4))!==-1);
+    advance(correct);
+  }
+
+  if(done){
+    var maxScore=TOTAL_Q*100;
+    var rank=score>=Math.ceil(maxScore*0.7)?'win':score>=Math.ceil(maxScore*0.4)?'draw':'loss';
+    return (
+      <div style={{maxWidth:400,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+        <div style={{fontSize:64,marginBottom:12}}>{score>=Math.ceil(maxScore*0.7)?'🎭':score>=Math.ceil(maxScore*0.4)?'🤔':'😅'}</div>
+        <h2 style={{fontSize:28,fontWeight:800,marginBottom:8}}>{score>=Math.ceil(maxScore*0.7)?'Mükemmel!':score>=Math.ceil(maxScore*0.4)?'İyi Oyun!':'Devam Et!'}</h2>
+        <div style={{fontSize:48,fontWeight:900,color:'#863bff',marginBottom:4}}>{score}</div>
+        <div style={{color:'var(--text-secondary)',fontSize:15,marginBottom:24}}>puan / {maxScore} maksimum</div>
+        <button onClick={function(){onGameEnd(rank);}} style={{display:'block',width:'100%',padding:14,borderRadius:12,background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>Bitir</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{maxWidth:400,margin:'0 auto',padding:'24px 20px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div style={{fontWeight:800,fontSize:32,color:timeLeft<=5?'#EF4444':'var(--text)',fontVariantNumeric:'tabular-nums'}}>{timeLeft}s</div>
+        <div style={{fontSize:13,color:'var(--text-secondary)',fontWeight:600}}>{qIdx+1} / {TOTAL_Q}</div>
+        <div style={{fontWeight:800,fontSize:22,color:'#863bff'}}>{score}</div>
+      </div>
+      <div style={{textAlign:'center',padding:'32px 16px',background:feedback==='correct'?'rgba(52,211,153,0.1)':feedback==='wrong'?'rgba(248,113,113,0.1)':'var(--surface)',borderRadius:20,border:'2px solid '+(feedback==='correct'?'#34D399':feedback==='wrong'?'#F87171':'var(--border)'),marginBottom:18,transition:'all 0.2s'}}>
+        <div style={{fontSize:52,letterSpacing:6,marginBottom:12}}>{q.emoji}</div>
+        <div style={{fontSize:12,color:'var(--text-secondary)',fontWeight:600}}>{q.hint}</div>
+        {showHint&&<div style={{fontSize:12,color:'#a855f7',marginTop:6}}>İpucu: {q.answer.charAt(0).toUpperCase()}...</div>}
+      </div>
+      {feedback ? (
+        <div style={{textAlign:'center',fontSize:18,fontWeight:800,padding:16,borderRadius:12,background:feedback==='correct'?'rgba(52,211,153,0.15)':'rgba(248,113,113,0.15)',color:feedback==='correct'?'#34D399':'#F87171'}}>
+          {feedback==='correct'?'✅ Doğru! +'+Math.ceil((timeLeft/Q_TIME)*100)+'p':'❌ '+q.answer}
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} style={{display:'flex',flexDirection:'column',gap:10}}>
+          <input ref={inputRef} value={input} onChange={function(e){setInput(e.target.value);}}
+            placeholder="Cevabını yaz..."
+            style={{padding:'14px 16px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontFamily:'inherit',outline:'none',textAlign:'center'}}
+          />
+          <div style={{display:'flex',gap:10}}>
+            <button type="button" onClick={function(){setShowHint(true);}} style={{flex:1,padding:12,borderRadius:12,background:'var(--surface-hover)',color:'var(--text-secondary)',border:'1px solid var(--border)',fontWeight:600,fontSize:14,cursor:'pointer'}}>💡 İpucu</button>
+            <button type="submit" style={{flex:2,padding:12,borderRadius:12,background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>Cevapla →</button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -8614,8 +8944,8 @@ export default function App() {
   const adGameCountRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0} };
-  const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0 };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0} };
+  const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 } };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { ...PROG_DEFAULTS, history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }; });
 
   useEffect(() => {
@@ -8666,6 +8996,11 @@ export default function App() {
         newStreak.lastPlayDate = today;
       }
 
+      const prevDs = prev.dailyStats || { date: null, played: 0, wins: 0 };
+      const newDs = prevDs.date === today
+        ? { ...prevDs, played: prevDs.played + 1, wins: prevDs.wins + (result === 'win' ? 1 : 0) }
+        : { date: today, played: 1, wins: result === 'win' ? 1 : 0 };
+
       const draft = {
         ...prev,
         games: { ...prev.games, [gid]: gs },
@@ -8676,6 +9011,7 @@ export default function App() {
         currentWinStreak: wsNow,
         bestWinStreak: bestWs,
         badges: prev.badges || {},
+        dailyStats: newDs,
       };
 
       const nb = checkNewBadges(draft);
@@ -8969,6 +9305,22 @@ export default function App() {
           <TarihEfsaneGame
             game={selectedGame}
             players={players}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'kelimeav':
+        return (
+          <KelimeAvciGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'emojimuz':
+        return (
+          <EmojiMuzayedeGame
+            game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
           />
