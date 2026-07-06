@@ -4616,6 +4616,7 @@ const GlobalStyle = ({ dark }) => (
       .bnav-dot { display: none; }
       .bnav-tab.bnav-active .bnav-dot { display: block; width: 4px; height: 4px; border-radius: 50%; background: #6366f1; margin-top: 1px; }
       .main-content { padding-bottom: 72px; }
+      .sound-toggle-float { display: none !important; }
     }
   `}</style>
 );
@@ -4772,6 +4773,7 @@ const Confetti = ({ active, color = '#E63946' }) => {
 
 const SoundToggle = ({ soundOn, onToggle }) => (
   <button
+    className="sound-toggle-float"
     onClick={onToggle}
     title={soundOn ? 'Sesi Kapat' : 'Sesi Aç'}
     style={{
@@ -5282,8 +5284,11 @@ const RANKS = [
 ];
 function getRank(wins) { return RANKS.find(r => wins >= r.min && wins <= r.max) || RANKS[0]; }
 
-const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock }) => {
+const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, soundOn, onToggleSound, dark, onToggleDark, onRenameUser, onResetStats }) => {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [newName, setNewName] = useState(user.name);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const totalGames = Object.values(stats.games).reduce(
     (a, g) => a + g.played,
     0
@@ -5565,6 +5570,93 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock }
           <FriendPanel sock={sock} myUserId={sock.myUserId} />
         </Card>
       )}
+
+      {/* Settings */}
+      <Card style={{ padding: 20, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 }}>
+          ⚙️ Ayarlar
+        </div>
+
+        {/* Username */}
+        <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.03em' }}>Kullanıcı Adı</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              value={newName}
+              onChange={function(e) { setNewName(e.target.value); setNameSaved(false); }}
+              maxLength={24}
+              style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 15, fontWeight: 600, background: 'var(--surface-hover)', color: 'var(--text)', fontFamily: "'DM Sans',sans-serif", outline: 'none' }}
+            />
+            {newName.trim() && newName.trim() !== user.name && (
+              <button
+                onClick={function() {
+                  if (newName.trim() && onRenameUser) { onRenameUser(newName.trim()); setNameSaved(true); }
+                }}
+                style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", flexShrink: 0 }}>
+                Kaydet
+              </button>
+            )}
+            {nameSaved && <span style={{ fontSize: 18 }}>✅</span>}
+          </div>
+        </div>
+
+        {/* Email */}
+        {user.email && (
+          <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.03em' }}>E-posta</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{user.email}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '2px 8px', borderRadius: 20, flexShrink: 0 }}>Google</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Şifre Google hesabınız üzerinden yönetilir.</div>
+          </div>
+        )}
+
+        {/* Sound toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid var(--border)', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Ses Efektleri</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Oyun içi ses efektleri</div>
+          </div>
+          <button onClick={onToggleSound} style={{ width: 48, height: 28, borderRadius: 14, border: 'none', background: soundOn ? '#6366f1' : 'var(--surface-hover)', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <span style={{ position: 'absolute', top: 3, left: soundOn ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s', display: 'block' }} />
+          </button>
+        </div>
+
+        {/* Dark mode toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid var(--border)', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Karanlık Mod</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Koyu tema kullan</div>
+          </div>
+          <button onClick={onToggleDark} style={{ width: 48, height: 28, borderRadius: 14, border: 'none', background: dark ? '#6366f1' : 'var(--surface-hover)', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <span style={{ position: 'absolute', top: 3, left: dark ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s', display: 'block' }} />
+          </button>
+        </div>
+
+        {/* Reset stats */}
+        {!showResetConfirm ? (
+          <button onClick={function() { setShowResetConfirm(true); }}
+            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)', fontFamily: "'DM Sans',sans-serif", width: '100%' }}>
+            🗑️ İstatistikleri Sıfırla
+          </button>
+        ) : (
+          <div style={{ background: 'rgba(239,68,68,0.08)', borderRadius: 12, padding: '14px', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#DC2626', marginBottom: 8 }}>Emin misin?</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>Tüm oyun geçmişin ve istatistiklerin silinecek.</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={function() { if (onResetStats) onResetStats(); setShowResetConfirm(false); }}
+                style={{ flex: 1, background: '#DC2626', color: '#fff', border: 'none', borderRadius: 9, padding: '9px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+                Evet, Sıfırla
+              </button>
+              <button onClick={function() { setShowResetConfirm(false); }}
+                style={{ flex: 1, background: 'var(--surface-hover)', color: 'var(--text)', border: 'none', borderRadius: 9, padding: '9px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+                İptal
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Button variant="danger" onClick={onLogout} style={{ width: '100%' }}>
         Çıkış Yap
@@ -5874,7 +5966,7 @@ function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile }) {
         <span className="bnav-dot"></span>
       </button>
       <button className={`bnav-tab${page === 'profile' ? ' bnav-active' : ''}`} onClick={onProfile}>
-        <span className="bnav-icon">👤</span>
+        <span className="bnav-icon">🧑</span>
         <span className="bnav-label">Profil</span>
         <span className="bnav-dot"></span>
       </button>
@@ -8516,6 +8608,20 @@ export default function App() {
               setSelectedGame(null);
               setRoomId(null);
               localStorage.removeItem('oyunclub_user');
+            }}
+            soundOn={soundOn}
+            onToggleSound={() => { setSoundOn((s) => !s); try { localStorage.setItem('oyunclub_sound', String(!soundOn)); } catch {} }}
+            dark={dark}
+            onToggleDark={() => setDark((d) => !d)}
+            onRenameUser={(newName) => {
+              const updated = { ...user, name: newName };
+              setUser(updated);
+              try { localStorage.setItem('oyunclub_user', JSON.stringify(updated)); } catch {}
+            }}
+            onResetStats={() => {
+              const empty = { games: Object.fromEntries(Object.keys(stats.games).map((k) => [k, { played: 0, wins: 0, losses: 0 }])), history: [] };
+              setStats(empty);
+              try { localStorage.removeItem('oyunclub_stats'); } catch {}
             }}
           />
         )}
