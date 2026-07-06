@@ -1,5 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+// Polyfill for older Android Chrome / Samsung Internet (< Chrome 99)
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    const rad = Array.isArray(r) ? r[0] : (r || 0);
+    this.beginPath();
+    this.moveTo(x + rad, y);
+    this.arcTo(x + w, y,     x + w, y + h, rad);
+    this.arcTo(x + w, y + h, x,     y + h, rad);
+    this.arcTo(x,     y + h, x,     y,     rad);
+    this.arcTo(x,     y,     x + w, y,     rad);
+    this.closePath();
+  };
+}
+
 var BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
  
 function useSocket(username) {
@@ -7931,16 +7945,16 @@ const ADSENSE_SLOT   = '8053490650';
 const AD_INTERVAL = 4;
 
 function AdOverlay({ onClose }) {
-  const [seconds, setSeconds] = React.useState(5);
+  const [seconds, setSeconds] = useState(5);
   const canClose = seconds <= 0;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (seconds <= 0) return;
     const t = setTimeout(() => setSeconds(s => s - 1), 1000);
     return () => clearTimeout(t);
   }, [seconds]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
   }, []);
 
@@ -8013,7 +8027,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
   const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0} };
-  const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) return JSON.parse(s); } catch {} return { games: EMPTY_STATS, history: [] }; });
+  const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [] }; });
 
   useEffect(() => {
     if (!user) return;
@@ -8040,7 +8054,8 @@ export default function App() {
     if (!selectedGame) return;
     setStats((prev) => {
       const gid = selectedGame.id;
-      const gs = { ...(prev.games[gid] || { played: 0, wins: 0, losses: 0 }) };
+      const gamesMap = prev.games || EMPTY_STATS;
+      const gs = { ...(gamesMap[gid] || { played: 0, wins: 0, losses: 0 }) };
       gs.played++;
       if (result === 'win') gs.wins++;
       else if (result === 'loss') gs.losses++;
