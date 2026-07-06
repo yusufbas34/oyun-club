@@ -4593,6 +4593,30 @@ const GlobalStyle = ({ dark }) => (
     @keyframes bounceIn { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.05); } 70% { transform: scale(0.95); } 100% { transform: scale(1); opacity: 1; } }
     @keyframes glow { 0%, 100% { box-shadow: 0 0 8px rgba(230,57,70,0.3); } 50% { box-shadow: 0 0 20px rgba(230,57,70,0.6); } }
     @keyframes ripple { 0% { transform: scale(0); opacity: 0.5; } 100% { transform: scale(4); opacity: 0; } }
+    @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+    .header-nav-desktop { display: flex; align-items: center; gap: 2px; }
+    .bottom-nav { display: none !important; }
+    @media (max-width: 768px) {
+      .header-nav-desktop { display: none !important; }
+      .bottom-nav {
+        display: flex !important;
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: var(--header-bg); backdrop-filter: blur(20px);
+        border-top: 1px solid var(--border); z-index: 100;
+        padding-bottom: env(safe-area-inset-bottom, 6px);
+      }
+      .bnav-tab {
+        flex: 1; display: flex; flex-direction: column; align-items: center;
+        padding: 8px 4px 6px; background: none; border: none; cursor: pointer;
+        font-family: 'DM Sans', sans-serif; gap: 3px; -webkit-tap-highlight-color: transparent;
+      }
+      .bnav-icon { font-size: 20px; line-height: 1; }
+      .bnav-label { font-size: 10px; font-weight: 600; color: var(--text-secondary); }
+      .bnav-tab.bnav-active .bnav-label { color: #6366f1; }
+      .bnav-dot { display: none; }
+      .bnav-tab.bnav-active .bnav-dot { display: block; width: 4px; height: 4px; border-radius: 50%; background: #6366f1; margin-top: 1px; }
+      .main-content { padding-bottom: 72px; }
+    }
   `}</style>
 );
 
@@ -4915,46 +4939,48 @@ const Header = ({
         >
           {dark ? '☀️' : '🌙'}
         </button>
-        <button
-          onClick={onMultiplayer}
-          title="Multiplayer"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 17, padding: '6px 8px', borderRadius: 8,
-            transition: 'var(--transition)',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-        >
-          🎮
-        </button>
-        <button
-          onClick={onLeaderboard}
-          title="Skor Tablosu"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 17, padding: '6px 8px', borderRadius: 8,
-            transition: 'var(--transition)',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-        >
-          🏆
-        </button>
-        <button
-          onClick={onProfile}
-          title={user.name}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center',
-            padding: '4px 6px', borderRadius: 50,
-            transition: 'var(--transition)',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-        >
-          <Avatar name={user.name} size={30} />
-        </button>
+        <span className="header-nav-desktop">
+          <button
+            onClick={onMultiplayer}
+            title="Multiplayer"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 17, padding: '6px 8px', borderRadius: 8,
+              transition: 'var(--transition)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            🎮
+          </button>
+          <button
+            onClick={onLeaderboard}
+            title="Skor Tablosu"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 17, padding: '6px 8px', borderRadius: 8,
+              transition: 'var(--transition)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            🏆
+          </button>
+          <button
+            onClick={onProfile}
+            title={user.name}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center',
+              padding: '4px 6px', borderRadius: 50,
+              transition: 'var(--transition)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            <Avatar name={user.name} size={30} />
+          </button>
+        </span>
       </div>
     )}
   </header>
@@ -5827,14 +5853,55 @@ const LeaderboardPage = ({ user, stats }) => {
 };
 
 // ============================================================
+// BOTTOM NAV (mobile only — CSS hides on desktop)
+// ============================================================
+function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile }) {
+  return (
+    <nav className="bottom-nav">
+      <button className={`bnav-tab${page === 'lobby' ? ' bnav-active' : ''}`} onClick={onLobby}>
+        <span className="bnav-icon">🎮</span>
+        <span className="bnav-label">Oyunlar</span>
+        <span className="bnav-dot"></span>
+      </button>
+      <button className={`bnav-tab${page === 'multiplayer' ? ' bnav-active' : ''}`} onClick={onMultiplayer}>
+        <span className="bnav-icon">🕹️</span>
+        <span className="bnav-label">Çok Oyunculu</span>
+        <span className="bnav-dot"></span>
+      </button>
+      <button className={`bnav-tab${page === 'leaderboard' ? ' bnav-active' : ''}`} onClick={onLeaderboard}>
+        <span className="bnav-icon">🏆</span>
+        <span className="bnav-label">Sıralama</span>
+        <span className="bnav-dot"></span>
+      </button>
+      <button className={`bnav-tab${page === 'profile' ? ' bnav-active' : ''}`} onClick={onProfile}>
+        <span className="bnav-icon">👤</span>
+        <span className="bnav-label">Profil</span>
+        <span className="bnav-dot"></span>
+      </button>
+    </nav>
+  );
+}
+
+// ============================================================
 // LOBBY
 // ============================================================
 const GAME_ICONS_MAP = {
   xox: '❌⭕', rps: '✊✋✌️', connectfour: '🔵', gomoku: '⚫',
   reaction: '⚡', mathduel: '🧮', cardbattle: '🃏', memorybattle: '🧠', wordrace: '🔤'
 };
+const GAME_BG_MAP = {
+  xox: 'linear-gradient(135deg,#E63946,#F4845F)',
+  rps: 'linear-gradient(135deg,#2A9D8F,#76C893)',
+  connectfour: 'linear-gradient(135deg,#1D4ED8,#60A5FA)',
+  gomoku: 'linear-gradient(135deg,#1F2937,#4B5563)',
+  reaction: 'linear-gradient(135deg,#D97706,#FCD34D)',
+  mathduel: 'linear-gradient(135deg,#0369A1,#38BDF8)',
+  cardbattle: 'linear-gradient(135deg,#7C3AED,#C084FC)',
+  memorybattle: 'linear-gradient(135deg,#0F766E,#34D399)',
+  wordrace: 'linear-gradient(135deg,#9333EA,#EC4899)',
+};
 
-const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
+const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [showJoin, setShowJoin] = useState(false);
@@ -5869,8 +5936,27 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
   );
   const totalWins = Object.values(stats.games).reduce((a, g) => a + g.wins, 0);
 
+  const totalActivePlayers = publicRooms.reduce(function(a, r) { return a + (r.players || 0); }, 0);
+
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '32px 20px' }}>
+    <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', padding: '28px 20px' }}>
+      {/* Live activity banner */}
+      {publicRooms.length > 0 && (
+        <div style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(134,59,255,0.1))', border: '1px solid rgba(99,102,241,0.22)', borderRadius: 14, padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, animation: 'fadeUp 0.35s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, flexShrink: 0 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'livePulse 2s ease-in-out infinite' }} />
+            CANLI
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', lineHeight: 1.2 }}>{publicRooms.length} açık masa · {totalActivePlayers} oyuncu aktif</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Hemen bir odaya katıl!</div>
+          </div>
+          <button onClick={function() { var r = publicRooms.find(function(rm) { return rm.players < rm.maxPlayers; }); if (r) onJoinRoom(r.id); else if (onMultiplayer) onMultiplayer(); }}
+            style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", flexShrink: 0 }}>
+            Hızlı Katıl →
+          </button>
+        </div>
+      )}
       <div style={{ marginBottom: 24, animation: 'fadeUp 0.4s ease' }}>
         <h1
           style={{
@@ -6056,25 +6142,40 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
           </div>
         </div>
         {publicRooms.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '18px 12px', background: 'var(--surface)', borderRadius: 12, border: '1px dashed var(--border)', color: 'var(--text-secondary)', fontSize: 13 }}>
-            Şu an açık masa yok — Çok Oyunculu'dan masa oluşturabilirsin!
+          <div style={{ textAlign: 'center', padding: '20px 16px', background: 'var(--surface)', borderRadius: 14, border: '1px dashed var(--border)' }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>🕹️</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 4 }}>Şu an açık masa yok</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>İlk masayı sen kur, rakibini bekle!</div>
+            <button onClick={onMultiplayer} style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+              + Masa Oluştur
+            </button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {publicRooms.slice(0, 15).map(function(room) {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>
+            {publicRooms.slice(0, 12).map(function(room) {
               const isFull = room.players >= room.maxPlayers;
               return (
-                <div key={room.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 10px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', gap: 5, opacity: isFull ? 0.6 : 1 }}>
-                  <div style={{ fontSize: 20, textAlign: 'center' }}>{GAME_ICONS_MAP[room.gameId] || '🎮'}</div>
-                  <div style={{ fontWeight: 700, fontSize: 11, textAlign: 'center', lineHeight: 1.2 }}>{room.gameName}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>{room.hostName}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>
-                    <span style={{ color: isFull ? '#ef4444' : '#22c55e', fontWeight: 600 }}>{room.players}</span>/{room.maxPlayers}
+                <div key={room.id}
+                  style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)', padding: '14px 14px 12px', opacity: isFull ? 0.6 : 1, transition: 'border-color 0.2s,transform 0.15s', cursor: isFull ? 'default' : 'pointer' }}
+                  onMouseEnter={!isFull ? function(e) { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.45)'; e.currentTarget.style.transform = 'translateY(-2px)'; } : undefined}
+                  onMouseLeave={!isFull ? function(e) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = ''; } : undefined}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: GAME_BG_MAP[room.gameId] || 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                      {GAME_ICONS_MAP[room.gameId] || '🎮'}
+                    </div>
+                    <div style={{ display: 'flex', gap: 3 }}>
+                      {Array.from({ length: room.maxPlayers || 2 }).map(function(_, i) {
+                        return <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i < room.players ? '#22c55e' : 'var(--surface-hover)', border: '1px solid var(--border)' }} />;
+                      })}
+                    </div>
                   </div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', marginBottom: 2, lineHeight: 1.3 }}>{room.gameName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>Host: {room.hostName}</div>
                   <button
                     onClick={function() { if (!isFull) onJoinRoom(room.id); }}
                     disabled={isFull}
-                    style={{ padding: '7px 4px', borderRadius: 8, border: 'none', background: !isFull ? '#6366f1' : '#ccc', color: '#fff', fontWeight: 700, fontSize: 11, cursor: isFull ? 'not-allowed' : 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: 'none', background: !isFull ? '#6366f1' : 'var(--surface-hover)', color: !isFull ? '#fff' : 'var(--text-secondary)', fontWeight: 700, fontSize: 12, cursor: isFull ? 'not-allowed' : 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
                     {isFull ? 'Dolu' : 'Katıl →'}
                   </button>
                 </div>
@@ -6150,8 +6251,17 @@ const Lobby = ({ onSelectGame, onJoinRoom, user, stats }) => {
                 </div>
               </div>
               <div style={{ padding: '12px 14px' }}>
-                <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{game.name}</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: 0 }}>{game.desc}</p>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{game.name}</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: 0, lineHeight: 1.4 }}>{game.desc}</p>
+                  </div>
+                  <button
+                    onClick={function(e) { e.stopPropagation(); onSelectGame(game); }}
+                    style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 11px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    Oyna →
+                  </button>
+                </div>
                 {gs && gs.played > 0 && (
                   <div style={{ marginTop: 8, fontSize: 11, color: game.color, fontWeight: 600 }}>
                     {gs.wins}G / {gs.losses}M · {gs.played} oyun
@@ -8376,10 +8486,20 @@ export default function App() {
           dark={dark}
           onToggleDark={() => setDark((d) => !d)}
         />
+        {user && !['login', 'game'].includes(page) && (
+          <BottomNav
+            page={page}
+            onLobby={() => setPage('lobby')}
+            onMultiplayer={() => setPage('multiplayer')}
+            onLeaderboard={() => setPage('leaderboard')}
+            onProfile={() => setPage('profile')}
+          />
+        )}
         {page === 'lobby' && (
           <Lobby
             onSelectGame={handleSelectGame}
             onJoinRoom={handleJoinRoom}
+            onMultiplayer={() => setPage('multiplayer')}
             user={user}
             stats={stats}
           />
