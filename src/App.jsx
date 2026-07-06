@@ -1938,7 +1938,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
   const KB_ROWS = [
     ['E','R','T','Y','U','I','O','P','Ğ','Ü'],
     ['A','S','D','F','G','H','J','K','L','Ş','İ'],
-    ['ENTER','Z','X','C','V','B','N','M','Ö','Ç','⌫'],
+    ['GİR','Z','X','C','V','B','N','M','Ö','Ç','⌫'],
   ];
 
   const keyColor = (k) => {
@@ -1951,7 +1951,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
 
   const handleKbKey = (k) => {
     if (gameOver) return;
-    if (k === 'ENTER') { submitGuess(); return; }
+    if (k === 'GİR') { submitGuess(); return; }
     if (k === '⌫') { setCurrent(c => c.slice(0, -1)); return; }
     if (current.length < 5) setCurrent(c => c + k);
   };
@@ -3089,7 +3089,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     <div style={{height:'90vh',display:'flex',flexDirection:'column',touchAction:'manipulation',userSelect:'none'}}>
       <div style={{textAlign:'center',padding:'8px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>🧮 Matematik Düellosu</span>
-        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {round}/{MAX} · P1:{scores[0]} P2:{scores[1]}</span>
+        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {round}/{MAX} · O1:{scores[0]} O2:{scores[1]}</span>
         <button onClick={restart} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#3B82F6',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
       </div>
       <div style={{textAlign:'center',padding:'20px 16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
@@ -3568,7 +3568,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     <div style={{height:'90vh',display:'flex',flexDirection:'column',touchAction:'manipulation'}}>
       <div style={{textAlign:'center',padding:'8px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>🔤 Kelime Yarışı</span>
-        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {ri+1}/{RACE_WORDS.length} · P1:{scores[0]} P2:{scores[1]}</span>
+        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {ri+1}/{RACE_WORDS.length} · O1:{scores[0]} O2:{scores[1]}</span>
       </div>
       <div style={{textAlign:'center',padding:'16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
         <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:4}}>{item.clue}</div>
@@ -3708,7 +3708,7 @@ function MangalaGame({ onGameEnd, soundOn }) {
         </div>
       </div>
       <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
-        P1: {hazne[0]} taş &nbsp;|&nbsp; P2: {hazne[1]} taş
+        Oyuncu 1: {hazne[0]} taş &nbsp;|&nbsp; Oyuncu 2: {hazne[1]} taş
       </div>
       {gameOver && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
@@ -5093,7 +5093,7 @@ const Header = ({
         <span className="header-nav-desktop">
           <button
             onClick={onMultiplayer}
-            title="Multiplayer"
+            title="Çok Oyunculu"
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               fontSize: 17, padding: '6px 8px', borderRadius: 8,
@@ -8514,14 +8514,14 @@ function AdOverlay({ onClose }) {
 
   useEffect(() => {
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
-    // Detect if AdSense filled the slot after 1.8s
+    // Gerçek reklam varsa içine iframe enjekte edilir — onu bekliyoruz
     const checkTimer = setTimeout(() => {
       try {
         const ins = insRef.current;
-        const filled = ins && (ins.offsetHeight > 30 || ins.innerHTML.trim().length > 0);
-        setAdFilled(!!filled);
+        const hasIframe = ins && ins.querySelectorAll('iframe').length > 0;
+        setAdFilled(hasIframe ? true : false);
       } catch { setAdFilled(false); }
-    }, 1800);
+    }, 2000);
     return () => clearTimeout(checkTimer);
   }, []);
 
