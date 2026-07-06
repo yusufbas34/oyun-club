@@ -6031,7 +6031,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
   const totalActivePlayers = publicRooms.reduce(function(a, r) { return a + (r.players || 0); }, 0);
 
   return (
-    <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', padding: '28px 20px' }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '28px 20px' }}>
       {/* Live activity banner */}
       {publicRooms.length > 0 && (
         <div style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(134,59,255,0.1))', border: '1px solid rgba(99,102,241,0.22)', borderRadius: 14, padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, animation: 'fadeUp 0.35s ease' }}>
@@ -8559,6 +8559,7 @@ export default function App() {
         >?</button>
       )}
       <div
+        className={user && !['login', 'game'].includes(page) ? 'main-content' : ''}
         style={{
           minHeight: '100vh',
           background: 'var(--bg)',
