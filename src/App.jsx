@@ -6126,7 +6126,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
         >
           <span>🎮 {totalGames} oyun</span>
           <span>🏆 {totalWins} galibiyet</span>
-          <span style={{padding:'2px 10px',borderRadius:20,background:'rgba(134,59,255,0.12)',color:'#863bff',fontWeight:600,fontSize:12}}>{getRank(totalWins).icon} {getRank(totalWins).label}</span>
+          <span style={{padding:'2px 10px',borderRadius:20,background:'rgba(134,59,255,0.12)',color:'#863bff',fontWeight:600,fontSize:12}}>{getLevelInfo(stats.xp||0).icon} {getLevelInfo(stats.xp||0).name}</span>
         </div>
       </div>
 
@@ -8305,33 +8305,55 @@ function calcXpGain(result, winStreak) {
 }
 
 var BADGE_DEFS = [
-  { id: 'xox_first',      name: 'İlk XOX Zaferi',    icon: '✕',  check: function(s){ return (s.games.xox?.wins||0)>=1; } },
-  { id: 'rps_first',      name: 'Taş Ustası',         icon: '✊', check: function(s){ return (s.games.rps?.wins||0)>=1; } },
-  { id: 'math_first',     name: 'Hesap Makinesi',     icon: '🧮', check: function(s){ return (s.games.mathduel?.wins||0)>=1; } },
-  { id: 'word_first',     name: 'Kelime Ustası',      icon: '🔤', check: function(s){ return (s.games.wordrace?.wins||0)>=1; } },
-  { id: 'memory_first',   name: 'Hafıza Şampiyonu',  icon: '🧠', check: function(s){ return (s.games.memorybattle?.wins||0)>=1; } },
-  { id: 'connect_first',  name: "4'lü Usta",          icon: '🔵', check: function(s){ return (s.games.connectfour?.wins||0)>=1; } },
-  { id: 'reaction_first', name: 'Şimşek',             icon: '⚡', check: function(s){ return (s.games.reaction?.wins||0)>=1; } },
-  { id: 'play_10',        name: 'İlk 10',             icon: '🎮', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=10; } },
-  { id: 'play_50',        name: '50 Maç',             icon: '🕹️', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=50; } },
-  { id: 'play_100',       name: 'Yüzlük',             icon: '💯', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=100; } },
-  { id: 'win_10',         name: '10 Galibiyet',       icon: '🏅', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=10; } },
-  { id: 'win_50',         name: '50 Galibiyet',       icon: '🥇', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=50; } },
-  { id: 'win_100',        name: 'Yüz Galibiyet',      icon: '🏆', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=100; } },
-  { id: 'streak_3',       name: '3 Günlük Seri',      icon: '🔥', check: function(s){ return (s.streak?.count||0)>=3; } },
-  { id: 'streak_7',       name: 'Haftalık Savaşçı',   icon: '⚡', check: function(s){ return (s.streak?.count||0)>=7; } },
-  { id: 'streak_30',      name: 'Aylık Kahraman',     icon: '👑', check: function(s){ return (s.streak?.count||0)>=30; } },
-  { id: 'level_3',        name: 'Meraklı Seviyesi',   icon: '🔍', check: function(s){ return (s.level||1)>=3; } },
-  { id: 'level_5',        name: 'Usta Seviyesi',      icon: '⭐', check: function(s){ return (s.level||1)>=5; } },
-  { id: 'level_7',        name: 'Efsane Seviyesi',    icon: '💎', check: function(s){ return (s.level||1)>=7; } },
-  { id: 'variety_5',      name: 'Çok Yönlü',          icon: '🎯', check: function(s){ return Object.keys(s.games).filter(function(k){return s.games[k].played>0;}).length>=5; } },
-  { id: 'all_games',      name: 'Koleksiyoncu',       icon: '🗂️', check: function(s){ return Object.keys(s.games).filter(function(k){return s.games[k].played>0;}).length>=9; } },
-  { id: 'winstreak_5',    name: '5 Art Arda',         icon: '🔥', check: function(s){ return (s.bestWinStreak||0)>=5; } },
-  { id: 'hizcarpim',      name: 'Hız Çarpım Ustası', icon: '🚀', check: function(s){ return (s.games.hizcarpim?.played||0)>=1; } },
-  { id: 'tarih_first',    name: 'Tarih Meraklısı',   icon: '📚', check: function(s){ return (s.games.tarihefsan?.played||0)>=1; } },
-  { id: 'kelimeav_first', name: 'Kelime Avcısı',     icon: '🔍', check: function(s){ return (s.games.kelimeav?.played||0)>=1; } },
-  { id: 'emojimuz_first', name: 'Emoji Ustası',      icon: '🎭', check: function(s){ return (s.games.emojimuz?.played||0)>=1; } },
-  { id: 'daily_done',     name: 'Günlük Kahraman',   icon: '⚡', check: function(s){ var ds=s.dailyStats||{}; return ds.played>=3&&ds.wins>=2; } },
+  // ── Keşif rozetleri (ilk kez oyna) ──
+  { id: 'xox_first',      tier:'bronze', name: 'İlk XOX',          icon: '✕',   check: function(s){ return (s.games.xox?.played||0)>=1; } },
+  { id: 'rps_first',      tier:'bronze', name: 'İlk Taş Kağıt',    icon: '✊',  check: function(s){ return (s.games.rps?.played||0)>=1; } },
+  { id: 'wordle_first',   tier:'bronze', name: 'İlk Wordle',        icon: '🔤',  check: function(s){ return (s.games.wordle?.played||0)>=1; } },
+  { id: 'snake_first',    tier:'bronze', name: 'İlk Yılan',         icon: '🐍',  check: function(s){ return (s.games.snake?.played||0)>=1; } },
+  { id: 'memory_first',   tier:'bronze', name: 'İlk Hafıza',        icon: '🃏',  check: function(s){ return (s.games.memory?.played||0)>=1; } },
+  { id: 'sudoku_first',   tier:'bronze', name: 'İlk Sudoku',        icon: '🔲',  check: function(s){ return (s.games.sudoku?.played||0)>=1; } },
+  { id: 'hizcarpim',      tier:'bronze', name: 'Hız Çarpım',        icon: '🚀',  check: function(s){ return (s.games.hizcarpim?.played||0)>=1; } },
+  { id: 'tarih_first',    tier:'bronze', name: 'Tarih Meraklısı',   icon: '📚',  check: function(s){ return (s.games.tarihefsan?.played||0)>=1; } },
+  { id: 'kelimeav_first', tier:'bronze', name: 'Kelime Avcısı',     icon: '🔍',  check: function(s){ return (s.games.kelimeav?.played||0)>=1; } },
+  { id: 'emojimuz_first', tier:'bronze', name: 'Emoji Ustası',      icon: '🎭',  check: function(s){ return (s.games.emojimuz?.played||0)>=1; } },
+  // ── Oyun sayısı (bronz→gümüş→altın→elmas) ──
+  { id: 'play_10',        tier:'bronze', name: 'İlk 10',            icon: '🎮',  check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=10; } },
+  { id: 'play_50',        tier:'silver', name: '50 Maç',            icon: '🕹️', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=50; } },
+  { id: 'play_200',       tier:'gold',   name: 'Çılgın Oyuncu',     icon: '💯',  check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=200; } },
+  { id: 'play_500',       tier:'diamond',name: '500 Maç Efsanesi',  icon: '🏟️', check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=500; } },
+  // ── Galibiyet sayısı ──
+  { id: 'win_10',         tier:'bronze', name: '10 Galibiyet',      icon: '🏅',  check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=10; } },
+  { id: 'win_50',         tier:'silver', name: '50 Galibiyet',      icon: '🥈',  check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=50; } },
+  { id: 'win_150',        tier:'gold',   name: '150 Galibiyet',     icon: '🥇',  check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=150; } },
+  { id: 'win_500',        tier:'diamond',name: '500 Galibiyet',     icon: '🏆',  check: function(s){ return Object.values(s.games).reduce(function(a,g){return a+g.wins;},0)>=500; } },
+  // ── Günlük seri ──
+  { id: 'streak_3',       tier:'bronze', name: '3 Günlük Seri',     icon: '🔥',  check: function(s){ return (s.streak?.count||0)>=3; } },
+  { id: 'streak_7',       tier:'silver', name: 'Haftalık Savaşçı',  icon: '🌟',  check: function(s){ return (s.streak?.count||0)>=7; } },
+  { id: 'streak_30',      tier:'gold',   name: 'Aylık Kahraman',    icon: '👑',  check: function(s){ return (s.streak?.count||0)>=30; } },
+  { id: 'streak_100',     tier:'diamond',name: '100 Günlük Titan',  icon: '🔱',  check: function(s){ return (s.streak?.count||0)>=100; } },
+  // ── Art arda galibiyet serisi ──
+  { id: 'winstreak_3',    tier:'bronze', name: '3 Art Arda',        icon: '⚡',  check: function(s){ return (s.bestWinStreak||0)>=3; } },
+  { id: 'winstreak_5',    tier:'silver', name: '5 Art Arda',        icon: '🔥',  check: function(s){ return (s.bestWinStreak||0)>=5; } },
+  { id: 'winstreak_10',   tier:'gold',   name: '10 Art Arda',       icon: '💥',  check: function(s){ return (s.bestWinStreak||0)>=10; } },
+  { id: 'winstreak_20',   tier:'diamond',name: '20 Art Arda',       icon: '🌪️', check: function(s){ return (s.bestWinStreak||0)>=20; } },
+  // ── Seviye rozetleri ──
+  { id: 'level_3',        tier:'bronze', name: 'Meraklı Seviyesi',  icon: '🔍',  check: function(s){ return (s.level||1)>=3; } },
+  { id: 'level_5',        tier:'silver', name: 'Usta Seviyesi',     icon: '⭐',  check: function(s){ return (s.level||1)>=5; } },
+  { id: 'level_7',        tier:'gold',   name: 'Efsane Seviyesi',   icon: '💎',  check: function(s){ return (s.level||1)>=7; } },
+  { id: 'level_8',        tier:'diamond',name: 'Tanrı Seviyesi',    icon: '🌌',  check: function(s){ return (s.level||1)>=8; } },
+  // ── Çeşitlilik ──
+  { id: 'variety_3',      tier:'bronze', name: '3 Farklı Oyun',     icon: '🎲',  check: function(s){ return Object.keys(s.games).filter(function(k){return s.games[k].played>0;}).length>=3; } },
+  { id: 'variety_5',      tier:'silver', name: 'Çok Yönlü',         icon: '🎯',  check: function(s){ return Object.keys(s.games).filter(function(k){return s.games[k].played>0;}).length>=5; } },
+  { id: 'variety_10',     tier:'gold',   name: '10 Oyun Koleksiyonu',icon: '🗂️', check: function(s){ return Object.keys(s.games).filter(function(k){return s.games[k].played>0;}).length>=10; } },
+  { id: 'all_games',      tier:'diamond',name: 'Her Oyunu Dene',    icon: '🌟',  check: function(s){ return Object.keys(s.games).filter(function(k){return s.games[k].played>0;}).length>=18; } },
+  // ── Oyuna özel ustalık ──
+  { id: 'xox_master',     tier:'silver', name: 'XOX Ustası',        icon: '✕',   check: function(s){ return (s.games.xox?.wins||0)>=10; } },
+  { id: 'xox_legend',     tier:'gold',   name: 'XOX Efsanesi',      icon: '✕',   check: function(s){ return (s.games.xox?.wins||0)>=30; } },
+  { id: 'math_master',    tier:'silver', name: 'Matematik Dehası',   icon: '🧮',  check: function(s){ return (s.games.mathduel?.wins||0)>=10; } },
+  { id: 'wordle_master',  tier:'silver', name: 'Wordle Üstadı',      icon: '🟩',  check: function(s){ return (s.games.wordle?.wins||0)>=10; } },
+  // ── Günlük görev & özel ──
+  { id: 'daily_done',     tier:'silver', name: 'Günlük Kahraman',   icon: '⚡',  check: function(s){ var ds=s.dailyStats||{}; return ds.played>=3&&ds.wins>=2; } },
+  { id: 'daily_10',       tier:'gold',   name: 'Rutin Savaşçı',     icon: '📅',  check: function(s){ return (s.streak?.count||0)>=10&&Object.values(s.games).reduce(function(a,g){return a+g.played;},0)>=100; } },
 ];
 
 function checkNewBadges(newStats) {
@@ -8369,29 +8391,46 @@ function XPBar({ xp, streakCount }) {
   );
 }
 
+var TIER_STYLES = {
+  bronze:  { bg:'rgba(205,127,50,0.13)', border:'rgba(205,127,50,0.35)', dot:'#CD7F32', label:'Bronz' },
+  silver:  { bg:'rgba(180,180,180,0.13)', border:'rgba(180,180,180,0.35)', dot:'#A8A8A8', label:'Gümüş' },
+  gold:    { bg:'rgba(255,196,0,0.13)', border:'rgba(255,196,0,0.35)', dot:'#FFC400', label:'Altın' },
+  diamond: { bg:'rgba(134,59,255,0.13)', border:'rgba(134,59,255,0.35)', dot:'#863bff', label:'Elmas' },
+};
+
 function BadgeGrid({ badges }) {
+  var s1 = useState(false); var showAll = s1[0]; var setShowAll = s1[1];
   var earned = BADGE_DEFS.filter(function(b) { return badges && badges[b.id]; });
-  var locked = BADGE_DEFS.filter(function(b) { return !badges || !badges[b.id]; }).slice(0, Math.max(4, 8 - earned.length));
+  var locked = BADGE_DEFS.filter(function(b) { return !badges || !badges[b.id]; });
+  var lockedVisible = showAll ? locked : locked.slice(0, Math.max(4, 8 - earned.length));
   return (
     <div>
-      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-        Rozetler ({earned.length}/{BADGE_DEFS.length})
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1 }}>
+          Rozetler ({earned.length}/{BADGE_DEFS.length})
+        </div>
+        <button onClick={function(){ setShowAll(function(p){ return !p; }); }}
+          style={{ background:'none', border:'none', color:'#863bff', fontWeight:700, fontSize:12, cursor:'pointer', padding:'4px 8px' }}>
+          {showAll ? '▲ Gizle' : '▼ Tümünü Gör'}
+        </button>
       </div>
       {earned.length === 0 && (
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>Henüz rozet kazanılmadı — oynamaya başla!</div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
         {earned.map(function(b) {
+          var t = TIER_STYLES[b.tier] || TIER_STYLES.bronze;
           return (
-            <div key={b.id} title={b.name} style={{ background: 'rgba(134,59,255,0.12)', border: '1px solid rgba(134,59,255,0.3)', borderRadius: 12, padding: '10px 4px', textAlign: 'center' }}>
+            <div key={b.id} title={b.name} style={{ background: t.bg, border: '1px solid '+t.border, borderRadius: 12, padding: '10px 4px', textAlign: 'center', position:'relative' }}>
+              <div style={{ position:'absolute', top:5, right:6, width:6, height:6, borderRadius:'50%', background:t.dot }} />
               <div style={{ fontSize: 22 }}>{b.icon}</div>
               <div style={{ fontSize: 9, fontWeight: 700, marginTop: 4, color: 'var(--text)', lineHeight: 1.2 }}>{b.name}</div>
             </div>
           );
         })}
-        {locked.map(function(b) {
+        {lockedVisible.map(function(b) {
           return (
-            <div key={b.id} title={b.name} style={{ background: 'var(--surface-hover)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 4px', textAlign: 'center', opacity: 0.38 }}>
+            <div key={b.id} title={b.name+' (kilitli)'} style={{ background: 'var(--surface-hover)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 4px', textAlign: 'center', opacity: 0.35 }}>
               <div style={{ fontSize: 22, filter: 'grayscale(1)' }}>{b.icon}</div>
               <div style={{ fontSize: 9, fontWeight: 600, marginTop: 4, color: 'var(--text-secondary)', lineHeight: 1.2 }}>{b.name}</div>
             </div>
@@ -8402,7 +8441,7 @@ function BadgeGrid({ badges }) {
   );
 }
 
-function ShareResultOverlay({ gameName, result, xpGain, onClose }) {
+function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay }) {
   var resultEmoji = result === 'win' ? '🏆' : result === 'loss' ? '😅' : '🤝';
   var resultText = result === 'win' ? 'kazandım' : result === 'loss' ? 'kaybettim' : 'berabere kaldım';
   var shareText = 'oyun.club\'ta ' + gameName + ' oynadım ve ' + resultText + '! ' + resultEmoji + '\n\n+' + xpGain + ' XP kazandım 🎮\n\nSen de oyna: oyun.club';
@@ -8421,7 +8460,12 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose }) {
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(134,59,255,0.12)', color: '#a855f7', padding: '6px 16px', borderRadius: 999, fontWeight: 700, fontSize: 14, marginBottom: 20 }}>
           ⚡ +{xpGain} XP
         </div>
-        <button onClick={doShare} style={{ display: 'block', width: '100%', padding: 14, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+        {onReplay && (
+          <button onClick={onReplay} style={{ display: 'block', width: '100%', padding: 14, borderRadius: 12, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+            🔄 Tekrar Oyna
+          </button>
+        )}
+        <button onClick={doShare} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
           📱 Paylaş
         </button>
         <button onClick={onClose} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: 'var(--surface-hover)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
@@ -9032,10 +9076,11 @@ export default function App() {
 
     const xpGain = calcXpGain(result, stats.currentWinStreak || 0);
     const gameName = selectedGame.name;
+    const gameToReplay = selectedGame;
     // Hemen lobby'ye geç — oyun ekranı kapansın, çift çağrı önlensin
     setPage('lobby');
     setSelectedGame(null);
-    setTimeout(() => setShareResult({ gameName, result, xpGain }), 400);
+    setTimeout(() => setShareResult({ gameName, result, xpGain, game: gameToReplay }), 400);
   };
 
   const handleLogin = (userData) => {
@@ -9339,6 +9384,7 @@ export default function App() {
           result={shareResult.result}
           xpGain={shareResult.xpGain}
           onClose={() => setShareResult(null)}
+          onReplay={shareResult.game ? () => { setShareResult(null); handleSelectGame(shareResult.game); } : undefined}
         />
       )}
       {showAd && pendingGame && (
