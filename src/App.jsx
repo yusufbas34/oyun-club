@@ -4523,6 +4523,19 @@ const GAMES = [
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
+  {
+    id: 'sorugecesi',
+    name: 'Soru Gecesi',
+    desc: '2-4 kişilik bilgi yarışması — sırayla oynayın',
+    icon: '🧠',
+    players: 4,
+    minPlayers: 2,
+    local: true,
+    genre: 'strateji',
+    isNew: true,
+    color: '#6366F1',
+    bg: 'linear-gradient(135deg, #6366F1 0%, #A78BFA 100%)',
+  },
 ];
 
 const generateRoomId = () =>
@@ -6527,6 +6540,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
             { key: 'all', label: 'Tümü' },
             { key: 1, label: '👤 Tek' },
             { key: 2, label: '👥 2 Kişi' },
+            { key: '3-4', label: '👨‍👩‍👧 3-4 Kişi' },
           ].map(function(f) {
             const active = filterPlayers === f.key;
             return (
@@ -6567,7 +6581,11 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
             const q = searchQuery.toLowerCase();
             return g.name.toLowerCase().includes(q) || g.desc.toLowerCase().includes(q);
           }
-          if (filterPlayers !== 'all' && g.players !== filterPlayers) return false;
+          if (filterPlayers !== 'all') {
+            if (filterPlayers === '3-4') {
+              if (!(g.players >= 3 || (g.minPlayers && g.players >= 3))) return false;
+            } else if (g.players !== filterPlayers) return false;
+          }
           if (filterGenre === 'yeni') return !!g.isNew;
           if (filterGenre !== 'all' && g.genre !== filterGenre) return false;
           return true;
@@ -6587,7 +6605,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
                 <span style={{ fontSize: 28, display: 'block', marginBottom: 2 }}>{game.icon}</span>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
                   <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px' }}>
-                    {game.players === 1 ? '👤 Tek' : '👥 2 Kişi'}
+                    {game.players === 1 ? '👤 Tek' : game.minPlayers ? `👨‍👩‍👧 ${game.minPlayers}-${game.players} Kişi` : '👥 2 Kişi'}
                   </span>
                   <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px', textTransform: 'capitalize' }}>
                     {genreIcons[game.genre] || '🎮'} {game.genre}
@@ -8437,6 +8455,7 @@ const GAME_HELP = {
   tavla:      { icon:'🎲',  title:'Tavla',                  rules:['Zar at, taşlarını kart üzerinde ilerlet.','Rakip taşı vu: tek taşı vurunca onu bara gönderirsin.','15 taşını önce evine toplayan ve sonra tahtadan çıkaran kazanır.'] },
   kelimezinciri:{ icon:'🔗',title:'Kelime Zinciri',         rules:['Verilen kelimenin son harfiyle yeni kelime yaz.','60 saniyede zinciri uzat — 10+ kelime için mükemmel puan!','Aynı kelime tekrar kullanılamaz.'] },
   deyimtamamla:{ icon:'📖', title:'Deyim Tamamla',          rules:['8 atasözü/deyim sorusu. Doğru şıkkı seç.','Hızlı cevap = bonus puan. 15+ saniye kaldıysa +3 puan.','Tüm soruları doğru yaparsan mükemmel puan alırsın!'] },
+  sorugecesi:  { icon:'🧠', title:'Soru Gecesi',            rules:['2-4 oyuncu isimlerini gir, oyunu başlat.','Her oyuncu kendi sırasında "Hazırım" a basar — diğerleri bakmaz.','15 saniyede doğru şıkkı seç: 10 puan + hız bonusu.','10 soru sonunda en çok puan toplayan kazanır!'] },
 };
 
 function HelpModal({ gameId, onClose }) {
@@ -9446,6 +9465,199 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
 }
 
 // ============================================================
+// SORU GECESİ — 2-4 player local party quiz
+// ============================================================
+const SORUGECESI_QS = [
+  { q:'Türkiye\'nin başkenti hangisidir?', a:0, opts:['Ankara','İstanbul','İzmir','Bursa'] },
+  { q:'Osmanlı İmparatorluğu kaç yılında kuruldu?', a:2, opts:['1299','1453','1071','1326'] },
+  { q:'Türkiye\'nin en yüksek dağı hangisidir?', a:1, opts:['Uludağ','Ağrı Dağı','Erciyes','Süphan'] },
+  { q:'Hangi gezegen Güneş Sistemi\'nin en büyüğüdür?', a:3, opts:['Satürn','Neptün','Uranüs','Jüpiter'] },
+  { q:'Su kaç derecede kaynar?', a:0, opts:['100°C','90°C','80°C','110°C'] },
+  { q:'DNA\'nın açılımı nedir?', a:2, opts:['Deoxynitric Acid','Dual Nucleic Acid','Deoxyribonucleic Acid','Dynamic Nucleic Acid'] },
+  { q:'Türkiye\'nin para birimi nedir?', a:1, opts:['Lira','Türk Lirası','Kuruş','Akçe'] },
+  { q:'Kaç tane renk (ışık) gözünüz var?', a:0, opts:['3','4','2','5'] },
+  { q:'Türkiye kaç kıtada yer alır?', a:2, opts:['1','3','2','4'] },
+  { q:'İstanbul\'un eski adı nedir?', a:3, opts:['Ankara','Nikomedia','Nikaia','Konstantinopolis'] },
+  { q:'Atom altı parçacık hangisi değildir?', a:1, opts:['Proton','Foton','Nötron','Elektron'] },
+  { q:'Türkiye\'nin en uzun nehri hangisidir?', a:0, opts:['Kızılırmak','Fırat','Dicle','Sakarya'] },
+  { q:'Hangi yıl Türkiye Cumhuriyeti ilan edildi?', a:2, opts:['1919','1920','1923','1938'] },
+  { q:'İnsan vücudunda kaç kemik var?', a:1, opts:['186','206','196','216'] },
+  { q:'Dünya\'nın en büyük okyanusu hangisidir?', a:0, opts:['Pasifik','Atlantik','Hint','Arktik'] },
+  { q:'Hangi element simgesi "Fe" dir?', a:3, opts:['Flor','Fermiyum','Fosfor','Demir'] },
+  { q:'Türkiye\'de kaç il vardır?', a:2, opts:['72','80','81','76'] },
+  { q:'Güneş Sistemi\'ndeki en küçük gezegen hangisidir?', a:1, opts:['Mars','Merkür','Venüs','Plüton'] },
+  { q:'Boğaziçi Köprüsü hangi iki kıtayı birbirine bağlar?', a:0, opts:['Asya-Avrupa','Asya-Afrika','Avrupa-Afrika','Asya-Amerika'] },
+  { q:'Işığın hızı yaklaşık kaç km/s\'dir?', a:2, opts:['200.000','250.000','300.000','350.000'] },
+];
+
+const PLAYER_COLORS = ['#E63946','#2A9D8F','#6366F1','#D97706'];
+const PLAYER_EMOJIS = ['🔴','🟢','🔵','🟡'];
+
+function SoruGecesiGame({ game, onGameEnd, soundOn }) {
+  const [phase, setPhase] = React.useState('setup');
+  const [playerCount, setPlayerCount] = React.useState(2);
+  const [names, setNames] = React.useState(['Oyuncu 1','Oyuncu 2','Oyuncu 3','Oyuncu 4']);
+  const [scores, setScores] = React.useState([0,0,0,0]);
+  const [qIdx, setQIdx] = React.useState(0);
+  const [pIdx, setPIdx] = React.useState(0);
+  const [selected, setSelected] = React.useState(null);
+  const [showAns, setShowAns] = React.useState(false);
+  const [timer, setTimer] = React.useState(15);
+  const [readyScreen, setReadyScreen] = React.useState(true);
+  const TOTAL_Q = 10;
+  const shuffled = React.useMemo(function() {
+    var arr = SORUGECESI_QS.slice(); for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;} return arr.slice(0,TOTAL_Q);
+  },[]);
+
+  React.useEffect(function(){
+    if(phase!=='playing'||showAns||readyScreen)return;
+    if(timer<=0){handleAnswer(null);return;}
+    var t=setTimeout(function(){setTimer(function(v){return v-1;});},1000);
+    return function(){clearTimeout(t);};
+  },[phase,timer,showAns,readyScreen]);
+
+  function handleAnswer(idx){
+    setSelected(idx);
+    setShowAns(true);
+    var correct=idx===shuffled[qIdx].a;
+    if(correct){
+      var bonus=Math.floor(timer/3);
+      setScores(function(s){var n=s.slice();n[pIdx]+=10+bonus;return n;});
+      if(soundOn)playSound('correct');
+      playHaptic('correct');
+    } else {
+      if(soundOn)playSound('wrong');
+      playHaptic('wrong');
+    }
+    setTimeout(function(){
+      setShowAns(false);setSelected(null);setTimer(15);
+      var nextP=pIdx+1;
+      if(nextP>=playerCount){
+        var nextQ=qIdx+1;
+        if(nextQ>=TOTAL_Q){setPhase('result');return;}
+        setQIdx(nextQ);setPIdx(0);setReadyScreen(true);
+      } else { setPIdx(nextP);setReadyScreen(true); }
+    },1800);
+  }
+
+  var activePlayers = names.slice(0,playerCount);
+
+  if(phase==='setup'){
+    return (
+      <div style={{maxWidth:480,margin:'0 auto',padding:'28px 16px',textAlign:'center'}}>
+        <div style={{fontSize:52,marginBottom:8}}>🧠</div>
+        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:22,marginBottom:4}}>Soru Gecesi</h2>
+        <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:24}}>2-4 kişilik bilgi yarışması. Sırayla oynayın!</p>
+        <div style={{marginBottom:20}}>
+          <div style={{fontWeight:600,marginBottom:8}}>Oyuncu sayısı</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center'}}>
+            {[2,3,4].map(function(n){
+              return <button key={n} onClick={function(){setPlayerCount(n);}} style={{width:52,height:52,borderRadius:12,border:playerCount===n?'none':'1px solid var(--border)',background:playerCount===n?'#6366f1':'var(--surface)',color:playerCount===n?'#fff':'var(--text)',fontWeight:700,fontSize:18,cursor:'pointer'}}>{n}</button>;
+            })}
+          </div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:28}}>
+          {Array.from({length:playerCount},function(_,i){
+            return (
+              <div key={i} style={{display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontSize:22}}>{PLAYER_EMOJIS[i]}</span>
+                <input value={names[i]} onChange={function(e){var v=e.target.value;setNames(function(n){var a=n.slice();a[i]=v;return a;});}} style={{flex:1,padding:'10px 12px',borderRadius:10,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:15,outline:'none'}} maxLength={16} />
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={function(){setPhase('playing');setReadyScreen(true);}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+          Oyunu Başlat 🎉
+        </button>
+      </div>
+    );
+  }
+
+  if(phase==='result'){
+    var ranked=activePlayers.map(function(n,i){return{name:n,score:scores[i],color:PLAYER_COLORS[i],emoji:PLAYER_EMOJIS[i]};}).sort(function(a,b){return b.score-a.score;});
+    var winner=ranked[0];
+    return (
+      <div style={{maxWidth:480,margin:'0 auto',padding:'28px 16px',textAlign:'center'}}>
+        <div style={{fontSize:52,marginBottom:8}}>🏆</div>
+        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:22,marginBottom:4}}>Oyun Bitti!</h2>
+        <div style={{marginBottom:6,fontSize:18,fontWeight:700}}>{winner.emoji} {winner.name} kazandı!</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:28,marginTop:20}}>
+          {ranked.map(function(p,i){
+            return (
+              <div key={p.name} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:12,background:i===0?'rgba(134,59,255,0.12)':'var(--surface)',border:i===0?'1px solid rgba(134,59,255,0.3)':'1px solid var(--border)'}}>
+                <span style={{fontSize:20,width:28}}>{i===0?'🥇':i===1?'🥈':'🥉'}</span>
+                <span style={{fontSize:20}}>{p.emoji}</span>
+                <span style={{flex:1,fontWeight:700,textAlign:'left'}}>{p.name}</span>
+                <span style={{fontWeight:800,color:p.color,fontSize:18}}>{p.score} puan</span>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={function(){onGameEnd('win');}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+          Lobiyi Bitir ✓
+        </button>
+      </div>
+    );
+  }
+
+  var q=shuffled[qIdx];
+
+  if(readyScreen){
+    return (
+      <div style={{maxWidth:480,margin:'0 auto',padding:'28px 16px',textAlign:'center'}}>
+        <div style={{fontSize:56,marginBottom:12}}>{PLAYER_EMOJIS[pIdx]}</div>
+        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:4,color:PLAYER_COLORS[pIdx]}}>{activePlayers[pIdx]}</h2>
+        <p style={{color:'var(--text-secondary)',marginBottom:8}}>Soru {qIdx*playerCount+pIdx+1} / {TOTAL_Q*playerCount}</p>
+        <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:32}}>Diğer oyuncular ekrana bakmasın!</p>
+        <button onClick={function(){setReadyScreen(false);}} style={{padding:'14px 32px',borderRadius:14,border:'none',background:PLAYER_COLORS[pIdx],color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+          Hazırım — Soruyu Göster
+        </button>
+        <div style={{marginTop:16,display:'flex',gap:6,justifyContent:'center'}}>
+          {activePlayers.map(function(n,i){return <span key={i} style={{fontSize:12,padding:'3px 10px',borderRadius:10,background:i===pIdx?PLAYER_COLORS[pIdx]:'var(--surface)',color:i===pIdx?'#fff':'var(--text-secondary)',border:i===pIdx?'none':'1px solid var(--border)',fontWeight:600}}>{PLAYER_EMOJIS[i]} {scores[i]}p</span>;})}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{maxWidth:480,margin:'0 auto',padding:'24px 16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <span style={{fontSize:13,color:'var(--text-secondary)',fontWeight:600}}>Soru {qIdx+1}/{TOTAL_Q}</span>
+        <div style={{display:'flex',gap:8}}>
+          {activePlayers.map(function(n,i){return <span key={i} style={{fontSize:11,padding:'3px 8px',borderRadius:8,background:i===pIdx?PLAYER_COLORS[pIdx]:'var(--surface)',color:i===pIdx?'#fff':'var(--text-secondary)',fontWeight:700}}>{PLAYER_EMOJIS[i]}{scores[i]}</span>;})}
+        </div>
+      </div>
+      <div style={{textAlign:'center',marginBottom:16}}>
+        <div style={{fontSize:28,fontWeight:800,color:PLAYER_COLORS[pIdx]}}>{PLAYER_EMOJIS[pIdx]} {activePlayers[pIdx]}</div>
+        <div style={{fontSize:12,color:'var(--text-secondary)'}}>sırasında</div>
+      </div>
+      <div style={{background:'var(--surface)',borderRadius:16,padding:'20px',marginBottom:20,border:'1px solid var(--border)'}}>
+        <div style={{fontFamily:"'Sora',sans-serif",fontWeight:700,fontSize:17,lineHeight:1.4,textAlign:'center'}}>{q.q}</div>
+      </div>
+      <div style={{position:'relative',height:8,background:'var(--surface-hover)',borderRadius:4,marginBottom:20,overflow:'hidden'}}>
+        <div style={{position:'absolute',left:0,top:0,height:'100%',borderRadius:4,background:timer>8?'#22c55e':timer>4?'#D97706':'#E63946',width:(timer/15*100)+'%',transition:'width 1s linear'}}/>
+        <div style={{position:'absolute',right:8,top:-12,fontSize:12,fontWeight:700,color:timer>8?'#22c55e':timer>4?'#D97706':'#E63946'}}>{timer}s</div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        {q.opts.map(function(opt,i){
+          var bg='var(--surface)',color='var(--text)',border='1px solid var(--border)';
+          if(showAns){
+            if(i===q.a){bg='#22c55e';color='#fff';border='none';}
+            else if(i===selected&&selected!==q.a){bg='#ef4444';color='#fff';border='none';}
+          }
+          return (
+            <button key={i} onClick={function(){if(!showAns)handleAnswer(i);}} disabled={showAns}
+              style={{padding:'14px 10px',borderRadius:12,border:border,background:bg,color:color,fontWeight:600,fontSize:14,cursor:showAns?'default':'pointer',fontFamily:"'DM Sans',sans-serif",lineHeight:1.3,transition:'all 0.2s'}}>
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // DAILY QUEST BANNER
 // ============================================================
 function DailyQuestBanner({ stats }) {
@@ -9957,7 +10169,7 @@ export default function App() {
   const adGameCountRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0} };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0}, sorugecesi:{played:0,wins:0,losses:0} };
   const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 }, streakFreeze: { count: 1, weekUsed: null }, season: { num: 0, xp: 0, month: null } };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { ...PROG_DEFAULTS, history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }; });
 
@@ -10419,6 +10631,14 @@ export default function App() {
       case 'deyimtamamla':
         return (
           <DeyimTamamlaGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'sorugecesi':
+        return (
+          <SoruGecesiGame
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
