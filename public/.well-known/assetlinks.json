@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.netlify.oyunclup.twa",
+    "sha256_cert_fingerprints": ["40:C8:54:F3:70:6E:48:89:D5:91:77:8F:28:79:0A:47:E5:D8:A5:92:1E:6D:77:22:7A:73:76:13:62:5B:10:78"]
+  }
+}]
