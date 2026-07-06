@@ -2271,6 +2271,8 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
   const [selected, setSelected] = useState(null);
   const [errors, setErrors] = useState(new Set());
   const [won, setWon] = useState(false);
+  const [mistakeCount, setMistakeCount] = useState(0);
+  const MAX_MISTAKES = 3;
 
   const getBoxIdx = (r, c) => Math.floor(r/3)*3 + Math.floor(c/3);
 
@@ -2289,7 +2291,7 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
   };
 
   const handleInput = (num) => {
-    if (selected === null || won) return;
+    if (selected === null || won || mistakeCount >= MAX_MISTAKES) return;
     const idx = selected;
     if (initial[idx] !== 0) return;
     const nv = [...values];
@@ -2298,9 +2300,23 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
     setValues(nv);
     const errs = checkErrors(nv);
     setErrors(errs);
+    // Count new mistakes: cells that are wrong vs solution
+    const wrongCells = nv.filter((v, i) => v !== 0 && v !== sol[i]).length;
+    const newMistakes = wrongCells;
+    // Track when a new wrong cell is placed
+    if (num !== 0 && nv[idx] !== sol[idx]) {
+      playHaptic('wrong');
+      const nm = mistakeCount + 1;
+      setMistakeCount(nm);
+      if (nm >= MAX_MISTAKES) {
+        if (soundOn) playSound('lose');
+        setTimeout(() => onGameEnd('loss'), 800);
+      }
+    }
     if (nv.every((v, i) => v === sol[i])) {
       setWon(true);
       if (soundOn) playSound('win');
+      playHaptic('win');
       onGameEnd('win');
     }
   };
@@ -2313,6 +2329,7 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
     setSelected(null);
     setErrors(new Set());
     setWon(false);
+    setMistakeCount(0);
   };
 
   const selR = selected !== null ? Math.floor(selected/9) : -1;
@@ -2323,7 +2340,17 @@ function SudokuGame({ game, onGameEnd, soundOn }) {
     <div style={{ maxWidth: 380, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24 }}>🔲 Sudoku</h2>
-        <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[0,1,2].map(function(n) {
+              return <div key={n} style={{ width: 12, height: 12, borderRadius: '50%', background: n < mistakeCount ? '#E63946' : 'var(--border)' }} />;
+            })}
+          </div>
+          <span style={{ fontSize: 12, color: mistakeCount >= MAX_MISTAKES ? '#E63946' : 'var(--text-secondary)', fontWeight: 700 }}>
+            {mistakeCount}/{MAX_MISTAKES} hata
+          </span>
+          <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 1, background: 'var(--border)', border: '2px solid var(--text)', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
@@ -4200,7 +4227,7 @@ function BrickBreakerGame({ onGameEnd, soundOn }) {
 // ============================================================
 // CONSTANTS & HELPERS
 // ============================================================
-// genre: 'strateji' | 'hız' | 'hafıza' | 'kelime'
+// genre: 'strateji' | 'hız' | 'hafıza' | 'kelime' | 'bulmaca' | 'klasik'
 const GAMES = [
   {
     id: 'xox',
@@ -4305,27 +4332,27 @@ const GAMES = [
     desc: 'Mayınları bulmadan alanı temizle',
     icon: '💣',
     players: 1,
-    genre: 'strateji',
+    genre: 'bulmaca',
     color: '#457B9D',
     bg: 'linear-gradient(135deg, #457B9D 0%, #48CAE4 100%)',
   },
   {
     id: 'sudoku',
     name: 'Sudoku',
-    desc: 'Rakamları yerleştir',
+    desc: 'Rakamları yerleştir, 3 hata hakkın var',
     icon: '🔲',
     players: 1,
-    genre: 'strateji',
+    genre: 'bulmaca',
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
   {
     id: 'dama',
     name: 'Dama',
-    desc: 'Türk Dama - Bota karşı oyna',
+    desc: 'Türk Dama — bota karşı oyna',
     icon: '⚫',
     players: 1,
-    genre: 'strateji',
+    genre: 'klasik',
     color: '#457B9D',
     bg: 'linear-gradient(135deg, #457B9D 0%, #1D3557 100%)',
   },
@@ -4345,7 +4372,7 @@ const GAMES = [
     desc: "Sayıları birleştir, 2048'e ulaş",
     icon: '🔢',
     players: 1,
-    genre: 'strateji',
+    genre: 'bulmaca',
     color: '#F59563',
     bg: 'linear-gradient(135deg, #BBADA0 0%, #F59563 100%)',
   },
@@ -4372,11 +4399,11 @@ const GAMES = [
   {
     id: 'mangala',
     name: 'Mangala',
-    desc: 'Türklerin binlerce yıllık geleneksel taş oyunu',
+    desc: 'Türklerin geleneksel taş oyunu — 2 kişilik',
     icon: '🪨',
     players: 2,
     local: true,
-    genre: 'strateji',
+    genre: 'klasik',
     color: '#92400E',
     bg: 'linear-gradient(135deg, #92400E 0%, #F59E0B 100%)',
   },
@@ -4396,7 +4423,7 @@ const GAMES = [
     desc: 'Tüm lambaları kapatmak için ızgaraya dokun',
     icon: '💡',
     players: 1,
-    genre: 'strateji',
+    genre: 'bulmaca',
     color: '#D97706',
     bg: 'linear-gradient(135deg, #D97706 0%, #FDE68A 100%)',
   },
@@ -4417,7 +4444,7 @@ const GAMES = [
     icon: '🪵',
     players: 2,
     local: true,
-    genre: 'strateji',
+    genre: 'klasik',
     color: '#065F46',
     bg: 'linear-gradient(135deg, #065F46 0%, #6EE7B7 100%)',
   },
@@ -4448,6 +4475,7 @@ const GAMES = [
     icon: '🔍',
     players: 1,
     genre: 'kelime',
+    isNew: true,
     color: '#0F766E',
     bg: 'linear-gradient(135deg, #0F766E 0%, #2DD4BF 100%)',
   },
@@ -4458,6 +4486,7 @@ const GAMES = [
     icon: '🎭',
     players: 1,
     genre: 'kelime',
+    isNew: true,
     color: '#BE185D',
     bg: 'linear-gradient(135deg, #BE185D 0%, #FB7185 100%)',
   },
@@ -4467,7 +4496,8 @@ const GAMES = [
     desc: 'Klasik Türk tavlası — bota karşı oyna',
     icon: '🎲',
     players: 1,
-    genre: 'strateji',
+    genre: 'klasik',
+    isNew: true,
     color: '#92400E',
     bg: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)',
   },
@@ -4478,6 +4508,7 @@ const GAMES = [
     icon: '🔗',
     players: 1,
     genre: 'kelime',
+    isNew: true,
     color: '#0F766E',
     bg: 'linear-gradient(135deg, #0F766E 0%, #2DD4BF 100%)',
   },
@@ -4488,6 +4519,7 @@ const GAMES = [
     icon: '📖',
     players: 1,
     genre: 'kelime',
+    isNew: true,
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
@@ -4977,7 +5009,10 @@ const Header = ({
   onHome,
   dark,
   onToggleDark,
-}) => (
+  onProfileTab,
+}) => {
+  const [showDrop, setShowDrop] = React.useState(false);
+  return (
   <header
     style={{
       display: 'flex',
@@ -5069,25 +5104,53 @@ const Header = ({
           >
             🏆
           </button>
-          <button
-            onClick={onProfile}
-            title={user.name}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center',
-              padding: '4px 6px', borderRadius: 50,
-              transition: 'var(--transition)',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-          >
-            <Avatar name={user.name} size={30} />
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowDrop(d => !d)}
+              title={user.name}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center',
+                padding: '4px 6px', borderRadius: 50,
+                transition: 'var(--transition)',
+              }}
+            >
+              <Avatar name={user.name} size={30} />
+            </button>
+            {showDrop && (
+              <>
+                <div onClick={() => setShowDrop(false)} style={{ position:'fixed',inset:0,zIndex:200 }} />
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:300, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, boxShadow:'var(--shadow-lg)', padding:6, minWidth:180, animation:'scaleIn 0.15s ease' }}>
+                  <div style={{ padding:'8px 12px 6px', fontSize:12, fontWeight:700, color:'var(--text-secondary)', borderBottom:'1px solid var(--border)', marginBottom:4 }}>
+                    {user.name}
+                  </div>
+                  {[
+                    { icon:'👤', label:'Profil', tab:'profil' },
+                    { icon:'📊', label:'İstatistikler', tab:'istatistik' },
+                    { icon:'🏅', label:'Rozetlerim', tab:'rozetler' },
+                    { icon:'⚙️', label:'Ayarlar', tab:'ayarlar' },
+                  ].map(function(item) {
+                    return (
+                      <button key={item.tab}
+                        onClick={function(){ setShowDrop(false); if(onProfileTab) onProfileTab(item.tab); else if(onProfile) onProfile(); }}
+                        style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 12px', borderRadius:10, border:'none', background:'none', color:'var(--text)', fontSize:14, fontWeight:500, cursor:'pointer', textAlign:'left' }}
+                        onMouseEnter={function(e){ e.currentTarget.style.background='var(--surface-hover)'; }}
+                        onMouseLeave={function(e){ e.currentTarget.style.background='none'; }}
+                      >
+                        <span>{item.icon}</span> {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </span>
       </div>
     )}
   </header>
-);
+  );
+};
 
 // ============================================================
 // LOGIN PAGE
@@ -5385,7 +5448,8 @@ const RANKS = [
 ];
 function getRank(wins) { return RANKS.find(r => wins >= r.min && wins <= r.max) || RANKS[0]; }
 
-const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, soundOn, onToggleSound, dark, onToggleDark, onRenameUser, onResetStats }) => {
+const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, soundOn, onToggleSound, dark, onToggleDark, onRenameUser, onResetStats, initialTab }) => {
+  const [activeTab, setActiveTab] = useState(initialTab || 'profil');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [newName, setNewName] = useState(user.name);
   const [nameSaved, setNameSaved] = useState(false);
@@ -5399,16 +5463,37 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
     totalGames > 0 ? Math.round((totalWins / totalGames) * 100) : 0;
   const rank = getRank(totalWins);
 
+  const TABS = [
+    { id: 'profil', label: '👤 Profil' },
+    { id: 'istatistik', label: '📊 İstatistik' },
+    { id: 'rozetler', label: '🏅 Rozetler' },
+    { id: 'ayarlar', label: '⚙️ Ayarlar' },
+  ];
+
   return (
     <div
       style={{
         maxWidth: 520,
         margin: '0 auto',
-        padding: '32px 20px',
+        padding: '16px 20px 32px',
         animation: 'fadeUp 0.4s ease',
       }}
     >
-      <Card
+      {/* Tab bar */}
+      <div style={{ display:'flex', gap:4, marginBottom:20, background:'var(--surface-hover)', borderRadius:14, padding:4 }}>
+        {TABS.map(function(tab) {
+          var active = activeTab === tab.id;
+          return (
+            <button key={tab.id} onClick={function(){ setActiveTab(tab.id); }}
+              style={{ flex:1, padding:'9px 4px', borderRadius:10, border:'none', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--text)' : 'var(--text-secondary)', fontWeight: active ? 700 : 500, fontSize:12, cursor:'pointer', transition:'all 0.2s', boxShadow: active ? 'var(--shadow)' : 'none', whiteSpace:'nowrap' }}>
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* PROFIL TAB */}
+      {activeTab === 'profil' && <Card
         style={{ textAlign: 'center', padding: '36px 24px', marginBottom: 20 }}
       >
         <div style={{position:'relative',width:80,margin:'0 auto 16px',cursor:'pointer'}} onClick={()=>setShowAvatarPicker(true)}>
@@ -5469,12 +5554,15 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
             {(stats.streakFreeze?.count||0)>0 ? '1 adet mevcut' : 'Bu hafta kullanıldı'}
           </div>
         </div>
-      </Card>
+      </Card>}
 
-      <Card style={{ padding: 20, marginBottom: 20 }}>
+      {/* ROZETLER TAB */}
+      {activeTab === 'rozetler' && <Card style={{ padding: 20, marginBottom: 20 }}>
         <BadgeGrid badges={stats.badges} />
-      </Card>
+      </Card>}
 
+      {/* İSTATİSTİK TAB */}
+      {activeTab === 'istatistik' && <div>
       <div
         style={{
           display: 'grid',
@@ -5681,7 +5769,10 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
             })}
         </Card>
       )}
+      </div>}
 
+      {/* AYARLAR TAB */}
+      {activeTab === 'ayarlar' && <div>
       {sock && sock.myUserId && (
         <Card style={{ padding: 20, marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
@@ -5781,6 +5872,7 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
       <Button variant="danger" onClick={onLogout} style={{ width: '100%' }}>
         Çıkış Yap
       </Button>
+      </div>}
     </div>
   );
 };
@@ -5788,7 +5880,21 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
 // ============================================================
 // LEADERBOARD PAGE (per-game)
 // ============================================================
-const FAKE_LB = {};
+const FAKE_LB = {
+  xox:         [ { name: 'Ahmet K.',   played: 52, wins: 38, avatar: 0 }, { name: 'Zeynep A.',  played: 41, wins: 31, avatar: 1 }, { name: 'Emre Y.',    played: 47, wins: 27, avatar: 3 }, { name: 'Elif S.',    played: 33, wins: 24, avatar: 4 }, { name: 'Murat D.',   played: 30, wins: 18, avatar: 2 } ],
+  wordle:      [ { name: 'Selin T.',   played: 30, wins: 24, avatar: 1 }, { name: 'Can M.',     played: 28, wins: 20, avatar: 0 }, { name: 'Ayşe B.',    played: 25, wins: 18, avatar: 5 }, { name: 'Kerem A.',   played: 22, wins: 15, avatar: 2 }, { name: 'Deniz K.',   played: 20, wins: 12, avatar: 3 } ],
+  sudoku:      [ { name: 'Cem Y.',     played: 45, wins: 40, avatar: 3 }, { name: 'Büşra K.',   played: 38, wins: 33, avatar: 4 }, { name: 'Tarık S.',   played: 32, wins: 28, avatar: 0 }, { name: 'Meltem A.',  played: 29, wins: 24, avatar: 1 }, { name: 'Ozan D.',    played: 25, wins: 19, avatar: 2 } ],
+  minesweeper: [ { name: 'Furkan E.',  played: 60, wins: 45, avatar: 2 }, { name: 'Nihan T.',   played: 50, wins: 38, avatar: 5 }, { name: 'Berk A.',    played: 44, wins: 32, avatar: 0 }, { name: 'Gizem Y.',   played: 38, wins: 27, avatar: 1 }, { name: 'Tolga M.',   played: 34, wins: 23, avatar: 3 } ],
+  rps:         [ { name: 'Merve K.',   played: 80, wins: 55, avatar: 4 }, { name: 'Alp D.',     played: 72, wins: 48, avatar: 0 }, { name: 'Ceren S.',   played: 65, wins: 42, avatar: 1 }, { name: 'Yusuf A.',   played: 60, wins: 38, avatar: 2 }, { name: 'Ecem B.',    played: 55, wins: 34, avatar: 5 } ],
+  connectfour: [ { name: 'Serkan Y.',  played: 40, wins: 30, avatar: 3 }, { name: 'Hande K.',   played: 35, wins: 26, avatar: 1 }, { name: 'İlker T.',   played: 30, wins: 22, avatar: 2 }, { name: 'Pınar A.',   played: 28, wins: 19, avatar: 4 }, { name: 'Onur M.',    played: 25, wins: 15, avatar: 0 } ],
+  snake:       [ { name: 'Kaan B.',    played: 35, wins: 20, avatar: 2 }, { name: 'İpek Y.',    played: 30, wins: 17, avatar: 5 }, { name: 'Mert A.',    played: 28, wins: 15, avatar: 0 }, { name: 'Seda T.',    played: 25, wins: 12, avatar: 1 }, { name: 'Koray D.',   played: 22, wins: 10, avatar: 3 } ],
+  memory:      [ { name: 'Arzu K.',    played: 28, wins: 22, avatar: 1 }, { name: 'Batu A.',    played: 25, wins: 19, avatar: 3 }, { name: 'Ceyda M.',   played: 22, wins: 16, avatar: 0 }, { name: 'Doruk Y.',   played: 20, wins: 14, avatar: 4 }, { name: 'Ela S.',     played: 18, wins: 11, avatar: 2 } ],
+  '2048':      [ { name: 'Fırat T.',   played: 40, wins: 18, avatar: 0 }, { name: 'Gamze K.',   played: 35, wins: 15, avatar: 5 }, { name: 'Hakan A.',   played: 30, wins: 13, avatar: 3 }, { name: 'Irmak Y.',   played: 27, wins: 11, avatar: 2 }, { name: 'Jale M.',    played: 24, wins: 9,  avatar: 1 } ],
+  mathduel:    [ { name: 'Kadir B.',   played: 55, wins: 42, avatar: 2 }, { name: 'Leyla D.',   played: 48, wins: 36, avatar: 4 }, { name: 'Mina S.',    played: 43, wins: 31, avatar: 1 }, { name: 'Nihat A.',   played: 38, wins: 27, avatar: 0 }, { name: 'Orhan T.',   played: 34, wins: 22, avatar: 3 } ],
+  dama:        [ { name: 'Pelin Y.',   played: 32, wins: 25, avatar: 5 }, { name: 'Rıza K.',    played: 28, wins: 21, avatar: 2 }, { name: 'Selma A.',   played: 25, wins: 18, avatar: 1 }, { name: 'Taner M.',   played: 22, wins: 15, avatar: 3 }, { name: 'Ufuk D.',    played: 19, wins: 12, avatar: 0 } ],
+  tavla:       [ { name: 'Veli T.',    played: 30, wins: 22, avatar: 3 }, { name: 'Yıldız K.',  played: 27, wins: 19, avatar: 1 }, { name: 'Zafer A.',   played: 24, wins: 17, avatar: 0 }, { name: 'Alper M.',   played: 21, wins: 14, avatar: 4 }, { name: 'Belma S.',   played: 18, wins: 11, avatar: 2 } ],
+  gomoku:      [ { name: 'Cem B.',     played: 36, wins: 28, avatar: 0 }, { name: 'Duygu A.',   played: 32, wins: 24, avatar: 2 }, { name: 'Ercan Y.',   played: 28, wins: 20, avatar: 4 }, { name: 'Fatma K.',   played: 24, wins: 17, avatar: 1 }, { name: 'Güner T.',   played: 21, wins: 14, avatar: 3 } ],
+};
 
 const LeaderboardPage = ({ user, stats }) => {
   const [activeTab, setActiveTab] = useState(GAMES[0].id);
@@ -6120,6 +6226,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
   const [publicRooms, setPublicRooms] = useState([]);
   const [filterPlayers, setFilterPlayers] = useState('all');
   const [filterGenre, setFilterGenre] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(function() {
     function fetchRooms() {
@@ -6398,20 +6505,34 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
         )}
       </div>
 
+      {/* Search bar */}
+      <div style={{ position: 'relative', marginBottom: 14 }}>
+        <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, opacity: 0.5 }}>🔍</span>
+        <input
+          value={searchQuery}
+          onChange={function(e) { setSearchQuery(e.target.value); }}
+          placeholder="Oyun ara..."
+          style={{ width: '100%', padding: '10px 14px 10px 40px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
+        />
+        {searchQuery && (
+          <button onClick={function(){ setSearchQuery(''); }} style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', fontSize:16, color:'var(--text-secondary)' }}>✕</button>
+        )}
+      </div>
+
       {/* Filter bar */}
       <div style={{ marginBottom: 20 }}>
         {/* Player count filter */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           {[
-            { key: 'all', label: 'Tümü', count: GAMES.length },
-            { key: 1, label: '👤 Tek Kişilik', count: GAMES.filter(g => g.players === 1).length },
-            { key: 2, label: '👥 2 Kişilik', count: GAMES.filter(g => g.players === 2).length },
+            { key: 'all', label: 'Tümü' },
+            { key: 1, label: '👤 Tek' },
+            { key: 2, label: '👥 2 Kişi' },
           ].map(function(f) {
             const active = filterPlayers === f.key;
             return (
-              <button key={f.key} onClick={function() { setFilterPlayers(f.key); setFilterGenre('all'); }}
-                style={{ padding: '7px 14px', borderRadius: 20, border: active ? 'none' : '1px solid var(--border)', background: active ? 'var(--accent)' : 'var(--surface)', color: active ? '#fff' : 'var(--text)', fontWeight: active ? 700 : 500, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
-                {f.label} <span style={{ opacity: 0.7, fontSize: 11 }}>{f.count}</span>
+              <button key={f.key} onClick={function() { setFilterPlayers(f.key); setFilterGenre('all'); setSearchQuery(''); }}
+                style={{ padding: '7px 14px', borderRadius: 20, border: active ? 'none' : '1px solid var(--border)', background: active ? 'var(--accent)' : 'var(--surface)', color: active ? (document.documentElement.dataset.theme === 'dark' ? '#000' : '#fff') : 'var(--text)', fontWeight: active ? 700 : 500, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
+                {f.label}
               </button>
             );
           })}
@@ -6419,16 +6540,19 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
         {/* Genre filter */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
-            { key: 'all', label: '🎮 Hepsi' },
-            { key: 'strateji', label: '♟️ Strateji' },
-            { key: 'hız', label: '⚡ Hız' },
-            { key: 'hafıza', label: '🧠 Hafıza' },
-            { key: 'kelime', label: '🔤 Kelime' },
+            { key: 'all',      label: '🎮 Hepsi',    color: '#6366f1' },
+            { key: 'yeni',     label: '🆕 Yeni',     color: '#E63946' },
+            { key: 'strateji', label: '♟️ Strateji', color: '#1D4ED8' },
+            { key: 'hız',      label: '⚡ Hız',       color: '#D97706' },
+            { key: 'hafıza',   label: '🧠 Hafıza',   color: '#7C3AED' },
+            { key: 'kelime',   label: '🔤 Kelime',   color: '#0F766E' },
+            { key: 'bulmaca',  label: '🧩 Bulmaca',  color: '#9333EA' },
+            { key: 'klasik',   label: '🏺 Klasik',   color: '#92400E' },
           ].map(function(f) {
             const active = filterGenre === f.key;
             return (
-              <button key={f.key} onClick={function() { setFilterGenre(f.key); }}
-                style={{ padding: '5px 12px', borderRadius: 16, border: active ? 'none' : '1px solid var(--border)', background: active ? '#6366f1' : 'var(--surface)', color: active ? '#fff' : 'var(--text-secondary)', fontWeight: active ? 700 : 400, fontSize: 12, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
+              <button key={f.key} onClick={function() { setFilterGenre(f.key); setSearchQuery(''); }}
+                style={{ padding: '5px 12px', borderRadius: 16, border: active ? 'none' : '1px solid var(--border)', background: active ? f.color : 'var(--surface)', color: active ? '#fff' : 'var(--text-secondary)', fontWeight: active ? 700 : 400, fontSize: 12, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
                 {f.label}
               </button>
             );
@@ -6439,11 +6563,17 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
       {/* Game grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
         {GAMES.filter(function(g) {
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            return g.name.toLowerCase().includes(q) || g.desc.toLowerCase().includes(q);
+          }
           if (filterPlayers !== 'all' && g.players !== filterPlayers) return false;
+          if (filterGenre === 'yeni') return !!g.isNew;
           if (filterGenre !== 'all' && g.genre !== filterGenre) return false;
           return true;
         }).map(function(game, i) {
           const gs = stats.games[game.id];
+          const genreIcons = { strateji:'♟️', hız:'⚡', hafıza:'🧠', kelime:'🔤', bulmaca:'🧩', klasik:'🏺' };
           return (
             <Card
               key={game.id}
@@ -6453,13 +6583,14 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
             >
               <div style={{ background: game.bg, padding: '20px 16px', color: '#fff', position: 'relative', overflow: 'hidden', minHeight: 80 }}>
                 <div style={{ position: 'absolute', right: -8, top: -8, fontSize: 64, opacity: 0.15, fontWeight: 800 }}>{game.icon}</div>
+                {game.isNew && <div style={{ position:'absolute', top:8, right:8, background:'#E63946', color:'#fff', fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:8, letterSpacing:0.5 }}>YENİ</div>}
                 <span style={{ fontSize: 28, display: 'block', marginBottom: 2 }}>{game.icon}</span>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
                   <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px' }}>
                     {game.players === 1 ? '👤 Tek' : '👥 2 Kişi'}
                   </span>
                   <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px', textTransform: 'capitalize' }}>
-                    {game.genre === 'strateji' ? '♟️' : game.genre === 'hız' ? '⚡' : game.genre === 'hafıza' ? '🧠' : '🔤'} {game.genre}
+                    {genreIcons[game.genre] || '🎮'} {game.genre}
                   </span>
                 </div>
               </div>
@@ -6786,13 +6917,14 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     const r = checkWinner(nb);
     if (r) {
       setWinner(r.winner); setWinLine(r.line);
-      if (r.winner === 'draw') { setScores(s=>({...s,draw:s.draw+1})); onGameEnd('draw'); }
-      else if (r.winner === 'X') { setScores(s=>({...s,x:s.x+1})); onGameEnd('win'); if(soundOn)playSound('win'); setShowConfetti(true); setTimeout(()=>setShowConfetti(false),2000); }
-      else { setScores(s=>({...s,o:s.o+1})); onGameEnd('loss'); if(soundOn)playSound('lose'); }
+      const diffOpts = difficulty ? { difficulty } : undefined;
+      if (r.winner === 'draw') { setScores(s=>({...s,draw:s.draw+1})); onGameEnd('draw', diffOpts); }
+      else if (r.winner === 'X') { setScores(s=>({...s,x:s.x+1})); onGameEnd('win', diffOpts); if(soundOn)playSound('win'); setShowConfetti(true); setTimeout(()=>setShowConfetti(false),2000); }
+      else { setScores(s=>({...s,o:s.o+1})); onGameEnd('loss', diffOpts); if(soundOn)playSound('lose'); }
       return true;
     }
     return false;
-  }, [checkWinner, onGameEnd, soundOn]);
+  }, [checkWinner, onGameEnd, soundOn, difficulty]);
 
   const handleClick = (i) => {
     if (!mode || board[i] || winner || botThinking) return;
@@ -8340,9 +8472,20 @@ const ADSENSE_SLOT   = '8053490650';
 // Kaç oyunda bir reklam göster (1 = her oyun, 4 = her 4 oyunda bir)
 const AD_INTERVAL = 4;
 
+var HOUSE_ADS = [
+  { icon: '🏆', bg: 'linear-gradient(135deg,#6366f1,#a855f7)', title: 'Skor Tablosunda Zirveye Çık!', body: 'Arkadaşlarına meydan oku, en üste çık ve rozetini kazan.' },
+  { icon: '🎲', bg: 'linear-gradient(135deg,#92400E,#D97706)', title: 'Tavla Seni Bekliyor!', body: 'Klasik Türk tavlasını bota karşı oyna, ustalığını kanıtla.' },
+  { icon: '🔥', bg: 'linear-gradient(135deg,#E63946,#F4845F)', title: 'Günlük Serileri Kır!', body: 'Her gün oyna, serisini koru ve bonus XP kazan.' },
+  { icon: '🔗', bg: 'linear-gradient(135deg,#0F766E,#2DD4BF)', title: 'Kelime Zincirine Gir!', body: '60 saniyede ne kadar uzun zincir kurabilirsin?' },
+  { icon: '📖', bg: 'linear-gradient(135deg,#7C3AED,#A78BFA)', title: 'Deyim Tamamla!', body: 'Türkçe atasözlerini ne kadar iyi biliyorsun?' },
+];
+
 function AdOverlay({ onClose }) {
   const [seconds, setSeconds] = useState(5);
   const canClose = seconds <= 0;
+  const insRef = useRef(null);
+  const [adFilled, setAdFilled] = useState(null); // null=pending, true=filled, false=empty
+  const houseAd = HOUSE_ADS[Math.floor((Date.now() / 15000)) % HOUSE_ADS.length];
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -8352,6 +8495,15 @@ function AdOverlay({ onClose }) {
 
   useEffect(() => {
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
+    // Detect if AdSense filled the slot after 1.8s
+    const checkTimer = setTimeout(() => {
+      try {
+        const ins = insRef.current;
+        const filled = ins && (ins.offsetHeight > 30 || ins.innerHTML.trim().length > 0);
+        setAdFilled(!!filled);
+      } catch { setAdFilled(false); }
+    }, 1800);
+    return () => clearTimeout(checkTimer);
   }, []);
 
   return (
@@ -8363,43 +8515,57 @@ function AdOverlay({ onClose }) {
       padding: '24px 16px',
     }}>
       <div style={{
-        backgroundColor: '#ffffff', borderRadius: 20, padding: '28px 20px',
+        backgroundColor: '#ffffff', borderRadius: 20, padding: '0',
         width: '100%', maxWidth: 320, textAlign: 'center',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
+        boxShadow: '0 16px 48px rgba(0,0,0,0.6)', overflow: 'hidden',
       }}>
-        <div style={{ fontSize: 44, marginBottom: 8 }}>🎮</div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 4, fontFamily: "'Sora', sans-serif" }}>oyun.club</div>
-        <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 20 }}>Reklam desteğin için teşekkürler!</div>
-
+        {/* AdSense slot — renders real ad when approved */}
         <ins
+          ref={insRef}
           className="adsbygoogle"
-          style={{ display: 'block' }}
+          style={{ display: 'block', minHeight: adFilled ? undefined : 0 }}
           data-ad-client={ADSENSE_CLIENT}
           data-ad-slot={ADSENSE_SLOT}
           data-ad-format="auto"
           data-full-width-responsive="true"
         />
+        {/* House ad — shows when AdSense doesn't fill */}
+        {adFilled === false && (
+          <div style={{ background: houseAd.bg, padding: '28px 20px 20px' }}>
+            <div style={{ fontSize: 56, marginBottom: 10 }}>{houseAd.icon}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 8, fontFamily: "'Sora',sans-serif" }}>{houseAd.title}</div>
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>{houseAd.body}</div>
+          </div>
+        )}
+        {/* Pending state */}
+        {adFilled === null && (
+          <div style={{ padding: '28px 20px 20px' }}>
+            <div style={{ fontSize: 44, marginBottom: 8 }}>🎮</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 4, fontFamily: "'Sora', sans-serif" }}>oyun.club</div>
+            <div style={{ fontSize: 13, color: '#6B7280' }}>Reklam yükleniyor...</div>
+          </div>
+        )}
 
-        <div style={{ margin: '20px 0 4px', fontSize: 28, fontWeight: 900, color: canClose ? '#863bff' : '#1A1A2E', fontFamily: "'Sora', sans-serif", minHeight: 40 }}>
-          {canClose ? '✓' : seconds}
+        <div style={{ padding: '16px 20px 20px', background: '#fff' }}>
+          <div style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: canClose ? '#863bff' : '#1A1A2E', fontFamily: "'Sora', sans-serif", minHeight: 36 }}>
+            {canClose ? '✓' : seconds}
+          </div>
+          <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>
+            {canClose ? 'Hazır!' : 'saniye sonra geçebilirsin'}
+          </div>
+          <button
+            onClick={canClose ? onClose : undefined}
+            style={{
+              padding: '14px', borderRadius: 12, border: 'none',
+              background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : '#E5E7EB',
+              color: canClose ? '#FFF' : '#9CA3AF', fontSize: 15, fontWeight: 700,
+              cursor: canClose ? 'pointer' : 'default',
+              width: '100%', WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            {canClose ? '▶ Oyuna Başla' : `${seconds} saniye...`}
+          </button>
         </div>
-        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>
-          {canClose ? 'Hazır!' : 'saniye sonra oyun başlıyor'}
-        </div>
-
-        <button
-          onClick={canClose ? onClose : undefined}
-          style={{
-            padding: '14px', borderRadius: 12, border: 'none',
-            background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : '#E5E7EB',
-            color: canClose ? '#FFF' : '#9CA3AF', fontSize: 15, fontWeight: 700,
-            cursor: canClose ? 'pointer' : 'default',
-            width: '100%',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          {canClose ? '▶ Oyuna Başla' : `${seconds} saniye...`}
-        </button>
       </div>
     </div>
   );
@@ -8429,9 +8595,13 @@ function getLevelInfo(xp) {
   return Object.assign({}, cur, { next: next, progress: progress });
 }
 
-function calcXpGain(result, winStreak) {
-  if (result === 'win') { var xp = 30; if (winStreak >= 3) xp += 10; if (winStreak >= 5) xp += 10; return xp; }
-  return result === 'loss' ? 10 : 5;
+function calcXpGain(result, winStreak, difficulty) {
+  var base;
+  if (result === 'win') { base = 30; if (winStreak >= 3) base += 10; if (winStreak >= 5) base += 10; }
+  else if (result === 'loss') base = 10;
+  else base = 5;
+  var mult = difficulty === 'hard' ? 1.5 : difficulty === 'easy' ? 0.75 : 1;
+  return Math.round(base * mult);
 }
 
 var BADGE_DEFS = [
@@ -8535,45 +8705,63 @@ var TIER_STYLES = {
   diamond: { bg:'rgba(134,59,255,0.13)', border:'rgba(134,59,255,0.35)', dot:'#863bff', label:'Elmas' },
 };
 
+var TIER_ORDER = ['bronze','silver','gold','diamond'];
+var TIER_LABELS = { bronze:'🥉 Bronz', silver:'🥈 Gümüş', gold:'🥇 Altın', diamond:'💎 Elmas' };
+
 function BadgeGrid({ badges }) {
   var s1 = useState(false); var showAll = s1[0]; var setShowAll = s1[1];
   var earned = BADGE_DEFS.filter(function(b) { return badges && badges[b.id]; });
-  var locked = BADGE_DEFS.filter(function(b) { return !badges || !badges[b.id]; });
-  var lockedVisible = showAll ? locked : locked.slice(0, Math.max(4, 8 - earned.length));
+  var totalEarned = earned.length;
+
   return (
     <div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1 }}>
-          Rozetler ({earned.length}/{BADGE_DEFS.length})
+          Rozetler ({totalEarned}/{BADGE_DEFS.length})
         </div>
         <button onClick={function(){ setShowAll(function(p){ return !p; }); }}
           style={{ background:'none', border:'none', color:'#863bff', fontWeight:700, fontSize:12, cursor:'pointer', padding:'4px 8px' }}>
           {showAll ? '▲ Gizle' : '▼ Tümünü Gör'}
         </button>
       </div>
-      {earned.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>Henüz rozet kazanılmadı — oynamaya başla!</div>
+      {totalEarned === 0 && (
+        <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, padding: '12px 0' }}>Henüz rozet kazanılmadı — oynamaya başla!</div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-        {earned.map(function(b) {
-          var t = TIER_STYLES[b.tier] || TIER_STYLES.bronze;
-          return (
-            <div key={b.id} title={b.name} style={{ background: t.bg, border: '1px solid '+t.border, borderRadius: 12, padding: '10px 4px', textAlign: 'center', position:'relative' }}>
-              <div style={{ position:'absolute', top:5, right:6, width:6, height:6, borderRadius:'50%', background:t.dot }} />
-              <div style={{ fontSize: 22 }}>{b.icon}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, marginTop: 4, color: 'var(--text)', lineHeight: 1.2 }}>{b.name}</div>
+      {TIER_ORDER.map(function(tier) {
+        var t = TIER_STYLES[tier];
+        var tierEarned = BADGE_DEFS.filter(function(b){ return b.tier===tier && badges && badges[b.id]; });
+        var tierLocked = BADGE_DEFS.filter(function(b){ return b.tier===tier && (!badges || !badges[b.id]); });
+        var lockedVisible = showAll ? tierLocked : tierLocked.slice(0, 4);
+        if (tierEarned.length === 0 && !showAll) return null;
+        return (
+          <div key={tier} style={{ marginBottom: 16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+              <div style={{ fontWeight:800, fontSize:12, color: t.dot, textTransform:'uppercase', letterSpacing:1 }}>{TIER_LABELS[tier]}</div>
+              <div style={{ flex:1, height:1, background: t.border }} />
+              <div style={{ fontSize:11, color: t.dot, fontWeight:700 }}>{tierEarned.length}/{BADGE_DEFS.filter(function(b){return b.tier===tier;}).length}</div>
             </div>
-          );
-        })}
-        {lockedVisible.map(function(b) {
-          return (
-            <div key={b.id} title={b.name+' (kilitli)'} style={{ background: 'var(--surface-hover)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 4px', textAlign: 'center', opacity: 0.35 }}>
-              <div style={{ fontSize: 22, filter: 'grayscale(1)' }}>{b.icon}</div>
-              <div style={{ fontSize: 9, fontWeight: 600, marginTop: 4, color: 'var(--text-secondary)', lineHeight: 1.2 }}>{b.name}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+              {tierEarned.map(function(b) {
+                return (
+                  <div key={b.id} title={b.name} style={{ background: t.bg, border: '2px solid '+t.border, borderRadius: 12, padding: '10px 4px', textAlign: 'center', position:'relative' }}>
+                    <div style={{ position:'absolute', top:4, right:5, width:7, height:7, borderRadius:'50%', background:t.dot }} />
+                    <div style={{ fontSize: 22 }}>{b.icon}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, marginTop: 4, color: 'var(--text)', lineHeight: 1.2 }}>{b.name}</div>
+                  </div>
+                );
+              })}
+              {showAll && lockedVisible.map(function(b) {
+                return (
+                  <div key={b.id} title={b.name+' — kilitli'} style={{ background: 'var(--surface-hover)', border: '1px dashed var(--border)', borderRadius: 12, padding: '10px 4px', textAlign: 'center', opacity: 0.45 }}>
+                    <div style={{ fontSize: 22, filter: 'grayscale(1)' }}>{b.icon}</div>
+                    <div style={{ fontSize: 9, fontWeight: 600, marginTop: 4, color: 'var(--text-secondary)', lineHeight: 1.2 }}>{b.name}</div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -9791,14 +9979,16 @@ export default function App() {
 
   const [shareResult, setShareResult] = useState(null);
   const [floatingXP, setFloatingXP] = useState(null);
+  const [profileInitialTab, setProfileInitialTab] = useState('profil');
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
     setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2500);
   };
 
-  const handleGameEnd = (result) => {
+  const handleGameEnd = (result, opts) => {
     if (!selectedGame) return;
+    const difficulty = (opts && opts.difficulty) || null;
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86400000).toDateString();
     const gid = selectedGame.id;
@@ -9816,7 +10006,7 @@ export default function App() {
 
       const wsNow = result === 'win' ? (prev.currentWinStreak || 0) + 1 : 0;
       const bestWs = Math.max(prev.bestWinStreak || 0, wsNow);
-      const xpGain = calcXpGain(result, wsNow);
+      const xpGain = calcXpGain(result, wsNow, difficulty);
       const newXp = (prev.xp || 0) + xpGain;
       const newLevel = getLevelInfo(newXp).level;
 
@@ -9899,7 +10089,7 @@ export default function App() {
       return draft;
     });
 
-    const xpGain = calcXpGain(result, stats.currentWinStreak || 0);
+    const xpGain = calcXpGain(result, stats.currentWinStreak || 0, difficulty);
     const gameName = selectedGame.name;
     const gameToReplay = selectedGame;
     // Hemen lobby'ye geç — oyun ekranı kapansın, çift çağrı önlensin
@@ -10291,6 +10481,7 @@ export default function App() {
             !['lobby', 'profile', 'leaderboard', 'multiplayer'].includes(page)
           }
           onProfile={() => setPage('profile')}
+          onProfileTab={(tab) => { setProfileInitialTab(tab); setPage('profile'); }}
           onLeaderboard={() => setPage('leaderboard')}
           onMultiplayer={() => setPage('multiplayer')}
           onHome={handleHome}
@@ -10320,6 +10511,7 @@ export default function App() {
             user={user}
             stats={stats}
             userAvatar={userAvatar}
+            initialTab={profileInitialTab}
             onAvatarChange={(e) => { setUserAvatar(e); try { localStorage.setItem('oyunclub_avatar', e); } catch {} }}
             onLogout={() => {
               setUser(null);
