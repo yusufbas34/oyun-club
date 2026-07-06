@@ -4816,7 +4816,7 @@ const Header = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '14px 20px',
+      padding: '12px 16px',
       background: 'var(--header-bg)',
       backdropFilter: 'blur(20px)',
       borderBottom: '1px solid var(--border)',
@@ -4824,9 +4824,10 @@ const Header = ({
       top: 0,
       zIndex: 100,
       transition: 'background 0.3s ease',
+      minWidth: 0,
     }}
   >
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
       {showBack && (
         <button
           onClick={onBack}
@@ -4837,8 +4838,9 @@ const Header = ({
             fontSize: 20,
             display: 'flex',
             alignItems: 'center',
-            padding: 4,
+            padding: '4px 6px',
             color: 'var(--text)',
+            flexShrink: 0,
           }}
         >
           ←
@@ -4849,32 +4851,26 @@ const Header = ({
         style={{
           fontFamily: "'Sora', sans-serif",
           fontWeight: 800,
-          fontSize: 20,
+          fontSize: 18,
           letterSpacing: '-0.5px',
           cursor: 'pointer',
+          whiteSpace: 'nowrap',
         }}
       >
         oyun<span style={{ color: '#E63946' }}>.</span>club
       </span>
     </div>
     {user && (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
         <button
           onClick={onToggleDark}
           title={dark ? 'Açık Mod' : 'Karanlık Mod'}
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 18,
-            padding: '6px 10px',
-            borderRadius: 8,
-            transition: 'var(--transition)',
-            color: 'var(--text)',
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 17, padding: '6px 8px', borderRadius: 8,
+            transition: 'var(--transition)', color: 'var(--text)',
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = 'var(--surface-hover)')
-          }
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
         >
           {dark ? '☀️' : '🌙'}
@@ -4883,17 +4879,11 @@ const Header = ({
           onClick={onMultiplayer}
           title="Multiplayer"
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 18,
-            padding: '6px 10px',
-            borderRadius: 8,
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 17, padding: '6px 8px', borderRadius: 8,
             transition: 'var(--transition)',
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = 'var(--surface-hover)')
-          }
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
         >
           🎮
@@ -4902,52 +4892,28 @@ const Header = ({
           onClick={onLeaderboard}
           title="Skor Tablosu"
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 18,
-            padding: '6px 10px',
-            borderRadius: 8,
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 17, padding: '6px 8px', borderRadius: 8,
             transition: 'var(--transition)',
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = 'var(--surface-hover)')
-          }
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
         >
           🏆
         </button>
         <button
           onClick={onProfile}
+          title={user.name}
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '4px 8px',
-            borderRadius: 50,
+            background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center',
+            padding: '4px 6px', borderRadius: 50,
             transition: 'var(--transition)',
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = 'var(--surface-hover)')
-          }
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
         >
-          <Avatar name={user.name} size={32} />
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 500,
-              maxWidth: 100,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {user.name}
-          </span>
+          <Avatar name={user.name} size={30} />
         </button>
       </div>
     )}
