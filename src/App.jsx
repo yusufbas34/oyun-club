@@ -1234,6 +1234,14 @@ function MultiplayerLobby(props) {
     return function() { clearTimeout(t); };
   }, [sock.playerJoinedToast]);
 
+  // Kullanıcı başka sayfaya geçip odada bekliyorsa 10sn sonra odayı kapat
+  useEffect(function() {
+    if (props.active !== false) return;
+    if (!sock.roomData) return;
+    var t = setTimeout(function() { sock.leaveRoom(); }, 10000);
+    return function() { clearTimeout(t); };
+  }, [props.active, !!sock.roomData]);
+
   // Fetch public rooms on mount; rooms_updated socket event handles real-time updates
   useEffect(function() {
     if (!sock.roomData) {
@@ -8629,14 +8637,16 @@ export default function App() {
         {page === 'leaderboard' && (
           <LeaderboardPage user={user} stats={stats} />
         )}
-        {page === 'multiplayer' && (
+        {/* MultiplayerLobby her zaman mount'lu — odanın kapanmaması için */}
+        <div style={{ display: page === 'multiplayer' ? 'block' : 'none' }}>
           <MultiplayerLobby
             initialCode={roomId}
             initialGame={selectedGame?.id}
             userName={user ? user.name : ''}
             onSelectGame={handleSelectGame}
+            active={page === 'multiplayer'}
           />
-        )}
+        </div>
         {page === 'room' && selectedGame && (
           <RoomLobby
             game={selectedGame}
