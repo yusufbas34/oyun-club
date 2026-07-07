@@ -271,14 +271,16 @@ function useSocket(username) {
               return prev.map(function(f) { return f.userId === data.userId ? Object.assign({},f,{online:false}) : f; });
             });
           });
-          socket.on('friend_request_received', function(data) {
+          socket.on('friend_request_incoming', function(data) {
             setFriendRequests(function(prev) { return prev.concat([data]); });
             setFriendToast('🤝 ' + data.fromName + ' arkadaşlık isteği gönderdi!');
             setTimeout(function(){ setFriendToast(null); }, 4000);
           });
           socket.on('friend_accepted', function(data) {
-            setFriendList(function(prev) { return prev.concat([{userId:data.userId,name:data.name,online:true}]); });
-            setFriendToast('✅ ' + data.name + ' arkadaşlık isteğini kabul etti!');
+            var uid = data.byId || data.userId;
+            var uname = data.byName || data.name;
+            setFriendList(function(prev) { return prev.concat([{userId:uid,name:uname,online:true}]); });
+            setFriendToast('✅ ' + uname + ' arkadaşlık isteğini kabul etti!');
             setTimeout(function(){ setFriendToast(null); }, 4000);
           });
           socket.on('friend_removed', function(data) {
@@ -424,7 +426,7 @@ function useSocket(username) {
     socketRef.current.emit('get_friends', null, function(res) {
       if (res && res.friends) {
         setFriendList(res.friends);
-        setFriendRequests(res.requests || []);
+        setFriendRequests(res.pending || res.requests || []);
       }
       if (cb) cb(res);
     });
@@ -432,7 +434,7 @@ function useSocket(username) {
 
   var sendFriendRequest = useCallback(function(toUserId, cb) {
     if (!socketRef.current) return;
-    socketRef.current.emit('friend_request', { toUserId }, cb || function(){});
+    socketRef.current.emit('friend_request', { toId: toUserId }, cb || function(){});
   }, []);
 
   var acceptFriend = useCallback(function(fromId, cb) {
@@ -5388,7 +5390,7 @@ function FriendPanel({ sock, myUserId }) {
     setLoading(true); setSearchMsg('');
     sock.searchUser(searchQ.trim(), (res) => {
       setLoading(false);
-      setSearchResults((res?.results || []).filter(u => u.userId !== myUserId));
+      setSearchResults((res?.users || res?.results || []).filter(u => u.userId !== myUserId));
       if (!res?.results?.length) setSearchMsg('Kullanıcı bulunamadı');
     });
   };
