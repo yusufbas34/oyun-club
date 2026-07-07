@@ -5522,6 +5522,7 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
     { id: 'profil', label: '👤 Profil' },
     { id: 'istatistik', label: '📊 İstatistik' },
     { id: 'rozetler', label: '🏅 Rozetler' },
+    { id: 'arkadaşlar', label: '👥 Arkadaşlar' },
     { id: 'ayarlar', label: '⚙️ Ayarlar' },
   ];
 
@@ -5826,16 +5827,25 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
       )}
       </div>}
 
+      {/* ARKADAŞLAR TAB */}
+      {activeTab === 'arkadaşlar' && (
+        <div>
+          {sock && sock.myUserId ? (
+            <Card style={{ padding: 20 }}>
+              <FriendPanel sock={sock} myUserId={sock.myUserId} />
+            </Card>
+          ) : (
+            <Card style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Bağlanıyor...</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Arkadaş sistemi için sunucuya bağlanmanız gerekiyor.</div>
+            </Card>
+          )}
+        </div>
+      )}
+
       {/* AYARLAR TAB */}
       {activeTab === 'ayarlar' && <div>
-      {sock && sock.myUserId && (
-        <Card style={{ padding: 20, marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-            Arkadaşlar
-          </div>
-          <FriendPanel sock={sock} myUserId={sock.myUserId} />
-        </Card>
-      )}
 
       {/* Settings */}
       <Card style={{ padding: 20, marginBottom: 20 }}>
@@ -6224,7 +6234,7 @@ const LeaderboardPage = ({ user, stats }) => {
 // ============================================================
 // BOTTOM NAV (mobile only — CSS hides on desktop)
 // ============================================================
-function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile }) {
+function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile, friendRequestCount }) {
   return (
     <nav className="bottom-nav">
       <button className={`bnav-tab${page === 'lobby' ? ' bnav-active' : ''}`} onClick={onLobby}>
@@ -6242,10 +6252,13 @@ function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile }) {
         <span className="bnav-label">Sıralama</span>
         <span className="bnav-dot"></span>
       </button>
-      <button className={`bnav-tab${page === 'profile' ? ' bnav-active' : ''}`} onClick={onProfile}>
+      <button className={`bnav-tab${page === 'profile' ? ' bnav-active' : ''}`} onClick={onProfile} style={{position:'relative'}}>
         <span className="bnav-icon">🧑</span>
         <span className="bnav-label">Profil</span>
         <span className="bnav-dot"></span>
+        {friendRequestCount > 0 && (
+          <span style={{position:'absolute',top:6,right:'50%',transform:'translateX(10px)',background:'#ef4444',color:'#fff',borderRadius:10,padding:'1px 5px',fontSize:10,fontWeight:700,minWidth:16,textAlign:'center',lineHeight:'14px'}}>{friendRequestCount}</span>
+        )}
       </button>
     </nav>
   );
@@ -6270,7 +6283,7 @@ const GAME_BG_MAP = {
   wordrace: 'linear-gradient(135deg,#9333EA,#EC4899)',
 };
 
-const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
+const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onGoFriends }) => {
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [showJoin, setShowJoin] = useState(false);
@@ -6328,6 +6341,34 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
         </div>
       )}
       <DailyQuestBanner stats={stats} />
+
+      {/* Online Arkadaşlar Widget */}
+      {sock && (sock.friendList || []).filter(f => f.online).length > 0 && (
+        <div style={{ background: 'linear-gradient(135deg,rgba(34,197,94,0.08),rgba(16,185,129,0.08))', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, animation: 'fadeUp 0.35s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'livePulse 2s ease-in-out infinite' }} />
+              <span style={{ fontWeight: 700, fontSize: 13, color: '#22c55e' }}>{(sock.friendList || []).filter(f => f.online).length} Arkadaş Online</span>
+            </div>
+            {onGoFriends && <button onClick={onGoFriends} style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px' }}>Tümü →</button>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(sock.friendList || []).filter(f => f.online).map(f => (
+              <div key={f.userId} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', borderRadius: 20, padding: '5px 12px 5px 8px', border: '1px solid var(--border)' }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#22c55e,#16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 11 }}>
+                  {f.name.charAt(0).toUpperCase()}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{f.name}</span>
+                <button onClick={() => sock.inviteFriend && sock.inviteFriend(f.userId, null, null)}
+                  style={{ fontSize: 11, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', border: 'none', borderRadius: 8, padding: '3px 8px', cursor: 'pointer', fontWeight: 700 }}>
+                  Davet Et
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: 24, animation: 'fadeUp 0.4s ease' }}>
         <h1
           style={{
@@ -11306,6 +11347,45 @@ export default function App() {
     <>
       <GlobalStyle dark={dark} />
       {floatingXP && <FloatingXP xp={floatingXP} onDone={() => setFloatingXP(null)} />}
+
+      {/* Friend Toast */}
+      {sock && sock.friendToast && (
+        <div style={{ position: 'fixed', top: 70, left: '50%', transform: 'translateX(-50%)', zIndex: 9000, background: 'linear-gradient(135deg,#1e1b4b,#312e81)', color: '#fff', borderRadius: 14, padding: '12px 20px', fontSize: 14, fontWeight: 600, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', border: '1px solid rgba(134,59,255,0.4)', maxWidth: 320, textAlign: 'center', animation: 'fadeUp 0.3s ease', whiteSpace: 'nowrap' }}>
+          {sock.friendToast}
+        </div>
+      )}
+
+      {/* Game Invite Modal */}
+      {sock && sock.gameInvite && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 32, maxWidth: 320, width: '90%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', border: '1px solid var(--border)', animation: 'fadeUp 0.3s ease' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🎮</div>
+            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>Oyun Daveti!</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
+              <strong style={{ color: 'var(--text)' }}>{sock.gameInvite.fromName}</strong> seni bir oyuna bekliyor
+              {sock.gameInvite.gameId && <span> — <strong>{sock.gameInvite.gameId}</strong></span>}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { sock.clearGameInvite(); }}
+                style={{ flex: 1, padding: '12px', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                Reddet
+              </button>
+              <button onClick={() => {
+                const invite = sock.gameInvite;
+                sock.clearGameInvite();
+                if (invite.roomId) {
+                  window.location.hash = '#room=' + invite.roomId;
+                  window.location.reload();
+                }
+              }}
+                style={{ flex: 2, padding: '12px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                ✓ Kabul Et
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {shareResult && (
         <ShareResultOverlay
           gameName={shareResult.gameName}
@@ -11368,6 +11448,7 @@ export default function App() {
             onMultiplayer={() => setPage('multiplayer')}
             onLeaderboard={() => setPage('leaderboard')}
             onProfile={() => setPage('profile')}
+            friendRequestCount={sock ? (sock.friendRequests || []).length : 0}
           />
         )}
         {page === 'lobby' && (
@@ -11377,6 +11458,8 @@ export default function App() {
             onMultiplayer={() => setPage('multiplayer')}
             user={user}
             stats={stats}
+            sock={sock}
+            onGoFriends={() => { setProfileInitialTab('arkadaşlar'); setPage('profile'); }}
           />
         )}
         {page === 'profile' && (
@@ -11385,6 +11468,7 @@ export default function App() {
             stats={stats}
             userAvatar={userAvatar}
             initialTab={profileInitialTab}
+            sock={sock}
             onAvatarChange={(e) => { setUserAvatar(e); try { localStorage.setItem('oyunclub_avatar', e); } catch {} }}
             onLogout={() => {
               setUser(null);
