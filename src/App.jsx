@@ -94,6 +94,17 @@ function useSocket(username) {
                 if (res.user && res.user.id) {
                   setMyUserId(res.user.id);
                   try { localStorage.setItem('oyunclub_userid', res.user.id); } catch(e){}
+                  // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
+                  socket.emit('get_friends', null, function(r) {
+                    if (r && r.friends) {
+                      setFriendList(r.friends);
+                      setFriendRequests(r.pending || r.requests || []);
+                      if ((r.pending || r.requests || []).length > 0) {
+                        setFriendToast('🤝 ' + (r.pending || r.requests).length + ' bekleyen arkadaşlık isteği var!');
+                        setTimeout(function(){ setFriendToast(null); }, 5000);
+                      }
+                    }
+                  });
                 }
               } else {
                 setSocketError(res ? res.error : 'Kayit basarisiz');
@@ -5394,7 +5405,7 @@ function FriendPanel({ sock, myUserId }) {
       if (res?.error) { setSearchMsg('❌ ' + res.error); return; }
       const found = (res?.users || res?.results || []).filter(u => u.userId !== myUserId);
       setSearchResults(found);
-      if (!found.length) setSearchMsg('Kullanıcı bulunamadı. Kişinin uygulamayı açık tutması gerekiyor.');
+      if (!found.length) setSearchMsg('Kullanıcı bulunamadı. İsmi tam yazmayı dene.');
       else setSearchMsg('');
     });
   };
@@ -6243,7 +6254,7 @@ const LeaderboardPage = ({ user, stats }) => {
 // ============================================================
 // BOTTOM NAV (mobile only — CSS hides on desktop)
 // ============================================================
-function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile, friendRequestCount }) {
+function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile, onFriends, friendRequestCount }) {
   return (
     <nav className="bottom-nav">
       <button className={`bnav-tab${page === 'lobby' ? ' bnav-active' : ''}`} onClick={onLobby}>
@@ -6261,7 +6272,7 @@ function BottomNav({ page, onLobby, onMultiplayer, onLeaderboard, onProfile, fri
         <span className="bnav-label">Sıralama</span>
         <span className="bnav-dot"></span>
       </button>
-      <button className={`bnav-tab${page === 'profile' ? ' bnav-active' : ''}`} onClick={onProfile} style={{position:'relative'}}>
+      <button className={`bnav-tab${page === 'profile' ? ' bnav-active' : ''}`} onClick={friendRequestCount > 0 ? onFriends : onProfile} style={{position:'relative'}}>
         <span className="bnav-icon">🧑</span>
         <span className="bnav-label">Profil</span>
         <span className="bnav-dot"></span>
@@ -11478,6 +11489,7 @@ export default function App() {
             onMultiplayer={() => setPage('multiplayer')}
             onLeaderboard={() => setPage('leaderboard')}
             onProfile={() => setPage('profile')}
+            onFriends={() => { setProfileInitialTab('arkadaşlar'); setPage('profile'); }}
             friendRequestCount={sock ? (sock.friendRequests || []).length : 0}
           />
         )}
