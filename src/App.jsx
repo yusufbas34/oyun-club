@@ -4546,7 +4546,37 @@ const GAMES = [
     color: '#6366F1',
     bg: 'linear-gradient(135deg, #6366F1 0%, #A78BFA 100%)',
   },
+  {
+    id: 'adamasmaca',
+    name: 'Adam Asmaca',
+    desc: 'Türkçe kelimeyi 6 denemede bul',
+    icon: '🪢',
+    players: 1,
+    genre: 'kelime',
+    isNew: true,
+    color: '#6366F1',
+    bg: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
+  },
+  {
+    id: 'stroop',
+    name: 'Stroop Testi',
+    desc: 'Kelimenin rengini seç — zihin oyunu',
+    icon: '🎨',
+    players: 1,
+    genre: 'hız',
+    isNew: true,
+    popular: true,
+    color: '#BE185D',
+    bg: 'linear-gradient(135deg, #BE185D 0%, #F472B6 100%)',
+  },
 ];
+
+const getDailyGameId = () => {
+  var d = new Date();
+  var dayNum = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  var popularGames = GAMES.filter(function(g){ return g.players === 1 || !g.local; });
+  return popularGames[dayNum % popularGames.length].id;
+};
 
 const generateRoomId = () =>
   Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -5917,6 +5947,8 @@ const FAKE_LB = {
   dama:        [ { name: 'Pelin Y.',   played: 32, wins: 25, avatar: 5 }, { name: 'Rıza K.',    played: 28, wins: 21, avatar: 2 }, { name: 'Selma A.',   played: 25, wins: 18, avatar: 1 }, { name: 'Taner M.',   played: 22, wins: 15, avatar: 3 }, { name: 'Ufuk D.',    played: 19, wins: 12, avatar: 0 } ],
   tavla:       [ { name: 'Veli T.',    played: 30, wins: 22, avatar: 3 }, { name: 'Yıldız K.',  played: 27, wins: 19, avatar: 1 }, { name: 'Zafer A.',   played: 24, wins: 17, avatar: 0 }, { name: 'Alper M.',   played: 21, wins: 14, avatar: 4 }, { name: 'Belma S.',   played: 18, wins: 11, avatar: 2 } ],
   gomoku:      [ { name: 'Cem B.',     played: 36, wins: 28, avatar: 0 }, { name: 'Duygu A.',   played: 32, wins: 24, avatar: 2 }, { name: 'Ercan Y.',   played: 28, wins: 20, avatar: 4 }, { name: 'Fatma K.',   played: 24, wins: 17, avatar: 1 }, { name: 'Güner T.',   played: 21, wins: 14, avatar: 3 } ],
+  adamasmaca: [ { name: 'Zeynep K.',  played: 45, wins: 38, avatar: 1 }, { name: 'Berk A.',   played: 40, wins: 32, avatar: 0 }, { name: 'Seda T.',   played: 35, wins: 27, avatar: 3 }, { name: 'Mert Y.',   played: 30, wins: 22, avatar: 2 }, { name: 'Gül M.',    played: 25, wins: 17, avatar: 4 } ],
+  stroop:     [ { name: 'Ali K.',     played: 38, wins: 30, avatar: 2 }, { name: 'Ayşe T.',   played: 32, wins: 25, avatar: 5 }, { name: 'Can D.',    played: 28, wins: 21, avatar: 0 }, { name: 'Deniz Y.',  played: 25, wins: 18, avatar: 1 }, { name: 'Elif M.',   played: 22, wins: 15, avatar: 3 } ],
 };
 
 const LeaderboardPage = ({ user, stats }) => {
@@ -6522,6 +6554,29 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
         )}
       </div>
 
+      {/* Daily Challenge */}
+      {(function(){
+        var dailyId = getDailyGameId();
+        var dailyGame = GAMES.find(function(g){ return g.id === dailyId; });
+        if(!dailyGame) return null;
+        return (
+          <div onClick={function(){ onSelectGame(dailyGame); }} style={{borderRadius:16,overflow:'hidden',marginBottom:18,cursor:'pointer',background:dailyGame.bg,position:'relative'}}>
+            <div style={{padding:'16px 20px',color:'#fff'}}>
+              <div style={{fontSize:11,fontWeight:800,letterSpacing:1,opacity:0.8,marginBottom:4}}>⭐ GÜNÜN OYUNU</div>
+              <div style={{display:'flex',alignItems:'center',gap:12}}>
+                <span style={{fontSize:36}}>{dailyGame.icon}</span>
+                <div>
+                  <div style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>{dailyGame.name}</div>
+                  <div style={{fontSize:13,opacity:0.85}}>{dailyGame.desc}</div>
+                </div>
+                <div style={{marginLeft:'auto',background:'rgba(255,255,255,0.2)',borderRadius:20,padding:'6px 14px',fontWeight:700,fontSize:13}}>
+                  2× XP 🚀
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Search bar */}
       <div style={{ position: 'relative', marginBottom: 14 }}>
         <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, opacity: 0.5 }}>🔍</span>
@@ -9785,6 +9840,304 @@ function DailyQuestBanner({ stats }) {
 }
 
 // ============================================================
+// ADAM ASMACA GAME
+// ============================================================
+var ASMACA_WORDS = [
+  'araba','elma','masa','kalem','kitap','okul','yol','ağaç','deniz','dağ',
+  'çiçek','güneş','yıldız','bulut','rüzgar','yağmur','fırtına','yılan',
+  'kelebek','aslan','kaplan','fil','deve','tavşan','tilki','kartal',
+  'portakal','domates','patates','soğan','sarımsak','biber','kavun','karpuz',
+  'hastane','öğretmen','mühendis','doktor','avukat','öğrenci','arkadaş',
+  'bayram','tatil','yolculuk','macera','hazine','gizem','efsane','kahraman',
+  'mevsim','sonbahar','ilkbahar','yüzyıl','tarih','kültür','sanat','müzik',
+  'futbol','basketbol','tenis','yüzme','koşu','bisiklet','satranç',
+  'bilgisayar','telefon','internet','program','uygulama','oyun','film',
+  'mutfak','banyo','pencere','merdiven','balkon','bahçe','çatı','duvar',
+];
+
+var ASMACA_TR_ALPHABET = 'ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ'.split('');
+
+function AdamAsmacaGame({ game, onGameEnd, soundOn }) {
+  var MAX_WRONG = 6;
+  var s0 = React.useState(null); var phase = s0[0]; var setPhase = s0[1];
+  var s1 = React.useState(''); var word = s1[0]; var setWord = s1[1];
+  var s2 = React.useState([]); var guessed = s2[0]; var setGuessed = s2[1];
+  var s3 = React.useState(0); var wrongCount = s3[0]; var setWrongCount = s3[1];
+
+  function startGame() {
+    var w = ASMACA_WORDS[Math.floor(Math.random()*ASMACA_WORDS.length)].toUpperCase();
+    setWord(w); setGuessed([]); setWrongCount(0); setPhase('playing');
+  }
+
+  function guess(letter) {
+    if(guessed.indexOf(letter)!==-1 || phase!=='playing') return;
+    var newGuessed = guessed.concat([letter]);
+    setGuessed(newGuessed);
+    var wordUp = word;
+    var letterInWord = wordUp.indexOf(letter)!==-1 || (letter==='I' && wordUp.indexOf('İ')!==-1) || (letter==='İ' && wordUp.indexOf('I')!==-1);
+    if(!letterInWord) {
+      var nw = wrongCount+1;
+      setWrongCount(nw);
+      if(soundOn) playSound('wrong');
+      playHaptic('wrong');
+      if(nw>=MAX_WRONG) { setPhase('lost'); onGameEnd('loss'); }
+    } else {
+      if(soundOn) playSound('correct');
+      playHaptic('correct');
+      // Check win: all letters guessed
+      var allGuessed = wordUp.split('').every(function(c){
+        if(c==='_' || c===' ') return true;
+        return newGuessed.indexOf(c)!==-1;
+      });
+      if(allGuessed) { setPhase('won'); onGameEnd('win'); }
+    }
+  }
+
+  var HANGMAN_STAGES = [
+    '😊','😟','😰','😨','😱','💀','☠️'
+  ];
+
+  if(!phase) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+      <div style={{fontSize:72,marginBottom:8}}>🪢</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Adam Asmaca</h2>
+      <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:12}}>Kelimeyi bulmaya çalış! 6 yanlış tahmin hakkın var.</p>
+      <div style={{display:'flex',justifyContent:'center',gap:6,marginBottom:28}}>
+        {Array.from({length:MAX_WRONG+1}).map(function(_,i){
+          return <span key={i} style={{fontSize:20}}>{HANGMAN_STAGES[i]}</span>;
+        })}
+      </div>
+      <button onClick={startGame} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366F1,#8B5CF6)',color:'#fff',fontSize:17,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+        Başla
+      </button>
+    </div>
+  );
+
+  var displayWord = word.split('').map(function(c){
+    return guessed.indexOf(c)!==-1 ? c : (c===' '?'  ':'_');
+  });
+
+  var wrongLetters = guessed.filter(function(l){ return word.indexOf(l)===-1; });
+
+  if(phase==='won' || phase==='lost') return (
+    <div style={{maxWidth:400,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+      <div style={{fontSize:64,marginBottom:12}}>{phase==='won'?'🎉':'💀'}</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:26,marginBottom:8}}>
+        {phase==='won'?'Tebrikler!':'Kaybettin!'}
+      </h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:4}}>
+        {phase==='won'?'Kelimeyi buldun:':'Kelime:'}
+      </p>
+      <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:'#6366F1',marginBottom:20}}>{word}</div>
+      <button onClick={startGame} style={{display:'block',width:'100%',padding:14,borderRadius:12,background:'linear-gradient(135deg,#6366F1,#8B5CF6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer',marginBottom:10}}>
+        Tekrar Oyna
+      </button>
+      <button onClick={function(){onGameEnd(phase==='won'?'win':'loss');}} style={{display:'block',width:'100%',padding:12,borderRadius:12,background:'var(--surface-hover)',color:'var(--text)',border:'1px solid var(--border)',fontWeight:600,fontSize:14,cursor:'pointer'}}>
+        Çık
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{maxWidth:420,margin:'0 auto',padding:'20px 16px'}}>
+      {/* Hangman visual */}
+      <div style={{textAlign:'center',marginBottom:16}}>
+        <div style={{fontSize:60,lineHeight:1}}>{HANGMAN_STAGES[wrongCount]}</div>
+        <div style={{display:'flex',justifyContent:'center',gap:4,marginTop:8}}>
+          {Array.from({length:MAX_WRONG}).map(function(_,i){
+            return <div key={i} style={{width:12,height:12,borderRadius:'50%',background:i<wrongCount?'#EF4444':'var(--border)'}} />;
+          })}
+        </div>
+        <div style={{fontSize:12,color:wrongCount>=4?'#EF4444':'var(--text-secondary)',marginTop:4}}>
+          {MAX_WRONG-wrongCount} hak kaldı
+        </div>
+      </div>
+      {/* Word display */}
+      <div style={{display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap',marginBottom:24}}>
+        {displayWord.map(function(c,i){
+          return (
+            <div key={i} style={{textAlign:'center',minWidth:24}}>
+              <div style={{fontSize:22,fontWeight:800,letterSpacing:1,color:c!=='_'?'#6366F1':'var(--text)',height:32,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>{c}</div>
+              <div style={{height:2,background:c!=='_'?'#6366F1':'var(--border)',borderRadius:2,marginTop:2}} />
+            </div>
+          );
+        })}
+      </div>
+      {/* Wrong letters */}
+      {wrongLetters.length>0 && (
+        <div style={{textAlign:'center',marginBottom:12,fontSize:13,color:'#EF4444'}}>
+          Yanlış: {wrongLetters.join(', ')}
+        </div>
+      )}
+      {/* Letter keyboard */}
+      <div style={{display:'flex',flexWrap:'wrap',gap:5,justifyContent:'center'}}>
+        {ASMACA_TR_ALPHABET.map(function(letter){
+          var isGuessed = guessed.indexOf(letter)!==-1;
+          var isCorrect = isGuessed && word.indexOf(letter)!==-1;
+          var isWrong = isGuessed && word.indexOf(letter)===-1;
+          return (
+            <button key={letter} onClick={function(){ guess(letter); }} disabled={isGuessed}
+              style={{width:36,height:36,borderRadius:8,border:'1px solid var(--border)',
+                background:isCorrect?'rgba(99,102,241,0.15)':isWrong?'rgba(239,68,68,0.1)':'var(--surface)',
+                color:isCorrect?'#6366F1':isWrong?'#EF4444':'var(--text)',
+                fontWeight:700,fontSize:13,cursor:isGuessed?'default':'pointer',
+                opacity:isGuessed?0.5:1
+              }}>
+              {letter}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// STROOP TESTİ — Color-Word Interference Game
+// ============================================================
+var STROOP_COLORS = [
+  { name:'KIRMIZI', color:'#E63946', label:'KIRMIZI' },
+  { name:'MAVİ',    color:'#2563EB', label:'MAVİ' },
+  { name:'YEŞİL',   color:'#16A34A', label:'YEŞİL' },
+  { name:'SARI',    color:'#D97706', label:'SARI' },
+  { name:'MOR',     color:'#7C3AED', label:'MOR' },
+  { name:'TURUNCU', color:'#EA580C', label:'TURUNCU' },
+];
+
+function generateStroopRound() {
+  var word = STROOP_COLORS[Math.floor(Math.random()*STROOP_COLORS.length)];
+  var colorObj;
+  do { colorObj = STROOP_COLORS[Math.floor(Math.random()*STROOP_COLORS.length)]; } while(colorObj.name===word.name);
+  return { word: word.name, wordColor: colorObj.color, correctName: colorObj.name, correctColor: colorObj.color };
+}
+
+function StroopTestiGame({ game, onGameEnd, soundOn }) {
+  var TOTAL = 20;
+  var s0 = React.useState(null); var phase = s0[0]; var setPhase = s0[1];
+  var s1 = React.useState(0); var score = s1[0]; var setScore = s1[1];
+  var s2 = React.useState(0); var qIdx = s2[0]; var setQIdx = s2[1];
+  var s3 = React.useState(function(){ return generateStroopRound(); }); var round = s3[0]; var setRound = s3[1];
+  var s4 = React.useState(null); var feedback = s4[0]; var setFeedback = s4[1];
+  var s5 = React.useState(0); var combo = s5[0]; var setCombo = s5[1];
+  var s6 = React.useState(45); var timeLeft = s6[0]; var setTimeLeft = s6[1];
+
+  React.useEffect(function(){
+    if(phase!=='playing') return;
+    if(timeLeft<=0){ setPhase('done'); return; }
+    var t = setTimeout(function(){ setTimeLeft(function(v){ return v-1; }); },1000);
+    return function(){ clearTimeout(t); };
+  },[phase,timeLeft]);
+
+  function handleAnswer(colorName) {
+    if(phase!=='playing'||feedback) return;
+    var correct = colorName === round.correctName;
+    if(correct){
+      var newCombo = combo+1;
+      setCombo(newCombo);
+      var pts = 10 + (newCombo>=3?5:0);
+      setScore(function(s){ return s+pts; });
+      if(soundOn) playSound('correct');
+      playHaptic('correct');
+      setFeedback('correct');
+    } else {
+      setCombo(0);
+      if(soundOn) playSound('wrong');
+      playHaptic('wrong');
+      setFeedback('wrong');
+    }
+    setTimeout(function(){
+      setFeedback(null);
+      var next = qIdx+1;
+      if(next>=TOTAL){ setPhase('done'); return; }
+      setQIdx(next);
+      setRound(generateStroopRound());
+    }, 400);
+  }
+
+  var buttons = React.useMemo(function(){
+    var correct = STROOP_COLORS.find(function(c){ return c.name===round.correctName; });
+    var others = STROOP_COLORS.filter(function(c){ return c.name!==round.correctName; });
+    for(var i=others.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=others[i];others[i]=others[j];others[j]=t;}
+    var sel = [correct].concat(others.slice(0,3));
+    for(var k=sel.length-1;k>0;k--){var l=Math.floor(Math.random()*(k+1));var tmp=sel[k];sel[k]=sel[l];sel[l]=tmp;}
+    return sel;
+  },[round]);
+
+  if(!phase) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+      <div style={{fontSize:72,marginBottom:8}}>🎨</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Stroop Testi</h2>
+      <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:8}}>Kelimenin rengini seç, yazdığını değil!</p>
+      <div style={{background:'var(--surface)',borderRadius:14,padding:'16px',marginBottom:20}}>
+        <div style={{fontSize:32,fontWeight:900,color:'#2563EB',marginBottom:8}}>KIRMIZI</div>
+        <p style={{fontSize:12,color:'var(--text-secondary)'}}>⬆️ Bu kelime "KIRMIZI" yazıyor ama MAVİ renkte. Doğru cevap: MAVİ</p>
+      </div>
+      <button onClick={function(){setPhase('playing');}} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#BE185D,#F472B6)',color:'#fff',fontSize:17,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+        Başla
+      </button>
+    </div>
+  );
+
+  if(phase==='done') {
+    var rank = score>=150?'win':score>=80?'draw':'loss';
+    return (
+      <div style={{maxWidth:400,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+        <div style={{fontSize:64,marginBottom:12}}>{score>=150?'🧠':score>=80?'😊':'🤔'}</div>
+        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:26,marginBottom:8}}>
+          {score>=150?'Olağanüstü Beyin!':score>=80?'İyi İş!':'Pratik Yapalım!'}
+        </h2>
+        <div style={{fontSize:48,fontWeight:900,color:'#BE185D',marginBottom:4}}>{score}</div>
+        <div style={{color:'var(--text-secondary)',fontSize:14,marginBottom:8}}>puan · {qIdx} soru</div>
+        <div style={{background:'var(--surface)',borderRadius:12,padding:'12px',marginBottom:20,fontSize:13,color:'var(--text-secondary)'}}>
+          💡 Stroop Etkisi: Beyin renk ve kelime anlamını aynı anda işler. Bu çatışma tepki sürenizi uzatır!
+        </div>
+        <button onClick={function(){onGameEnd(rank);}} style={{display:'block',width:'100%',padding:14,borderRadius:12,background:'linear-gradient(135deg,#BE185D,#F472B6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>
+          Bitir
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{maxWidth:420,margin:'0 auto',padding:'20px 16px'}}>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div style={{fontSize:14,color:'var(--text-secondary)',fontWeight:600}}>{qIdx+1}/{TOTAL}</div>
+        <div style={{padding:'6px 14px',borderRadius:999,background:timeLeft<=10?'rgba(239,68,68,0.12)':'rgba(190,24,93,0.1)',color:timeLeft<=10?'#EF4444':'#BE185D',fontWeight:700,fontSize:14}}>
+          ⏱ {timeLeft}s
+        </div>
+        <div style={{fontWeight:800,fontSize:16,color:'#BE185D'}}>{score}p {combo>=3?'🔥×'+combo:''}</div>
+      </div>
+      {/* The word */}
+      <div style={{textAlign:'center',marginBottom:32,padding:'24px',background:'var(--surface)',borderRadius:20,border:'2px solid var(--border)'}}>
+        <div style={{fontSize:11,color:'var(--text-secondary)',fontWeight:700,letterSpacing:1,marginBottom:8}}>BU KELİMENİN RENGİ NEDİR?</div>
+        <div style={{fontSize:44,fontWeight:900,color:round.wordColor,letterSpacing:2,fontFamily:'monospace'}}>{round.word}</div>
+      </div>
+      {/* Color buttons */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        {buttons.map(function(c){
+          return (
+            <button key={c.name} onClick={function(){ handleAnswer(c.name); }}
+              style={{padding:'16px 8px',borderRadius:14,border:'2px solid '+c.color,
+                background:feedback&&c.name===round.correctName?c.color+'22':'var(--surface)',
+                color:c.color,fontWeight:800,fontSize:14,cursor:'pointer',
+                fontFamily:"'Sora',sans-serif",transition:'transform 0.1s',
+                transform:'scale(1)'}}>
+              ● {c.name}
+            </button>
+          );
+        })}
+      </div>
+      {feedback && (
+        <div style={{textAlign:'center',marginTop:12,fontSize:16,fontWeight:700,color:feedback==='correct'?'#16A34A':'#EF4444'}}>
+          {feedback==='correct'?(combo>=3?'🔥 COMBO! +15':'✅ Doğru! +10'):'❌ Yanlış!'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // KELIME AVCI GAME
 // ============================================================
 
@@ -10105,6 +10458,26 @@ var EMOJI_SORULAR = [
   { emoji:'🐺🌕', answer:'kurt ay', hint:'Türk kültürü' },
   { emoji:'🌺🌸🌼', answer:'çiçek bahçesi', hint:'İfade' },
   { emoji:'🗡️⚖️', answer:'kılıç kalkan', hint:'Sembol' },
+  { emoji:'🇹🇷❤️', answer:'türkiye sevgisi', hint:'Vatanseverlik' },
+  { emoji:'☕📖', answer:'kahve kitap', hint:'Kültürel alışkanlık' },
+  { emoji:'🌙⭐', answer:'ay yıldız', hint:'Türk bayrağı sembolü' },
+  { emoji:'🎭🎪', answer:'tiyatro gösterisi', hint:'Sanat' },
+  { emoji:'🏆⚽', answer:'şampiyon oldu', hint:'Spor' },
+  { emoji:'🐪🏜️', answer:'deve çölü', hint:'Hayvan ve doğa' },
+  { emoji:'🧿💙', answer:'nazar boncuğu', hint:'Türk geleneksel koruması' },
+  { emoji:'🌺🌿', answer:'çiçek bahçe', hint:'Doğa' },
+  { emoji:'🦅🔝', answer:'kartal zirve', hint:'Güç sembolü' },
+  { emoji:'🎵🌙', answer:'gece müziği', hint:'İfade' },
+  { emoji:'🏛️📜', answer:'tarih belgesi', hint:'Kültür' },
+  { emoji:'🌊🏄', answer:'dalgasörfü', hint:'Spor' },
+  { emoji:'🎯🏹', answer:'ok yay hedef', hint:'Geleneksel spor' },
+  { emoji:'💫⭐✨', answer:'yıldızlar parlar', hint:'Doğa' },
+  { emoji:'🦁🐯', answer:'aslan kaplan', hint:'Yabani hayvanlar' },
+  { emoji:'🌋🔥', answer:'yanardağ ateşi', hint:'Doğa olayı' },
+  { emoji:'🎪🎠', answer:'lunapark atlıkarınca', hint:'Eğlence' },
+  { emoji:'🏔️❄️', answer:'karlı dağ', hint:'Doğa' },
+  { emoji:'🌊💙🐬', answer:'deniz delfin', hint:'Deniz canlısı' },
+  { emoji:'🎶🎸', answer:'müzik gitar', hint:'Enstrüman' },
 ];
 
 function shuffle(arr) {
@@ -10431,7 +10804,7 @@ export default function App() {
   const adGameCountRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0}, sorugecesi:{played:0,wins:0,losses:0} };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0}, sorugecesi:{played:0,wins:0,losses:0}, adamasmaca:{played:0,wins:0,losses:0}, stroop:{played:0,wins:0,losses:0} };
   const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 }, streakFreeze: { count: 1, weekUsed: null }, season: { num: 0, xp: 0, month: null } };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { ...PROG_DEFAULTS, history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }; });
 
@@ -10901,6 +11274,22 @@ export default function App() {
       case 'sorugecesi':
         return (
           <SoruGecesiGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'adamasmaca':
+        return (
+          <AdamAsmacaGame
+            game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'stroop':
+        return (
+          <StroopTestiGame
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
