@@ -1217,6 +1217,7 @@ function MultiplayerLobby(props) {
   var s3 = useState(passedName || "Oyuncu"); var username = s3[0];
   var s4 = useState(false); var showPrivacyModal = s4[0]; var setShowPrivacyModal = s4[1];
   var s5 = useState(false); var autoJoined = s5[0]; var setAutoJoined = s5[1];
+  var s6 = useState({}); var sentFriendReqs = s6[0]; var setSentFriendReqs = s6[1];
   var lastMoveRef = useRef(null);
 
   var sock = props.sock || { isConnected: false, isRegistered: false, roomData: null, players: [], messages: [], myUserId: null, friendList: [], friendRequests: [], friendToast: null, gameInvite: null };
@@ -1341,13 +1342,27 @@ function MultiplayerLobby(props) {
           {/* Players */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {players.map(function(p, i) {
+              var isMe = p.id === sock.myUserId;
+              var alreadyFriend = (sock.friendList || []).some(function(f) { return f.userId === p.id; });
+              var reqSent = sentFriendReqs[p.id];
               return (
-                <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: i === myIndex ? 'rgba(99,102,241,0.1)' : 'var(--surface-hover)', border: '1px solid ' + (i === myIndex ? '#6366f1' : 'var(--border)'), borderRadius: 10, padding: '8px 14px' }}>
+                <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: isMe ? 'rgba(99,102,241,0.1)' : 'var(--surface-hover)', border: '1px solid ' + (isMe ? '#6366f1' : 'var(--border)'), borderRadius: 10, padding: '8px 14px' }}>
                   <div style={{ width: 28, height: 28, borderRadius: '50%', background: i === 0 ? '#E63946' : '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13 }}>{p.name ? p.name[0].toUpperCase() : '?'}</div>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}{i === myIndex ? ' (Sen)' : ''}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}{isMe ? ' (Sen)' : ''}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{i === 0 ? 'Host' : 'Oyuncu 2'}</div>
                   </div>
+                  {!isMe && (
+                    alreadyFriend
+                      ? <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600, marginLeft: 4 }}>✓ Arkadaş</span>
+                      : reqSent
+                        ? <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 4 }}>İstek gönderildi</span>
+                        : <button onClick={function() {
+                            sock.sendFriendRequest(p.id, function(res) {
+                              if (res && res.success) setSentFriendReqs(function(prev) { var n = Object.assign({}, prev); n[p.id] = true; return n; });
+                            });
+                          }} style={{ marginLeft: 4, padding: '3px 8px', borderRadius: 6, border: 'none', background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>+ Ekle</button>
+                  )}
                 </div>
               );
             })}
@@ -5456,7 +5471,9 @@ function FriendPanel({ sock, myUserId }) {
               <div style={{fontSize:32,marginBottom:8}}>👤</div>
               Henüz arkadaşın yok. "Ara" sekmesinden arkadaş ekle!
             </div>
-          ) : friends.map(f => (
+          ) : friends.map(f => {
+            const inRoom = sock?.roomData;
+            return (
             <div key={f.userId} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
               <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#863bff,#5b21b6)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0,position:'relative'}}>
                 {f.name.charAt(0).toUpperCase()}
@@ -5466,9 +5483,13 @@ function FriendPanel({ sock, myUserId }) {
                 <div style={{fontWeight:600,fontSize:14}}>{f.name}</div>
                 <div style={{fontSize:11,color:f.online?'#22c55e':'var(--text-secondary)'}}>{f.online?'Online':'Çevrimdışı'}</div>
               </div>
+              {f.online && inRoom && (
+                <button onClick={()=>sock.inviteFriend(f.userId, inRoom.id, inRoom.gameId)} style={{padding:'4px 10px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#059669,#34d399)',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer'}}>Davet Et</button>
+              )}
               <button onClick={()=>sock.removeFriend(f.userId)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--text-secondary)',fontSize:11,cursor:'pointer'}}>Çıkar</button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
