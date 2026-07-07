@@ -1208,7 +1208,7 @@ function MultiplayerLobby(props) {
   var s5 = useState(false); var autoJoined = s5[0]; var setAutoJoined = s5[1];
   var lastMoveRef = useRef(null);
 
-  var sock = props.sock || useSocket(username);
+  var sock = props.sock || { isConnected: false, isRegistered: false, roomData: null, players: [], messages: [], myUserId: null, friendList: [], friendRequests: [], friendToast: null, gameInvite: null };
 
   // Auto-join from URL params
   useEffect(function() {
@@ -5831,7 +5831,7 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
       {/* ARKADAŞLAR TAB */}
       {activeTab === 'arkadaşlar' && (
         <div>
-          {sock && sock.myUserId ? (
+          {sock && sock.isConnected ? (
             <Card style={{ padding: 20 }}>
               <FriendPanel sock={sock} myUserId={sock.myUserId} />
             </Card>
@@ -5839,7 +5839,12 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
             <Card style={{ padding: 32, textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
               <div style={{ fontWeight: 700, marginBottom: 8 }}>Bağlanıyor...</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Arkadaş sistemi için sunucuya bağlanmanız gerekiyor.</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>Sunucuya bağlanılıyor...</div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#863bff', display: 'inline-block', animation: 'livePulse 0.6s ease-in-out infinite' }} />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#863bff', display: 'inline-block', animation: 'livePulse 0.6s ease-in-out 0.2s infinite' }} />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#863bff', display: 'inline-block', animation: 'livePulse 0.6s ease-in-out 0.4s infinite' }} />
+              </div>
             </Card>
           )}
         </div>
