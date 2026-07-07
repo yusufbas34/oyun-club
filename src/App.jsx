@@ -1208,7 +1208,7 @@ function MultiplayerLobby(props) {
   var s5 = useState(false); var autoJoined = s5[0]; var setAutoJoined = s5[1];
   var lastMoveRef = useRef(null);
 
-  var sock = useSocket(username);
+  var sock = props.sock || useSocket(username);
 
   // Auto-join from URL params
   useEffect(function() {
@@ -1437,7 +1437,6 @@ function MultiplayerLobby(props) {
 
   // --- LOBBY VIEW ---
   return (
-    <SockContext.Provider value={sock}>
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
       {/* Connection status */}
       <div style={{ padding: '12px 16px', borderRadius: 12, background: sock.isConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: '1px solid ' + (sock.isConnected ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'), color: sock.isConnected ? '#16a34a' : '#dc2626', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1600,7 +1599,6 @@ function MultiplayerLobby(props) {
         </div>
       )}
     </div>
-    </SockContext.Provider>
   );
 }
 // ============================================================
@@ -6345,32 +6343,52 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
       )}
       <DailyQuestBanner stats={stats} />
 
-      {/* Online Arkadaşlar Widget */}
-      {sock && (sock.friendList || []).filter(f => f.online).length > 0 && (
-        <div style={{ background: 'linear-gradient(135deg,rgba(34,197,94,0.08),rgba(16,185,129,0.08))', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, animation: 'fadeUp 0.35s ease' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'livePulse 2s ease-in-out infinite' }} />
-              <span style={{ fontWeight: 700, fontSize: 13, color: '#22c55e' }}>{(sock.friendList || []).filter(f => f.online).length} Arkadaş Online</span>
-            </div>
-            {onGoFriends && <button onClick={onGoFriends} style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px' }}>Tümü →</button>}
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {(sock.friendList || []).filter(f => f.online).map(f => (
-              <div key={f.userId} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface)', borderRadius: 20, padding: '5px 12px 5px 8px', border: '1px solid var(--border)' }}>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#22c55e,#16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 11 }}>
-                  {f.name.charAt(0).toUpperCase()}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{f.name}</span>
-                <button onClick={() => sock.inviteFriend && sock.inviteFriend(f.userId, null, null)}
-                  style={{ fontSize: 11, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', border: 'none', borderRadius: 8, padding: '3px 8px', cursor: 'pointer', fontWeight: 700 }}>
-                  Davet Et
-                </button>
+      {/* Arkadaşlar Widget */}
+      {sock && (sock.friendList || []).length > 0 && (() => {
+        const allFriends = sock.friendList || [];
+        const online = allFriends.filter(f => f.online);
+        const offline = allFriends.filter(f => !f.online);
+        const shown = [...online, ...offline].slice(0, 3);
+        return (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px', marginBottom: 20, animation: 'fadeUp 0.35s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>👥</span>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>Arkadaşlar</span>
+                {online.length > 0 && (
+                  <span style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'livePulse 2s ease-in-out infinite' }} />
+                    {online.length} online
+                  </span>
+                )}
               </div>
-            ))}
+              {onGoFriends && <button onClick={onGoFriends} style={{ fontSize: 12, color: '#863bff', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Tümü →</button>}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {shown.map(f => (
+                <div key={f.userId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: f.online ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#6b7280,#4b5563)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14 }}>
+                      {f.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: f.online ? '#22c55e' : '#6b7280', border: '2px solid var(--surface)' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: f.online ? '#22c55e' : 'var(--text-secondary)' }}>{f.online ? 'Online' : 'Çevrimdışı'}</div>
+                  </div>
+                  {f.online && (
+                    <button onClick={() => sock.inviteFriend && sock.inviteFriend(f.userId, null, null)}
+                      style={{ flexShrink: 0, fontSize: 12, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', border: 'none', borderRadius: 10, padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
+                      Davet Et
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div style={{ marginBottom: 24, animation: 'fadeUp 0.4s ease' }}>
         <h1
@@ -10873,7 +10891,7 @@ export default function App() {
   const [shareResult, setShareResult] = useState(null);
   const [floatingXP, setFloatingXP] = useState(null);
   const [profileInitialTab, setProfileInitialTab] = useState('profil');
-  var sock = React.useContext(SockContext);
+  var sock = useSocket(user ? user.name : 'Oyuncu');
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -11508,6 +11526,7 @@ export default function App() {
             userName={user ? user.name : ''}
             onSelectGame={handleSelectGame}
             active={page === 'multiplayer'}
+            sock={sock}
           />
         </div>
         {page === 'room' && selectedGame && (
