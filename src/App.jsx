@@ -8733,10 +8733,10 @@ function AdOverlay({ onClose }) {
           <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginBottom: 8, fontFamily: "'Sora',sans-serif", lineHeight: 1.2 }}>{houseAd.title}</div>
           <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5 }}>{houseAd.body}</div>
         </div>
-        {/* AdSense slot — onaylı domainlerde buraya gerçek reklam gelir */}
+        {/* AdSense slot */}
         <ins
           className="adsbygoogle"
-          style={{ display: 'block', height: 0, overflow: 'hidden' }}
+          style={{ display: 'block', minHeight: 100 }}
           data-ad-client={ADSENSE_CLIENT}
           data-ad-slot={ADSENSE_SLOT}
           data-ad-format="auto"
