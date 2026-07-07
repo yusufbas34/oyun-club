@@ -5397,17 +5397,32 @@ function FriendPanel({ sock, myUserId }) {
 
   useEffect(() => { if (sock && myUserId) sock.getFriends(); }, [myUserId]);
 
+  const [notFound, setNotFound] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const doSearch = () => {
     if (!searchQ.trim() || searchQ.trim().length < 2) return setSearchMsg('En az 2 karakter gir');
-    setLoading(true); setSearchMsg('');
+    setLoading(true); setSearchMsg(''); setNotFound(false);
     sock.searchUser(searchQ.trim(), (res) => {
       setLoading(false);
       if (res?.error) { setSearchMsg('❌ ' + res.error); return; }
       const found = (res?.users || res?.results || []).filter(u => u.userId !== myUserId);
       setSearchResults(found);
-      if (!found.length) setSearchMsg('Kullanıcı bulunamadı. İsmi tam yazmayı dene.');
+      if (!found.length) { setSearchMsg(''); setNotFound(true); }
       else setSearchMsg('');
     });
+  };
+
+  const shareInvite = () => {
+    const url = window.location.origin;
+    if (navigator.share) {
+      navigator.share({ title: 'oyun.club', text: 'Seninle oyun oynamak istiyorum! oyun.club\'a gel:', url });
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }).catch(() => {});
+    }
   };
 
   const sendReq = (toUserId, name) => {
@@ -5487,6 +5502,18 @@ function FriendPanel({ sock, myUserId }) {
             </button>
           </div>
           {searchMsg && <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:8,textAlign:'center'}}>{searchMsg}</div>}
+          {notFound && (
+            <div style={{textAlign:'center',padding:'20px 12px',background:'var(--surface-hover)',borderRadius:14,marginBottom:12}}>
+              <div style={{fontSize:28,marginBottom:6}}>🔍</div>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>"{searchQ}" bulunamadı</div>
+              <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:14,lineHeight:1.5}}>
+                Arkadaşın uygulamayı henüz açmamış olabilir.<br/>Ona bir link gönder, siteye girsin!
+              </div>
+              <button onClick={shareInvite} style={{padding:'10px 20px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                {copied ? '✅ Link kopyalandı!' : '📤 Davet linki gönder'}
+              </button>
+            </div>
+          )}
           {searchResults.map(u => {
             const already = friends.some(f=>f.userId===u.userId);
             return (
@@ -5503,6 +5530,14 @@ function FriendPanel({ sock, myUserId }) {
               </div>
             );
           })}
+          {!notFound && searchResults.length === 0 && !loading && !searchMsg && (
+            <div style={{textAlign:'center',padding:'16px',color:'var(--text-secondary)',fontSize:12,marginTop:8}}>
+              <div style={{marginBottom:8}}>Arkadaşın kayıtlı değilse linki paylaşarak davet et</div>
+              <button onClick={shareInvite} style={{padding:'8px 16px',borderRadius:10,border:'1px solid var(--border)',background:'transparent',color:'var(--text)',fontSize:12,cursor:'pointer'}}>
+                {copied ? '✅ Link kopyalandı!' : '📤 Davet linki paylaş'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
