@@ -15,6 +15,7 @@ if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D
 }
 
 var BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
+var SockContext = React.createContext(null);
  
 function useSocket(username) {
   var socketRef = useRef(null);
@@ -1436,6 +1437,7 @@ function MultiplayerLobby(props) {
 
   // --- LOBBY VIEW ---
   return (
+    <SockContext.Provider value={sock}>
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
       {/* Connection status */}
       <div style={{ padding: '12px 16px', borderRadius: 12, background: sock.isConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: '1px solid ' + (sock.isConnected ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'), color: sock.isConnected ? '#16a34a' : '#dc2626', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1598,6 +1600,7 @@ function MultiplayerLobby(props) {
         </div>
       )}
     </div>
+    </SockContext.Provider>
   );
 }
 // ============================================================
@@ -10870,6 +10873,7 @@ export default function App() {
   const [shareResult, setShareResult] = useState(null);
   const [floatingXP, setFloatingXP] = useState(null);
   const [profileInitialTab, setProfileInitialTab] = useState('profil');
+  var sock = React.useContext(SockContext);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
