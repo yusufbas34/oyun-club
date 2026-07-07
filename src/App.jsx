@@ -4236,6 +4236,7 @@ const GAMES = [
     icon: '✕○',
     players: 2,
     genre: 'strateji',
+    popular: true,
     color: '#E63946',
     bg: 'linear-gradient(135deg, #E63946 0%, #F4845F 100%)',
   },
@@ -4247,6 +4248,7 @@ const GAMES = [
     players: 2,
     local: true,
     genre: 'strateji',
+    popular: true,
     color: '#1D4ED8',
     bg: 'linear-gradient(135deg, #1D4ED8 0%, #60A5FA 100%)',
   },
@@ -4268,6 +4270,7 @@ const GAMES = [
     icon: '✊✋✌',
     players: 2,
     genre: 'hız',
+    popular: true,
     color: '#2A9D8F',
     bg: 'linear-gradient(135deg, #2A9D8F 0%, #76C893 100%)',
   },
@@ -4290,6 +4293,7 @@ const GAMES = [
     players: 2,
     local: true,
     genre: 'hız',
+    popular: true,
     color: '#0369A1',
     bg: 'linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)',
   },
@@ -4333,6 +4337,7 @@ const GAMES = [
     icon: '💣',
     players: 1,
     genre: 'bulmaca',
+    popular: true,
     color: '#457B9D',
     bg: 'linear-gradient(135deg, #457B9D 0%, #48CAE4 100%)',
   },
@@ -4343,6 +4348,7 @@ const GAMES = [
     icon: '🔲',
     players: 1,
     genre: 'bulmaca',
+    popular: true,
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
@@ -4363,6 +4369,7 @@ const GAMES = [
     icon: '🐍',
     players: 1,
     genre: 'hız',
+    popular: true,
     color: '#059669',
     bg: 'linear-gradient(135deg, #059669 0%, #34D399 100%)',
   },
@@ -4373,6 +4380,7 @@ const GAMES = [
     icon: '🔢',
     players: 1,
     genre: 'bulmaca',
+    popular: true,
     color: '#F59563',
     bg: 'linear-gradient(135deg, #BBADA0 0%, #F59563 100%)',
   },
@@ -4383,6 +4391,7 @@ const GAMES = [
     icon: '🃏',
     players: 1,
     genre: 'hafıza',
+    popular: true,
     color: '#7C3AED',
     bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
   },
@@ -4393,6 +4402,7 @@ const GAMES = [
     icon: '🔤',
     players: 1,
     genre: 'kelime',
+    popular: true,
     color: '#538D4E',
     bg: 'linear-gradient(135deg, #538D4E 0%, #6AAF5E 100%)',
   },
@@ -5922,14 +5932,9 @@ const LeaderboardPage = ({ user, stats }) => {
   const fakePlayers = FAKE_LB[activeTab] || [];
   const allPlayers = [
     ...fakePlayers,
-    {
-      name: user.name,
-      played: userGameStats.played,
-      wins: userGameStats.wins,
-      avatar: 2,
-    },
+    ...(userGameStats.played > 0 ? [{ name: user.name, played: userGameStats.played, wins: userGameStats.wins, avatar: 2 }] : []),
   ].sort((a, b) => b.wins - a.wins);
-  const userRank = allPlayers.findIndex((p) => p.name === user.name) + 1;
+  const userRank = userGameStats.played > 0 ? (allPlayers.findIndex((p) => p.name === user.name) + 1) : null;
 
   return (
     <div
@@ -6011,8 +6016,7 @@ const LeaderboardPage = ({ user, stats }) => {
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>{user.name}</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>
-              {userGameStats.played} oyun • {userGameStats.wins}G /{' '}
-              {userGameStats.losses}M
+              {userGameStats.played > 0 ? `${userGameStats.played} oyun • ${userGameStats.wins}G / ${userGameStats.losses}M` : 'Henüz oynamadı'}
             </div>
           </div>
         </div>
@@ -6024,9 +6028,9 @@ const LeaderboardPage = ({ user, stats }) => {
               fontWeight: 800,
             }}
           >
-            #{userRank}
+            {userRank ? `#${userRank}` : '—'}
           </div>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>sıralama</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>{userRank ? 'sıralama' : 'henüz yok'}</div>
         </div>
       </Card>
 
@@ -6555,7 +6559,8 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
             { key: 'all',      label: '🎮 Hepsi',    color: '#6366f1' },
-            { key: 'yeni',     label: '🆕 Yeni',     color: '#E63946' },
+            { key: 'populer',  label: '🔥 Popüler',  color: '#E63946' },
+            { key: 'yeni',     label: '🆕 Yeni',     color: '#0369A1' },
             { key: 'strateji', label: '♟️ Strateji', color: '#1D4ED8' },
             { key: 'hız',      label: '⚡ Hız',       color: '#D97706' },
             { key: 'hafıza',   label: '🧠 Hafıza',   color: '#7C3AED' },
@@ -6586,6 +6591,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats }) => {
               if (!(g.players >= 3 || (g.minPlayers && g.players >= 3))) return false;
             } else if (g.players !== filterPlayers) return false;
           }
+          if (filterGenre === 'populer') return !!g.popular;
           if (filterGenre === 'yeni') return !!g.isNew;
           if (filterGenre !== 'all' && g.genre !== filterGenre) return false;
           return true;
@@ -8502,9 +8508,12 @@ var HOUSE_ADS = [
 function AdOverlay({ onClose }) {
   const [seconds, setSeconds] = useState(5);
   const canClose = seconds <= 0;
-  const insRef = useRef(null);
-  const [adFilled, setAdFilled] = useState(null); // null=pending, true=filled, false=empty
-  const houseAd = HOUSE_ADS[Math.floor((Date.now() / 15000)) % HOUSE_ADS.length];
+  const houseAd = HOUSE_ADS[Math.floor((Date.now() / 30000)) % HOUSE_ADS.length];
+
+  useEffect(() => {
+    // AdSense push — çalışırsa görünür, çalışmazsa ev reklamı gösterilir
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
+  }, []);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -8512,77 +8521,49 @@ function AdOverlay({ onClose }) {
     return () => clearTimeout(t);
   }, [seconds]);
 
-  useEffect(() => {
-    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
-    // Gerçek reklam varsa içine iframe enjekte edilir — onu bekliyoruz
-    const checkTimer = setTimeout(() => {
-      try {
-        const ins = insRef.current;
-        const hasIframe = ins && ins.querySelectorAll('iframe').length > 0;
-        setAdFilled(hasIframe ? true : false);
-      } catch { setAdFilled(false); }
-    }, 2000);
-    return () => clearTimeout(checkTimer);
-  }, []);
-
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
-      backgroundColor: 'rgba(0,0,0,0.82)',
+      background: 'rgba(0,0,0,0.85)',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       padding: '24px 16px',
     }}>
       <div style={{
-        backgroundColor: '#ffffff', borderRadius: 20, padding: '0',
-        width: '100%', maxWidth: 320, textAlign: 'center',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.6)', overflow: 'hidden',
+        borderRadius: 24, width: '100%', maxWidth: 340,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.7)', overflow: 'hidden',
       }}>
-        {/* AdSense slot — renders real ad when approved */}
+        {/* Ev reklamı — her zaman görünür */}
+        <div style={{ background: houseAd.bg, padding: '32px 24px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 64, marginBottom: 12, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>{houseAd.icon}</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginBottom: 8, fontFamily: "'Sora',sans-serif", lineHeight: 1.2 }}>{houseAd.title}</div>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5 }}>{houseAd.body}</div>
+        </div>
+        {/* AdSense slot — onaylı domainlerde buraya gerçek reklam gelir */}
         <ins
-          ref={insRef}
           className="adsbygoogle"
-          style={{ display: 'block', minHeight: adFilled ? undefined : 0 }}
+          style={{ display: 'block', height: 0, overflow: 'hidden' }}
           data-ad-client={ADSENSE_CLIENT}
           data-ad-slot={ADSENSE_SLOT}
           data-ad-format="auto"
           data-full-width-responsive="true"
         />
-        {/* House ad — shows when AdSense doesn't fill */}
-        {adFilled === false && (
-          <div style={{ background: houseAd.bg, padding: '28px 20px 20px' }}>
-            <div style={{ fontSize: 56, marginBottom: 10 }}>{houseAd.icon}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 8, fontFamily: "'Sora',sans-serif" }}>{houseAd.title}</div>
-            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>{houseAd.body}</div>
-          </div>
-        )}
-        {/* Pending state */}
-        {adFilled === null && (
-          <div style={{ padding: '28px 20px 20px' }}>
-            <div style={{ fontSize: 44, marginBottom: 8 }}>🎮</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 4, fontFamily: "'Sora', sans-serif" }}>oyun.club</div>
-            <div style={{ fontSize: 13, color: '#6B7280' }}>Reklam yükleniyor...</div>
-          </div>
-        )}
-
-        <div style={{ padding: '16px 20px 20px', background: '#fff' }}>
-          <div style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: canClose ? '#863bff' : '#1A1A2E', fontFamily: "'Sora', sans-serif", minHeight: 36 }}>
-            {canClose ? '✓' : seconds}
-          </div>
-          <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>
-            {canClose ? 'Hazır!' : 'saniye sonra geçebilirsin'}
+        <div style={{ padding: '16px 20px 20px', background: '#fff', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 12 }}>
+            {canClose ? '✅ Hazır!' : `${seconds} saniye sonra geçebilirsin`}
           </div>
           <button
             onClick={canClose ? onClose : undefined}
             style={{
-              padding: '14px', borderRadius: 12, border: 'none',
+              padding: '14px', borderRadius: 14, border: 'none',
               background: canClose ? 'linear-gradient(135deg,#863bff,#5b21b6)' : '#E5E7EB',
-              color: canClose ? '#FFF' : '#9CA3AF', fontSize: 15, fontWeight: 700,
+              color: canClose ? '#FFF' : '#9CA3AF', fontSize: 15, fontWeight: 800,
               cursor: canClose ? 'pointer' : 'default',
-              width: '100%', WebkitTapHighlightColor: 'transparent',
+              width: '100%', fontFamily: "'Sora',sans-serif",
+              transition: 'all 0.3s ease',
             }}
           >
-            {canClose ? '▶ Oyuna Başla' : `${seconds} saniye...`}
+            {canClose ? '▶ Oyuna Başla' : `⏳ ${seconds} saniye...`}
           </button>
         </div>
       </div>
@@ -8846,6 +8827,23 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
     else { window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank'); }
   }
 
+  function doShareFacebook() {
+    var url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent('https://oyun.club') + '&quote=' + encodeURIComponent(shareText);
+    window.open(url, '_blank', 'noopener,noreferrer,width=600,height=400');
+  }
+
+  function doShareInstagram() {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText + '\n\nhttps://oyun.club').then(function() {
+        alert('Metin kopyalandı! Instagram\'ı aç ve hikayene yapıştır.');
+      }).catch(function() {
+        alert('Instagram paylaşımı için: oyun.club adresini ziyaret edip ekran görüntüsü alabilirsin.');
+      });
+    } else {
+      alert('Instagram paylaşımı için ekran görüntüsü alarak paylaşabilirsin!');
+    }
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
       <div style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', maxWidth: 320, width: '100%', textAlign: 'center', animation: 'fadeUp 0.3s ease' }} onClick={function(e){e.stopPropagation();}}>
@@ -8862,12 +8860,20 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
             🔄 Tekrar Oyna
           </button>
         )}
-        <button onClick={doShareCard} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+        <button onClick={doShareCard} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 8 }}>
           🖼️ Kart Paylaş
         </button>
-        <button onClick={doShareText} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: 'rgba(37,211,102,0.15)', color: '#25D366', border: '1px solid rgba(37,211,102,0.3)', fontWeight: 700, fontSize: 14, cursor: 'pointer', marginBottom: 10 }}>
-          📱 WhatsApp'ta Paylaş
-        </button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <button onClick={doShareText} style={{ padding: '10px 4px', borderRadius: 12, background: 'rgba(37,211,102,0.15)', color: '#25D366', border: '1px solid rgba(37,211,102,0.3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            WhatsApp
+          </button>
+          <button onClick={doShareFacebook} style={{ padding: '10px 4px', borderRadius: 12, background: 'rgba(24,119,242,0.12)', color: '#1877F2', border: '1px solid rgba(24,119,242,0.3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            Facebook
+          </button>
+          <button onClick={doShareInstagram} style={{ padding: '10px 4px', borderRadius: 12, background: 'rgba(225,48,108,0.1)', color: '#E1306C', border: '1px solid rgba(225,48,108,0.3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            Instagram
+          </button>
+        </div>
         <button onClick={onClose} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: 'var(--surface-hover)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
           Devam Et
         </button>
@@ -9122,6 +9128,7 @@ function DeyimTamamlaGame({ game, onGameEnd, soundOn }) {
 // TAVLA GAME
 // ============================================================
 function TavlaGame({ game, onGameEnd, soundOn }) {
+  var s_mode = useState(null); var gameMode = s_mode[0]; var setGameMode = s_mode[1];
   // Simplified Tavla: 24 points, 2 players. White=1 moves 23→0, Black=-1 moves 0→23
   var INITIAL = (function() {
     var b = Array(24).fill(null).map(function(){ return {count:0,color:0}; });
@@ -9149,7 +9156,8 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
 
   function rollDice() { return [Math.ceil(Math.random()*6), Math.ceil(Math.random()*6)]; }
 
-  function startGame() {
+  function startGame(mode) {
+    setGameMode(mode);
     var d = rollDice();
     setPhase('white'); // White goes first
     setDice(d);
@@ -9307,46 +9315,46 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
   }
 
   function handlePointClick(idx) {
-    if (phase !== 'white' || botThinking || winner) return;
-    var color = 1;
+    var isMyTurn = phase === 'white' || (phase === 'black' && gameMode === 'local');
+    if (!isMyTurn || botThinking || winner) return;
+    var color = phase === 'white' ? 1 : -1;
+    var barCount = phase === 'white' ? bar.white : bar.black;
+    var barIdx = phase === 'white' ? 24 : -1;
     if (selected === null) {
-      // Select a piece
-      if (bar.white > 0) {
-        // Must enter from bar
-        var legal = getLegalMoves(24, 'white', moves, board, bar);
+      if (barCount > 0) {
+        var legal = getLegalMoves(barIdx, phase, moves, board, bar);
         if (legal.length === 0) return;
-        setSelected(24);
+        setSelected(barIdx);
         return;
       }
-      if (board[idx].color === color && board[idx].count > 0) {
+      if (board[idx] && board[idx].color === color && board[idx].count > 0) {
         setSelected(idx);
       }
     } else {
-      // Move selected piece to idx
       var fromIdx = selected;
-      var legal2 = getLegalMoves(fromIdx, 'white', moves, board, bar);
+      var legal2 = getLegalMoves(fromIdx, phase, moves, board, bar);
       var move = legal2.find(function(m){ return m.to === idx; });
       if (move) {
         playHaptic('tap');
         if (soundOn) playSound('place');
-        var res = applyMove(fromIdx, idx, 'white', board, bar, borne, moves);
+        var res = applyMove(fromIdx, idx, phase, board, bar, borne, moves);
         setBoard(res.board); setBar(res.bar); setBorne(res.borne);
         setSelected(null);
         if (res.dice.length === 0) {
           var w = checkWin(res.borne);
           if (w) { setWinner(w); onGameEnd(w==='white'?'win':'loss'); return; }
+          var nextPhase = phase === 'white' ? 'black' : 'white';
           var d3 = rollDice();
           var nm3 = d3[0]===d3[1]?[d3[0],d3[0],d3[0],d3[0]]:[...d3];
-          setDice(d3); setMoves(nm3); setPhase('black');
-          setBotThinking(true);
-          setTimeout(function() {
-            doBotMove(res.board, res.bar, res.borne, nm3);
-          }, 700);
+          setDice(d3); setMoves(nm3); setPhase(nextPhase);
+          if (nextPhase === 'black' && gameMode === 'bot') {
+            setBotThinking(true);
+            setTimeout(function() { doBotMove(res.board, res.bar, res.borne, nm3); }, 700);
+          }
         } else {
           setMoves(res.dice);
         }
       } else {
-        // Re-select or deselect
         if (board[idx] && board[idx].color === color) setSelected(idx);
         else setSelected(null);
       }
@@ -9354,20 +9362,25 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
   }
 
   function handleBearOff() {
-    if (phase !== 'white' || botThinking || winner || moves.length === 0) return;
-    var legal3 = getLegalMoves(selected !== null ? selected : -99, 'white', moves, board, bar);
-    var bearMove = legal3.find(function(m){ return m.to === -1; });
+    var isMyTurn = phase === 'white' || (phase === 'black' && gameMode === 'local');
+    if (!isMyTurn || botThinking || winner || moves.length === 0) return;
+    var bearTo = phase === 'white' ? -1 : 24;
+    var legal3 = getLegalMoves(selected !== null ? selected : -99, phase, moves, board, bar);
+    var bearMove = legal3.find(function(m){ return m.to === bearTo; });
     if (bearMove) {
-      var res2 = applyMove(selected, -1, 'white', board, bar, borne, moves);
+      var res2 = applyMove(selected, bearTo, phase, board, bar, borne, moves);
       setBoard(res2.board); setBar(res2.bar); setBorne(res2.borne); setSelected(null);
       if (res2.dice.length === 0) {
         var w2 = checkWin(res2.borne);
         if (w2) { setWinner(w2); onGameEnd(w2==='white'?'win':'loss'); return; }
+        var nextPhase2 = phase === 'white' ? 'black' : 'white';
         var d4 = rollDice();
         var nm4 = d4[0]===d4[1]?[d4[0],d4[0],d4[0],d4[0]]:[...d4];
-        setDice(d4); setMoves(nm4); setPhase('black');
-        setBotThinking(true);
-        setTimeout(function() { doBotMove(res2.board, res2.bar, res2.borne, nm4); }, 700);
+        setDice(d4); setMoves(nm4); setPhase(nextPhase2);
+        if (nextPhase2 === 'black' && gameMode === 'bot') {
+          setBotThinking(true);
+          setTimeout(function() { doBotMove(res2.board, res2.bar, res2.borne, nm4); }, 700);
+        }
       } else {
         setMoves(res2.dice);
       }
@@ -9377,14 +9390,27 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
   var POINT_SIZE = 28;
 
   if (!phase) return (
-    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
-      <div style={{fontSize:56,marginBottom:12}}>🎲</div>
-      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Tavla</h2>
-      <p style={{color:'var(--text-secondary)',marginBottom:12}}>Klasik Türk tavlası. Bot'a karşı oyna.</p>
-      <p style={{color:'var(--text-secondary)',fontSize:13,marginBottom:28}}>Sen <strong style={{color:'#fff'}}>⬜ Beyaz</strong>'sın (→ sola). İlk zar otomatik atılır.</p>
-      <button onClick={startGame} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#92400E,#D97706)',color:'#FFF',fontSize:17,fontWeight:700,cursor:'pointer'}}>
-        Oyna
-      </button>
+    <div style={{maxWidth:420,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
+      <div style={{fontSize:72,marginBottom:8}}>🎲</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Tavla</h2>
+      <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:32}}>Klasik Türk tavlası — hem bot hem 2 kişilik</p>
+      <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:24}}>
+        <button onClick={function(){startGame('bot');}} style={{padding:'20px 24px',borderRadius:18,border:'2px solid rgba(146,64,14,0.3)',background:'linear-gradient(135deg,#92400E,#D97706)',color:'#fff',fontSize:16,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:12}}>
+          <span style={{fontSize:28}}>🤖</span>
+          <div style={{textAlign:'left'}}>
+            <div>Bot ile Oyna</div>
+            <div style={{fontSize:12,fontWeight:400,opacity:0.85}}>Yapay zekaya karşı tek başına oyna</div>
+          </div>
+        </button>
+        <button onClick={function(){startGame('local');}} style={{padding:'20px 24px',borderRadius:18,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:12}}>
+          <span style={{fontSize:28}}>👥</span>
+          <div style={{textAlign:'left'}}>
+            <div>2 Kişi Oyna</div>
+            <div style={{fontSize:12,fontWeight:400,color:'var(--text-secondary)'}}>Aynı cihazda arkadaşınla oyna</div>
+          </div>
+        </button>
+      </div>
+      <p style={{color:'var(--text-secondary)',fontSize:12}}>⬜ Beyaz üstten alta, ⬛ Siyah alttan yukarı gider</p>
     </div>
   );
 
@@ -9393,9 +9419,9 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
       {/* Status */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
         <div style={{fontWeight:700,fontSize:13}}>
-          {winner ? (winner==='white'?'🏆 Sen kazandın!':'😅 Bot kazandı!') :
+          {winner ? (winner==='white' ? (gameMode==='bot'?'🏆 Sen kazandın!':'🏆 Beyaz kazandı!') : (gameMode==='bot'?'😅 Bot kazandı!':'🏆 Siyah kazandı!')) :
            botThinking ? '🤖 Bot düşünüyor...' :
-           phase==='white' ? '⬜ Senin hamlen' : '⬛ Bot hamle yapıyor'}
+           phase==='white' ? (gameMode==='local'?'⬜ Beyaz\'ın sırası':'⬜ Senin hamlen') : (gameMode==='local'?'⬛ Siyah\'ın sırası':'⬛ Bot hamle yapıyor')}
         </div>
         <div style={{display:'flex',gap:6}}>
           {moves.map(function(d,i){return(
@@ -9409,7 +9435,7 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
         <div style={{display:'flex',gap:2,justifyContent:'center',marginBottom:4}}>
           {Array.from({length:12},function(_,i){return i+12;}).map(function(idx){
             var pt = board[idx];
-            var isLegal = selected !== null && getLegalMoves(selected,'white',moves,board,bar).some(function(m){return m.to===idx;});
+            var isLegal = selected !== null && getLegalMoves(selected,phase,moves,board,bar).some(function(m){return m.to===idx;});
             return (
               <div key={idx} onClick={function(){handlePointClick(idx);}}
                 style={{width:POINT_SIZE,minHeight:80,borderRadius:4,cursor:'pointer',background:isLegal?'rgba(255,255,0,0.2)':idx%2===0?'#8B4513':'#DEB887',display:'flex',flexDirection:'column',alignItems:'center',paddingTop:4,gap:2,position:'relative'}}>
@@ -9431,7 +9457,7 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
         <div style={{display:'flex',gap:2,justifyContent:'center',marginTop:4}}>
           {Array.from({length:12},function(_,i){return 11-i;}).map(function(idx){
             var pt = board[idx];
-            var isLegal = selected !== null && getLegalMoves(selected,'white',moves,board,bar).some(function(m){return m.to===idx;});
+            var isLegal = selected !== null && getLegalMoves(selected,phase,moves,board,bar).some(function(m){return m.to===idx;});
             return (
               <div key={idx} onClick={function(){handlePointClick(idx);}}
                 style={{width:POINT_SIZE,minHeight:80,borderRadius:4,cursor:'pointer',background:isLegal?'rgba(255,255,0,0.2)':idx%2===0?'#8B4513':'#DEB887',display:'flex',flexDirection:'column-reverse',alignItems:'center',paddingBottom:4,gap:2,position:'relative'}}>
@@ -9449,7 +9475,7 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
       <div style={{display:'flex',justifyContent:'space-between',marginTop:10,padding:'8px 12px',background:'var(--surface-hover)',borderRadius:10,fontSize:13}}>
         <span>⬜ Çıkan: {borne.white}/15</span>
         <span>⬛ Çıkan: {borne.black}/15</span>
-        {selected !== null && phase==='white' && (
+        {selected !== null && (phase==='white' || (phase==='black' && gameMode==='local')) && (
           <button onClick={handleBearOff} style={{padding:'4px 12px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#D97706,#F59E0B)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>
             Çıkar
           </button>
@@ -9503,18 +9529,17 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
   const [selected, setSelected] = React.useState(null);
   const [showAns, setShowAns] = React.useState(false);
   const [timer, setTimer] = React.useState(15);
-  const [readyScreen, setReadyScreen] = React.useState(true);
   const TOTAL_Q = 10;
   const shuffled = React.useMemo(function() {
     var arr = SORUGECESI_QS.slice(); for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;} return arr.slice(0,TOTAL_Q);
   },[]);
 
   React.useEffect(function(){
-    if(phase!=='playing'||showAns||readyScreen)return;
+    if(phase!=='playing'||showAns)return;
     if(timer<=0){handleAnswer(null);return;}
     var t=setTimeout(function(){setTimer(function(v){return v-1;});},1000);
     return function(){clearTimeout(t);};
-  },[phase,timer,showAns,readyScreen]);
+  },[phase,timer,showAns]);
 
   function handleAnswer(idx){
     setSelected(idx);
@@ -9535,8 +9560,8 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
       if(nextP>=playerCount){
         var nextQ=qIdx+1;
         if(nextQ>=TOTAL_Q){setPhase('result');return;}
-        setQIdx(nextQ);setPIdx(0);setReadyScreen(true);
-      } else { setPIdx(nextP);setReadyScreen(true); }
+        setQIdx(nextQ);setPIdx(0);
+      } else { setPIdx(nextP); }
     },1800);
   }
 
@@ -9566,7 +9591,7 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
             );
           })}
         </div>
-        <button onClick={function(){setPhase('playing');setReadyScreen(true);}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+        <button onClick={function(){setPhase('playing');}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
           Oyunu Başlat 🎉
         </button>
       </div>
@@ -9601,23 +9626,6 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
   }
 
   var q=shuffled[qIdx];
-
-  if(readyScreen){
-    return (
-      <div style={{maxWidth:480,margin:'0 auto',padding:'28px 16px',textAlign:'center'}}>
-        <div style={{fontSize:56,marginBottom:12}}>{PLAYER_EMOJIS[pIdx]}</div>
-        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:4,color:PLAYER_COLORS[pIdx]}}>{activePlayers[pIdx]}</h2>
-        <p style={{color:'var(--text-secondary)',marginBottom:8}}>Soru {qIdx*playerCount+pIdx+1} / {TOTAL_Q*playerCount}</p>
-        <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:32}}>Diğer oyuncular ekrana bakmasın!</p>
-        <button onClick={function(){setReadyScreen(false);}} style={{padding:'14px 32px',borderRadius:14,border:'none',background:PLAYER_COLORS[pIdx],color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
-          Hazırım — Soruyu Göster
-        </button>
-        <div style={{marginTop:16,display:'flex',gap:6,justifyContent:'center'}}>
-          {activePlayers.map(function(n,i){return <span key={i} style={{fontSize:12,padding:'3px 10px',borderRadius:10,background:i===pIdx?PLAYER_COLORS[pIdx]:'var(--surface)',color:i===pIdx?'#fff':'var(--text-secondary)',border:i===pIdx?'none':'1px solid var(--border)',fontWeight:600}}>{PLAYER_EMOJIS[i]} {scores[i]}p</span>;})}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{maxWidth:480,margin:'0 auto',padding:'24px 16px'}}>
@@ -9709,29 +9717,165 @@ function DailyQuestBanner({ stats }) {
 // ============================================================
 // KELIME AVCI GAME
 // ============================================================
-var TR_WORDS = ['araba','elma','masa','kalem','kitap','okul','ev','yol','su','ot','gül','kar','dağ','deniz','göl','nehir','orman','park','kale','taş','ağaç','yaprak','çiçek','kuş','balık','kedi','köpek','at','inek','koyun','arı','böcek','ipek','pamuk','yün','bez','elbise','ayak','el','baş','göz','kulak','burun','diş','dil','kol','omuz','sırt','yüz','saç','bel','diz','parmak','tırnak','kemik','ten','deri','kan','nefes','ses','renk','mavi','kırmızı','sarı','yeşil','beyaz','siyah','mor','pembe','turuncu','gri','kahve','altın','gümüş','bakır','demir','çelik','taş','kaya','toprak','kum','çamur','buz','ateş','rüzgar','yağmur','kar','fırtına','güneş','ay','yıldız','gök','bulut','gökkuşağı','sabah','akşam','gece','gündüz','hafta','ay','yıl','mevsim','ilkbahar','yaz','sonbahar','kış','sıcak','soğuk','ılık','kapalı','açık','büyük','küçük','uzun','kısa','ince','kalın','dolu','boş','hızlı','yavaş','güzel','çirkin','iyi','kötü','doğru','yanlış','kolay','zor','tatlı','ekşi','acı','tuzlu','sert','yumuşak','parlak','karanlık','sessiz','gürültülü','düz','eğri','oval','kare','daire','üçgen','beş','altı','yedi','sekiz','dokuz','on','yüz','bin','milyon','yarım','çeyrek','tüm','hep','hiç','çok','az','daha','en','bile','ya','da','de','ki','mi','mı','mu','mü','biz','siz','onlar','ben','sen','o','bu','şu','ne','kim','nerede','nasıl','neden','kaç','hangi','her','bazı','bir','iki','üç','dört','beş'];
 
-var TR_POOL = 'ABCDEFGHIİJKLMNOÖPRSTUÜVYZ'.split('');
-var POOL_WEIGHTS = { A:8,B:3,C:4,D:4,E:9,F:2,G:4,H:3,I:5,İ:8,J:1,K:6,L:5,M:5,N:6,O:4,Ö:2,P:2,R:6,S:6,T:6,U:4,Ü:2,V:2,Y:4,Z:3 };
+function turkishLower(s) {
+  return s.split('').map(function(c){
+    if(c==='İ') return 'i';
+    if(c==='I') return 'ı';
+    return c.toLowerCase();
+  }).join('');
+}
+
+var TR_WORDS = [
+  // 3 harf
+  'ada','ağa','ak','ala','alt','ana','ara','arı','at','av','ay','az',
+  'bak','bal','bar','bas','bat','bay','bez','bor','boy','boz','bul',
+  'can','cep','çak','çal','çam','çan','çat','çek','çil','çit','çok','çöl',
+  'dağ','dal','dam','dar','del','din','dip','don','dur','düş',
+  'ek','el','en','er','eş','ev',
+  'fal','fen','fil','fon',
+  'gaz','gel','gem','gen','git','gök','göl','göz','güç','gül','gün',
+  'hak','ham','hat','haz','hem','hep','hız','hiç',
+  'iç','ip','iş',
+  'kap','kar','kat','kay','kaz','kır','kıl','kol','koy','köy','kum','kur',
+  'ok','on','oy','öç','öz',
+  'pak','par','pay','pek','pir','put',
+  'raf','rap','ray','ruh',
+  'sap','sar','say','ses','sev','sır','sol','son','soy','söz','süs','süt',
+  'şan','şap','şef','şen','şey','şık','şiş',
+  'tak','tam','tan','taş','ter','tok','top','tuz','tür','tüm',
+  'uç','üç','üst','üye',
+  'var','ver',
+  'yağ','yak','yan','yap','yar','yat','yay','yaz','yel','yem','yen','yok','yön','yüz',
+  'zam','zan','zar','zor',
+  // 4 harf
+  'abla','acı','adam','ağaç','ağır','ağız','akıl','akış','alay','alan','alev','alım','alın',
+  'anne','arka','arzu','asıl','asma','atık','avlu','ayak','ayna',
+  'baca','baht','baş','beden','bela','bile','biri','bitki','borç','büyük',
+  'canlı','çaba','çalı','çanak','çapa','çatı','çene','çizgi','çoban','çorba',
+  'dalga','damar','davet','delik','demet','deniz','deve','diken','dilek',
+  'doğu','dolap','dolma','dönem','durak','duvar','duman',
+  'elmas','emek','emir','esen','eşek',
+  'fayda','fidan','fırça','fırın','fikir',
+  'gece','gelin','gemi','gişe','gönül','güzel',
+  'haber','hafif','halk','hasar','havuz','hayat','hırsız','hızlı',
+  'icat','ikaz','ilan','imza','insan','irade','isim',
+  'kebap','kedi','kelam','kenar','kesim','keten','keyif','kılıç','kına','kısa','koca','kolay',
+  'koltuk','komut','korku','kova','köpek','köprü','kulak','kurum','kutu','küçük',
+  'leke','liman',
+  'madde','masal','mavi','mekan','mesaj','meslek','meyve','mısır','model','motor','müzik',
+  'neden','nefes','nesne','niyet',
+  'ocak','onay','onur','oyun',
+  'para','pazar','perde','omuz','ordu','orman','ödev','öğle','önce','öneri','örnek',
+  'roman',
+  'saat','sanat','sebep','selam','siyah','sohbet','sokak','söylem',
+  'şahin','şarkı','şeker','şehir','şarap',
+  'tarih','tarla','tekne','tema','test','tırnak',
+  'uçak','uzman','ütü',
+  'yaban','yaka','yalın','yanık','yardım','yazar','yılan',
+  'zaman','zemin',
+  // 5 harf
+  'adres','ağabey','ahşap','albüm','aktris',
+  'bahçe','bakır','bakan','balkon','bayram','bebek','belge','berber','bıçak',
+  'bodrum','boyun','bölge',
+  'cadde','ceket','cennet','çalışma','çarşı','çekici','çelik',
+  'damar','damga','değer','deneme','destek','devlet','dürüst',
+  'eğlence','emekli','enerji','erkek',
+  'fabrika','falcı','gerçek','görüntü','gözlük','güçlük','güneş','güvenlik',
+  'hediye','heykel','horoz',
+  'işaret','içerik','ilginç','inanç','iptal',
+  'kadın','kalıcı','kaptan','karanlık','kasım','kavram','kebapçı','kelime','kırmızı',
+  'mahkeme','maymun','meydan','mutfak','müdür',
+  'okuyucu','oyuncu',
+  'papatya','resim','ruhsat',
+  'sabun','sağlam','sandık','satıcı',
+  'şaşırt','taban','tahmin','takım','talep','tavan',
+  'uğraş','uyarı',
+  'yabancı','yalnız','yardımcı','yarışma','yönetim','zincir',
+  // 6+ harf
+  'bahçede','başarı','değişim','gelişim','güzellik',
+  'hareket','hastane','hesabı','iletişim','ilerleme',
+  'katılım','kazanma','kesinlik',
+  'öğrenci','özellik','öğretim',
+  'planlama','sanatçı','serbest',
+  'tatilci','toplumun','verimli',
+  // Ek yaygın kelimeler
+  'araba','elma','masa','kalem','kitap','okul','yol','ağaç','yaprak','çiçek',
+  'kuş','balık','kedi','köpek','inek','koyun','böcek','ipek','pamuk','yün',
+  'elbise','göz','kulak','burun','diş','dil','kol','omuz','sırt','yüz',
+  'saç','bel','diz','parmak','tırnak','kemik','ten','deri','kan','nefes',
+  'ses','renk','mavi','kırmızı','sarı','yeşil','beyaz','siyah','mor','pembe',
+  'turuncu','gri','kahve','altın','gümüş','bakır','demir','çelik','kaya',
+  'toprak','kum','çamur','buz','ateş','rüzgar','yağmur','fırtına',
+  'güneş','yıldız','gök','bulut','gökkuşağı','sabah','akşam','gece','gündüz',
+  'hafta','yıl','mevsim','ilkbahar','yaz','sonbahar','kış','sıcak','soğuk','ılık',
+  'kapalı','açık','büyük','küçük','uzun','kısa','ince','kalın','dolu','boş',
+  'hızlı','yavaş','güzel','çirkin','iyi','kötü','doğru','yanlış','kolay','zor',
+  'tatlı','ekşi','acı','tuzlu','sert','yumuşak','parlak','karanlık',
+  'oval','kare','daire','üçgen','yedi','sekiz','dokuz','yarım','çeyrek',
+  'ekmek','çay','kahve','süt','yumurta','sebze','meyve','elma','armut',
+  'portakal','limon','üzüm','domates','patates','soğan','sarımsak','biber',
+  'mercimek','pirinç','makarna','çorba','pilav','börek','baklava','simit',
+  'tuz','şeker','yağ','sirke','reçel','bal','peynir','yoğurt',
+  'nehir','ırmak','orman','çiçek','kök','dal','gövde','tohum','bitki','çalı','ot',
+  'fare','tavşan','tilki','kurt','ayı','aslan','kaplan','fil','deve','maymun',
+  'güvercin','serçe','kurbağa','ahtapot','kelebek','karınca','sinek',
+  'cadde','park','okul','hastane','dükkan','market','banka','otel','restoran',
+  'gömlek','pantolon','etek','elbise','ceket','kazak','tişört','çorap','çizme',
+  'ayakkabı','terlik','sandalet','kemer','şapka','eldiven','çanta',
+  'masa','sıra','saat','radyo','televizyon','internet','bilgisayar','program',
+  'uygulama','film','konser','tiyatro','sinema','sergi','festival',
+  'arı','kovan','bal','petek','kelebek','papatya','lale','zambak','gül','çiçek',
+  'merdiven','kapı','pencere','duvar','tavan','çatı','mutfak','banyo','yatak',
+  'sandalye','koltuk','dolap','çekmece','halı','perde','lamba','ayna',
+  'çatal','kaşık','bıçak','tabak','bardak','tencere','tava',
+  'futbol','basketbol','tenis','satranç','yüzme','koşu','dans','müzik',
+  'resim','heykel','fotoğraf','bisiklet','motor','tren','gemi',
+  'kardeş','akraba','dost','arkadaş','öğretmen','doktor','polis','asker',
+  'şehir','köy','mahalle','sokak','ilçe','ülke','dünya','kıta','okyanus',
+];
+
+var TR_POOL = 'ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ'.split('');
+var POOL_WEIGHTS = { A:8,B:3,C:4,Ç:5,D:4,E:9,F:2,G:4,Ğ:2,H:3,I:5,İ:8,J:1,K:6,L:5,M:5,N:6,O:4,Ö:2,P:2,R:6,S:6,Ş:4,T:6,U:4,Ü:2,V:2,Y:4,Z:3 };
 
 function pickLetters(n) {
   var letters = [];
   for (var k in POOL_WEIGHTS) { for (var i=0;i<POOL_WEIGHTS[k];i++) letters.push(k); }
+  // Ensure at least 4 vowels in the selection
+  var vowels = ['A','E','I','İ','O','Ö','U','Ü'];
   var result = [];
   var pool = letters.slice();
-  for (var j=0;j<n;j++) {
+  // First pick vowels until we have 4
+  var vowelPool = pool.filter(function(l){ return vowels.indexOf(l)!==-1; });
+  for (var v=0;v<4 && vowelPool.length>0;v++) {
+    var vi = Math.floor(Math.random()*vowelPool.length);
+    var vl = vowelPool[vi];
+    result.push(vl);
+    var pi = pool.indexOf(vl); pool.splice(pi,1);
+    vowelPool.splice(vi,1);
+  }
+  // Fill rest randomly
+  for (var j=result.length;j<n;j++) {
     var idx = Math.floor(Math.random()*pool.length);
     result.push(pool[idx]);
     pool.splice(idx,1);
+  }
+  // Shuffle result
+  for (var s=result.length-1;s>0;s--){
+    var r=Math.floor(Math.random()*(s+1));
+    var tmp=result[s];result[s]=result[r];result[r]=tmp;
   }
   return result;
 }
 
 function canMakeWord(word, letters) {
-  var pool = letters.map(function(l){ return l.toLowerCase(); });
-  var chars = word.toUpperCase().replace('İ','İ').toLowerCase().split('');
+  var pool = letters.map(function(l){ return turkishLower(l); });
+  var chars = turkishLower(word).split('');
   for (var i=0;i<chars.length;i++) {
-    var pos = pool.indexOf(chars[i]);
+    var c = chars[i];
+    var pos = pool.indexOf(c);
+    if (pos===-1 && c==='i') pos = pool.indexOf('ı');
+    if (pos===-1 && c==='ı') pos = pool.indexOf('i');
     if (pos===-1) return false;
     pool.splice(pos,1);
   }
@@ -9747,8 +9891,8 @@ function KelimeAvciGame({ game, onGameEnd, soundOn }) {
   var s5=useState([]); var found=s5[0]; var setFound=s5[1];
   var s6=useState(null); var msg=s6[0]; var setMsg=s6[1];
   var s7=useState(false); var done=s7[0]; var setDone=s7[1];
+  var s8=useState([]); var usedTiles=s8[0]; var setUsedTiles=s8[1];
   var inputRef=useRef(null);
-  var scoreRef=useRef(0); scoreRef.current=score;
 
   useEffect(function(){
     if(done)return;
@@ -9758,23 +9902,41 @@ function KelimeAvciGame({ game, onGameEnd, soundOn }) {
     return function(){clearInterval(t);};
   },[done]);
 
-  useEffect(function(){ if(inputRef.current&&!done)inputRef.current.focus(); });
+  function handleTileClick(letter, tileIdx) {
+    if(done) return;
+    setInput(function(v){ return v + turkishLower(letter); });
+    setUsedTiles(function(u){ return u.concat([tileIdx]); });
+  }
+
+  function handleClearInput() {
+    setInput('');
+    setUsedTiles([]);
+  }
+
+  function handleDeleteLast() {
+    setInput(function(v){ return v.slice(0,-1); });
+    setUsedTiles(function(u){ return u.slice(0,-1); });
+  }
 
   function handleSubmit(e) {
     e&&e.preventDefault();
-    var word=input.trim().toLowerCase().replace(/i/g,'i').replace(/ı/g,'ı');
-    if(word.length<3){ setMsg('⚠️ En az 3 harf!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
-    if(found.indexOf(word)!==-1){ setMsg('✋ Zaten bulundu!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
-    var wordUpper = word.toUpperCase();
-    if(!canMakeWord(wordUpper, letters)){ setMsg('❌ Bu harfler yok!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
-    var inList = TR_WORDS.indexOf(word)!==-1;
-    if(!inList){ setMsg('🤔 Geçersiz kelime!'); setTimeout(function(){setMsg(null);},1200); setInput(''); return; }
+    var rawInput = input.trim();
+    if(!rawInput) return;
+    var word = turkishLower(rawInput);
+    if(word.length<3){ setMsg('⚠️ En az 3 harf!'); setTimeout(function(){setMsg(null);},1200); handleClearInput(); return; }
+    if(found.indexOf(word)!==-1){ setMsg('✋ Zaten bulundu!'); setTimeout(function(){setMsg(null);},1200); handleClearInput(); return; }
+    if(!canMakeWord(word, letters)){ setMsg('❌ Bu harfler yok!'); setTimeout(function(){setMsg(null);},1200); handleClearInput(); return; }
+    var wordNorm = word.replace(/ı/g,'i');
+    var inList = TR_WORDS.some(function(w){ return turkishLower(w).replace(/ı/g,'i') === wordNorm; });
+    if(!inList){ setMsg('🤔 Geçersiz kelime!'); setTimeout(function(){setMsg(null);},1200); handleClearInput(); return; }
     var pts = word.length*10;
     setFound(function(f){ return f.concat([word]); });
     setScore(function(s){ return s+pts; });
     setMsg('✅ +'+pts+' puan!');
+    if(soundOn) playSound('correct');
+    playHaptic('correct');
     setTimeout(function(){setMsg(null);},900);
-    setInput('');
+    handleClearInput();
   }
 
   if(done){
@@ -9795,26 +9957,56 @@ function KelimeAvciGame({ game, onGameEnd, soundOn }) {
   }
 
   return (
-    <div style={{maxWidth:440,margin:'0 auto',padding:'24px 20px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <div style={{fontWeight:800,fontSize:32,color:timeLeft<=15?'#EF4444':'var(--text)',fontVariantNumeric:'tabular-nums'}}>{timeLeft}s</div>
-        <div style={{textAlign:'center'}}><div style={{fontWeight:800,fontSize:22,color:'#863bff'}}>{score}</div><div style={{fontSize:11,color:'var(--text-secondary)'}}>puan</div></div>
-        <div style={{fontSize:14,color:'var(--text-secondary)'}}>{found.length} kelime</div>
+    <div style={{maxWidth:440,margin:'0 auto',padding:'20px 16px'}}>
+      {/* Header stats */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontWeight:800,fontSize:30,color:timeLeft<=15?'#EF4444':'var(--text)',fontVariantNumeric:'tabular-nums'}}>{timeLeft}s</div>
+        <div style={{textAlign:'center'}}><div style={{fontWeight:800,fontSize:22,color:'#0F766E'}}>{score}</div><div style={{fontSize:11,color:'var(--text-secondary)'}}>puan</div></div>
+        <div style={{fontSize:14,color:'var(--text-secondary)',fontWeight:600}}>{found.length} kelime</div>
       </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center',marginBottom:20}}>
+      {/* Letter tiles — clickable */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,marginBottom:14}}>
         {letters.map(function(l,i){
-          return <div key={i} style={{width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--surface)',border:'2px solid var(--border)',borderRadius:10,fontWeight:800,fontSize:18,userSelect:'none'}}>{l}</div>;
+          var isUsed = usedTiles.indexOf(i)!==-1;
+          return (
+            <button key={i} onClick={function(){ if(!isUsed) handleTileClick(l,i); }}
+              disabled={isUsed}
+              style={{height:44,display:'flex',alignItems:'center',justifyContent:'center',
+                background:isUsed?'var(--surface-hover)':'var(--surface)',
+                border:isUsed?'2px solid transparent':'2px solid #0F766E',
+                borderRadius:10,fontWeight:800,fontSize:17,cursor:isUsed?'default':'pointer',
+                color:isUsed?'var(--text-secondary)':'var(--text)',
+                opacity:isUsed?0.35:1,
+                transition:'all 0.1s',
+                textDecoration:isUsed?'line-through':'none'
+              }}>
+              {l}
+            </button>
+          );
         })}
       </div>
-      <form onSubmit={handleSubmit} style={{display:'flex',gap:10,marginBottom:12}}>
-        <input ref={inputRef} value={input} onChange={function(e){setInput(e.target.value);}}
-          placeholder="Kelime yaz..."
-          style={{flex:1,padding:'12px 16px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontFamily:'inherit',outline:'none'}}
+      {/* Word assembly bar */}
+      <div style={{background:'var(--surface)',border:'2px solid var(--border)',borderRadius:14,padding:'10px 14px',marginBottom:10,minHeight:48,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+        <div style={{fontSize:18,fontWeight:700,letterSpacing:2,flex:1,color:input?'var(--text)':'var(--text-secondary)'}}>
+          {input || <span style={{fontWeight:400,fontSize:14}}>Harf seç veya yaz...</span>}
+        </div>
+        {input&&(
+          <div style={{display:'flex',gap:6}}>
+            <button onClick={handleDeleteLast} style={{width:32,height:32,borderRadius:8,background:'var(--surface-hover)',border:'1px solid var(--border)',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>⌫</button>
+            <button onClick={handleClearInput} style={{width:32,height:32,borderRadius:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',cursor:'pointer',fontSize:14,fontWeight:700,color:'#EF4444',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          </div>
+        )}
+      </div>
+      {/* Submit + keyboard input */}
+      <form onSubmit={handleSubmit} style={{display:'flex',gap:8,marginBottom:10}}>
+        <input ref={inputRef} value={input} onChange={function(e){setInput(e.target.value);setUsedTiles([]);}}
+          placeholder="Ya da klavyeyle yaz..."
+          style={{flex:1,padding:'10px 14px',borderRadius:12,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:14,fontFamily:'inherit',outline:'none'}}
         />
-        <button type="submit" style={{padding:'12px 20px',borderRadius:12,background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>↵</button>
+        <button type="submit" style={{padding:'10px 18px',borderRadius:12,background:'linear-gradient(135deg,#0F766E,#2DD4BF)',color:'#fff',border:'none',fontWeight:800,fontSize:15,cursor:'pointer'}}>GİR</button>
       </form>
-      {msg&&<div style={{textAlign:'center',fontSize:14,fontWeight:700,color:'var(--text)',padding:'8px',borderRadius:10,background:'var(--surface-hover)',marginBottom:8,animation:'fadeUp 0.2s ease'}}>{msg}</div>}
-      {found.length>0&&<div style={{fontSize:12,color:'var(--text-secondary)',textAlign:'center'}}>{found.slice(-4).join(' · ')}</div>}
+      {msg&&<div style={{textAlign:'center',fontSize:14,fontWeight:700,padding:'8px',borderRadius:10,background:'var(--surface-hover)',marginBottom:8,animation:'fadeUp 0.2s ease'}}>{msg}</div>}
+      {found.length>0&&<div style={{fontSize:12,color:'var(--text-secondary)',textAlign:'center',marginTop:4}}>{found.slice(-5).join(' · ')}</div>}
     </div>
   );
 }
