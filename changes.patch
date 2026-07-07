@@ -1,0 +1,4 @@
+git apply changes.patch
+git add src/App.jsx
+git commit -m "Feat: unique usernames, leaderboard API, daily reward, lobby chat, onboarding"
+git push origin main
