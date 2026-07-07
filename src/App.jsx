@@ -5391,8 +5391,11 @@ function FriendPanel({ sock, myUserId }) {
     setLoading(true); setSearchMsg('');
     sock.searchUser(searchQ.trim(), (res) => {
       setLoading(false);
-      setSearchResults((res?.users || res?.results || []).filter(u => u.userId !== myUserId));
-      if (!res?.results?.length) setSearchMsg('Kullanıcı bulunamadı');
+      if (res?.error) { setSearchMsg('❌ ' + res.error); return; }
+      const found = (res?.users || res?.results || []).filter(u => u.userId !== myUserId);
+      setSearchResults(found);
+      if (!found.length) setSearchMsg('Kullanıcı bulunamadı. Kişinin uygulamayı açık tutması gerekiyor.');
+      else setSearchMsg('');
     });
   };
 
