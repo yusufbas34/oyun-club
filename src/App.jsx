@@ -2768,6 +2768,109 @@ function checkGomokuWin(board, r, c, color) {
   }
   return false;
 }
+// ============================================================
+// REVERSİ (OTHELLo)
+// ============================================================
+function ReversiGame({ game, players, onGameEnd, soundOn }) {
+  const SZ = 8;
+  const initBoard = () => {
+    const b = Array(SZ*SZ).fill(null);
+    b[27]='W'; b[28]='B'; b[35]='B'; b[36]='W';
+    return b;
+  };
+  const [board, setBoard] = useState(initBoard);
+  const [turn, setTurn] = useState('B');
+  const [scores, setScores] = useState({B:2,W:2});
+  const [over, setOver] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  function getFlips(b, idx, color) {
+    if (b[idx]) return [];
+    const opp = color==='B'?'W':'B';
+    const row = Math.floor(idx/SZ), col = idx%SZ;
+    const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    const flips = [];
+    for (const [dr,dc] of dirs) {
+      const line=[];
+      let r=row+dr, c=col+dc;
+      while(r>=0&&r<SZ&&c>=0&&c<SZ){
+        const i=r*SZ+c;
+        if(b[i]===opp){line.push(i);r+=dr;c+=dc;}
+        else if(b[i]===color){flips.push(...line);break;}
+        else break;
+      }
+    }
+    return flips;
+  }
+
+  function getValid(b, color) {
+    const v=[];
+    for(let i=0;i<SZ*SZ;i++) if(getFlips(b,i,color).length>0) v.push(i);
+    return v;
+  }
+
+  const valid = useMemo(()=>getValid(board,turn),[board,turn]);
+
+  const place = (idx) => {
+    if (over || board[idx]) return;
+    const flips = getFlips(board, idx, turn);
+    if (!flips.length) return;
+    if (soundOn) playSound('place');
+    const nb = [...board];
+    nb[idx]=turn;
+    for(const f of flips) nb[f]=turn;
+    const bC=nb.filter(c=>c==='B').length, wC=nb.filter(c=>c==='W').length;
+    setScores({B:bC,W:wC});
+    setBoard(nb);
+    const opp=turn==='B'?'W':'B';
+    const oppV=getValid(nb,opp);
+    if(oppV.length){setTurn(opp);setMsg('');}
+    else {
+      const myV=getValid(nb,turn);
+      if(myV.length){setMsg('Rakip geçiyor, sen devam et');} // keep turn
+      else {
+        setOver(true);
+        if(bC>wC){setMsg((players[0]||'Siyah')+' kazandı!');onGameEnd('win');}
+        else if(wC>bC){setMsg((players[1]||'Beyaz')+' kazandı!');onGameEnd('loss');}
+        else{setMsg('Berabere!');onGameEnd('draw');}
+        if(soundOn) playSound('win');
+      }
+    }
+  };
+
+  const p1=players&&players[0]?players[0]:'Siyah';
+  const p2=players&&players[1]?players[1]:'Beyaz';
+
+  return (
+    <div style={{maxWidth:400,margin:'0 auto',padding:'16px',textAlign:'center'}}>
+      <div style={{display:'flex',justifyContent:'space-around',marginBottom:14,gap:8}}>
+        {[{color:'B',label:p1,disc:'⚫'},{color:'W',label:p2,disc:'⚪'}].map(({color,label,disc})=>(
+          <div key={color} style={{flex:1,padding:'10px 8px',borderRadius:12,background:turn===color&&!over?'linear-gradient(135deg,#1e1b4b,#312e81)':'var(--surface)',color:turn===color&&!over?'#fff':'var(--text)',border:'2px solid'+(turn===color&&!over?'#6366f1':'var(--border)'),transition:'all 0.2s'}}>
+            <div style={{fontSize:22}}>{disc}</div>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:2}}>{label}</div>
+            <div style={{fontSize:22,fontWeight:800}}>{scores[color]}</div>
+          </div>
+        ))}
+      </div>
+      {msg&&<div style={{marginBottom:10,padding:'8px 16px',borderRadius:10,background:'var(--surface)',fontSize:14,fontWeight:600,color:over?'#059669':'var(--text)'}}>{msg}</div>}
+      <div style={{display:'grid',gridTemplateColumns:`repeat(${SZ},1fr)`,gap:2,background:'#14532d',padding:4,borderRadius:10,margin:'0 auto',maxWidth:340}}>
+        {board.map((cell,i)=>{
+          const isV=valid.includes(i);
+          return (
+            <div key={i} onClick={()=>place(i)}
+              style={{aspectRatio:'1',borderRadius:3,background:'#16a34a',display:'flex',alignItems:'center',justifyContent:'center',cursor:isV?'pointer':'default',border:isV?'1.5px solid rgba(255,255,255,0.6)':'1.5px solid transparent',transition:'border 0.1s'}}>
+              {cell&&<div style={{width:'78%',height:'78%',borderRadius:'50%',background:cell==='B'?'#111827':'#f8fafc',boxShadow:cell==='B'?'inset 1px 1px 3px rgba(255,255,255,0.2)':'inset 1px 1px 3px rgba(0,0,0,0.15)',transition:'all 0.15s'}}/>}
+              {isV&&!cell&&<div style={{width:'28%',height:'28%',borderRadius:'50%',background:turn==='B'?'rgba(0,0,0,0.35)':'rgba(255,255,255,0.45)'}}/>}
+            </div>
+          );
+        })}
+      </div>
+      {!over&&<div style={{marginTop:12,fontSize:13,color:'var(--text-secondary)'}}>{turn==='B'?p1:p2} hamle yapıyor</div>}
+      {over&&<button onClick={()=>{setBoard(initBoard());setTurn('B');setScores({B:2,W:2});setOver(false);setMsg('');}} style={{marginTop:14,padding:'12px 28px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#059669,#34d399)',color:'#fff',fontWeight:700,fontSize:15,cursor:'pointer'}}>Yeniden Oyna</button>}
+    </div>
+  );
+}
+
 function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const [board, setBoard] = useState(() => Array(GT_SIZE*GT_SIZE).fill(null));
   const [turn, setTurn] = useState('black');
@@ -4482,6 +4585,18 @@ const GAMES = [
     genre: 'kelime',
     color: '#065F46',
     bg: 'linear-gradient(135deg, #065F46 0%, #34D399 100%)',
+  },
+  {
+    id: 'reversi',
+    name: 'Reversi',
+    desc: 'Taşları çevir, tahtayı kap',
+    icon: '⬛⬜',
+    players: 2,
+    local: true,
+    genre: 'strateji',
+    isNew: true,
+    color: '#14532d',
+    bg: 'linear-gradient(135deg, #14532d 0%, #16a34a 100%)',
   },
   {
     id: 'minesweeper',
@@ -6928,36 +7043,27 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
               hoverable
               style={{ padding: 0, overflow: 'hidden', animation: 'fadeUp 0.4s ease', animationDelay: `${i * 0.05}s`, animationFillMode: 'both' }}
             >
-              <div style={{ background: game.bg, padding: '20px 16px', color: '#fff', position: 'relative', overflow: 'hidden', minHeight: 80 }}>
-                <div style={{ position: 'absolute', right: -8, top: -8, fontSize: 64, opacity: 0.15, fontWeight: 800 }}>{game.icon}</div>
-                {game.isNew && <div style={{ position:'absolute', top:8, right:8, background:'#E63946', color:'#fff', fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:8, letterSpacing:0.5 }}>YENİ</div>}
-                <span style={{ fontSize: 28, display: 'block', marginBottom: 2 }}>{game.icon}</span>
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                  <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px' }}>
-                    {game.players === 1 ? '👤 Tek' : game.minPlayers ? `👨‍👩‍👧 ${game.minPlayers}-${game.players} Kişi` : '👥 2 Kişi'}
-                  </span>
-                  <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.25)', borderRadius: 6, padding: '2px 6px', textTransform: 'capitalize' }}>
-                    {genreIcons[game.genre] || '🎮'} {game.genre}
-                  </span>
-                </div>
+              <div style={{ background: game.bg, padding: '16px 14px 12px', color: '#fff', position: 'relative', overflow: 'hidden', minHeight: 96 }}>
+                <div style={{ position: 'absolute', right: -18, bottom: -18, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', right: 14, bottom: -28, width: 54, height: 54, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
+                {game.isNew && <div style={{ position:'absolute', top:7, right:7, background:'#E63946', color:'#fff', fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:8, letterSpacing:0.5 }}>YENİ</div>}
+                {game.players > 1 && <div style={{ position:'absolute', top:7, left:7, background:'rgba(0,0,0,0.28)', color:'#fff', fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:8 }}>👥 {game.minPlayers ? `${game.minPlayers}-${game.players}` : '2'} kişi</div>}
+                <span style={{ fontSize: 38, display: 'block', marginBottom: 6, marginTop: game.players > 1 ? 16 : 0, lineHeight: 1 }}>{game.icon}</span>
+                <div style={{ fontFamily: "'Sora', sans-serif", fontWeight: 800, fontSize: 13, lineHeight: 1.2, textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>{game.name}</div>
               </div>
-              <div style={{ padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{game.name}</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: 0, lineHeight: 1.4 }}>{game.desc}</p>
-                  </div>
+              <div style={{ padding: '10px 14px' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 11, margin: '0 0 8px', lineHeight: 1.4 }}>{game.desc}</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {gs && gs.played > 0
+                    ? <div style={{ fontSize: 10, color: game.color || '#6366f1', fontWeight: 600 }}>{gs.wins}G/{gs.losses}M · {gs.played}</div>
+                    : <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{genreIcons[game.genre] || '🎮'} {game.genre}</div>
+                  }
                   <button
                     onClick={function(e) { e.stopPropagation(); onSelectGame(game); }}
-                    style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 11px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    style={{ background: game.color || '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", flexShrink: 0 }}>
                     Oyna →
                   </button>
                 </div>
-                {gs && gs.played > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: game.color, fontWeight: 600 }}>
-                    {gs.wins}G / {gs.losses}M · {gs.played} oyun
-                  </div>
-                )}
               </div>
             </Card>
           );
@@ -7892,13 +7998,16 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
   const [mode, setMode] = useState(null); // null | 'bot' | '2p'
   const [p1Choice, setP1Choice] = useState(null);
   const [p2Choice, setP2Choice] = useState(null);
-  const [p2Hidden, setP2Hidden] = useState(null); // for 2p mode - hidden until both pick
+  const [p2Hidden, setP2Hidden] = useState(null);
   const [scores, setScores] = useState([0, 0]);
   const [round, setRound] = useState(1);
   const [result, setResult] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [gameWinner, setGameWinner] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  // 2P state: 'p1pick' | 'handoff' | 'p2pick' | 'reveal'
+  const [turn2p, setTurn2p] = useState('p1pick');
+  const [secretP1, setSecretP1] = useState(null);
 
   if (!mode) return (
     <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
@@ -7913,10 +8022,62 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
           </button>
         )}
         <button onClick={()=>setMode('bot')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#2A9D8F,#76C893)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>🤖 Bota Karşı</button>
-        <button onClick={()=>setMode('2p')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>📱 Aynı Cihazda 2 Kişi</button>
+        <button onClick={()=>{ setMode('2p'); setTurn2p('p1pick'); setSecretP1(null); }} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
+
+  // 2P mode: pass-the-phone hidden choice flow
+  if (mode === '2p' && !showResult) {
+    if (turn2p === 'handoff') {
+      return (
+        <div style={{maxWidth:380,margin:'0 auto',padding:'40px 16px',textAlign:'center'}}>
+          <div style={{fontSize:64,marginBottom:16}}>📱</div>
+          <div style={{fontWeight:800,fontSize:20,marginBottom:8,fontFamily:"'Sora',sans-serif"}}>Telefonu 2. oyuncuya ver</div>
+          <div style={{color:'var(--text-secondary)',fontSize:14,marginBottom:32}}>1. oyuncu seçimini yaptı. Ekranı gösterme!</div>
+          <button onClick={()=>setTurn2p('p2pick')} style={{padding:'16px 32px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#1D4ED8,#60A5FA)',color:'#fff',fontWeight:700,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+            Hazırım →
+          </button>
+        </div>
+      );
+    }
+    const picking = turn2p === 'p1pick' ? (players[0] || 'Oyuncu 1') : (players[1] || 'Oyuncu 2');
+    return (
+      <div style={{maxWidth:380,margin:'0 auto',padding:'24px 16px',textAlign:'center'}}>
+        <div style={{background:'linear-gradient(135deg,#1e1b4b,#312e81)',borderRadius:16,padding:'16px',marginBottom:20,color:'#fff'}}>
+          <div style={{fontSize:13,opacity:0.8,marginBottom:4}}>Raund {round} • Skor: {scores[0]} - {scores[1]}</div>
+          <div style={{fontWeight:700,fontSize:16}}>{picking} seçimini yapıyor</div>
+          <div style={{fontSize:12,opacity:0.7,marginTop:4}}>Rakibine gösterme! 🤫</div>
+        </div>
+        <div style={{display:'flex',gap:12,justifyContent:'center'}}>
+          {CHOICES.map(c => (
+            <button key={c.id} onClick={()=>{
+              if(soundOn) playSound('place');
+              if(turn2p === 'p1pick') { setSecretP1(c); setTurn2p('handoff'); }
+              else {
+                const p1=secretP1, p2=c;
+                setP1Choice(p1); setP2Choice(p2); setShowResult(true);
+                const res = p1.id===p2.id?'draw':p1.beats===p2.id?'p1':'p2';
+                setResult(res);
+                if(soundOn) setTimeout(()=>playSound(res==='p1'?'match':res==='p2'?'lose':'click'),300);
+                const ns=[...scores];
+                if(res==='p1') ns[0]++; else if(res==='p2') ns[1]++;
+                setScores(ns);
+                if(ns[0]>=3||ns[1]>=3){
+                  const w=ns[0]>=3?0:1;
+                  setTimeout(()=>{ setGameWinner(w); onGameEnd(w===0?'win':'loss'); if(w===0&&soundOn)playSound('win'); if(w===0){setShowConfetti(true);setTimeout(()=>setShowConfetti(false),2000);} },1500);
+                }
+              }
+            }} style={{padding:'20px 16px',borderRadius:14,border:'2px solid var(--border)',background:'var(--surface)',fontSize:40,cursor:'pointer',transition:'transform 0.1s',flexDirection:'column',display:'flex',alignItems:'center',gap:6}}>
+              <span>{c.emoji}</span>
+              <span style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)'}}>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const play = (choice) => {
     if (showResult) return;
     if (soundOn) playSound('place');
@@ -7924,15 +8085,9 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     setP1Choice(choice);
     setP2Choice(bot);
     setShowResult(true);
-    let res =
-      choice.id === bot.id ? 'draw' : choice.beats === bot.id ? 'p1' : 'p2';
+    let res = choice.id === bot.id ? 'draw' : choice.beats === bot.id ? 'p1' : 'p2';
     setResult(res);
-    if (soundOn)
-      setTimeout(
-        () =>
-          playSound(res === 'p1' ? 'match' : res === 'p2' ? 'lose' : 'click'),
-        300
-      );
+    if (soundOn) setTimeout(() => playSound(res === 'p1' ? 'match' : res === 'p2' ? 'lose' : 'click'), 300);
     const ns = [...scores];
     if (res === 'p1') ns[0]++;
     else if (res === 'p2') ns[1]++;
@@ -7943,10 +8098,7 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
         setGameWinner(w);
         onGameEnd(w === 0 ? 'win' : 'loss');
         if (w === 0 && soundOn) playSound('win');
-        if (w === 0) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 2000);
-        }
+        if (w === 0) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 2000); }
       }, 1500);
     }
   };
@@ -7956,6 +8108,7 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     setResult(null);
     setShowResult(false);
     setRound((r) => r + 1);
+    if (mode === '2p') { setTurn2p('p1pick'); setSecretP1(null); }
   };
   const reset = () => {
     setP1Choice(null);
@@ -11214,7 +11367,7 @@ export default function App() {
   const adGameCountRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
-  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0}, sorugecesi:{played:0,wins:0,losses:0}, adamasmaca:{played:0,wins:0,losses:0}, stroop:{played:0,wins:0,losses:0} };
+  const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0}, sorugecesi:{played:0,wins:0,losses:0}, adamasmaca:{played:0,wins:0,losses:0}, stroop:{played:0,wins:0,losses:0}, reversi:{played:0,wins:0,losses:0} };
   const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 }, streakFreeze: { count: 1, weekUsed: null }, season: { num: 0, xp: 0, month: null } };
   const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { ...PROG_DEFAULTS, history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }; });
 
@@ -11737,6 +11890,15 @@ export default function App() {
         return (
           <StroopTestiGame
             game={selectedGame}
+            onGameEnd={handleGameEnd}
+            soundOn={soundOn}
+          />
+        );
+      case 'reversi':
+        return (
+          <ReversiGame
+            game={selectedGame}
+            players={players}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
           />
