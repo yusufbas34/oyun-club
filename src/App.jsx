@@ -58,6 +58,12 @@ function useSocket(username) {
   var s13 = useState(null);
   var playerJoinedToast = s13[0]; // {name: string}
   var setPlayerJoinedToast = s13[1];
+  var s14 = useState(null);
+  var registerError = s14[0];
+  var setRegisterError = s14[1];
+  var s15 = useState([]);
+  var lobbyMessages = s15[0];
+  var setLobbyMessages = s15[1];
 
   useEffect(
     function () {
@@ -107,9 +113,18 @@ function useSocket(username) {
                   });
                 }
               } else {
-                setSocketError(res ? res.error : 'Kayit basarisiz');
+                var errCode = res ? res.error : 'Kayit basarisiz';
+                if (res && res.error === 'name_taken') {
+                  setRegisterError('Bu takma ad zaten kullanılıyor. Lütfen farklı bir ad seçin.');
+                } else {
+                  setSocketError(errCode);
+                }
               }
             });
+          });
+
+          socket.on('lobby_message', function(msg) {
+            setLobbyMessages(function(prev) { return prev.concat(msg).slice(-100); });
           });
 
           socket.on('disconnect', function () {
@@ -486,6 +501,36 @@ function useSocket(username) {
     socketRef.current.emit('invite_friend', { toUserId, roomId, gameId }, cb || function(){});
   }, []);
 
+  var submitScore = useCallback(function(gameId, result) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('submit_score', { gameId, result });
+  }, []);
+
+  var sendLobbyMessage = useCallback(function(text) {
+    if (!socketRef.current || !text) return;
+    socketRef.current.emit('lobby_message', { text });
+  }, []);
+
+  var getLobbyMessages = useCallback(function(cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('get_lobby_messages', null, function(res) {
+      if (res && res.messages) setLobbyMessages(res.messages);
+      if (cb) cb(res);
+    });
+  }, []);
+
+  var clearRegisterError = useCallback(function() { setRegisterError(null); }, []);
+
+  var renameUser = useCallback(function(newName, cb) {
+    if (!socketRef.current || !newName) return;
+    socketRef.current.emit('rename_user', { newName }, function(res) {
+      if (res && res.error === 'name_taken') {
+        setRegisterError('Bu takma ad zaten kullanılıyor. Lütfen farklı bir ad seçin.');
+      }
+      if (cb) cb(res);
+    });
+  }, []);
+
   var getOnlineUsers = useCallback(function(cb) {
     if (!socketRef.current) return;
     socketRef.current.emit('get_online_users', null, cb || function(){});
@@ -526,6 +571,13 @@ function useSocket(username) {
     removeFriend: removeFriend,
     searchUser: searchUser,
     inviteFriend: inviteFriend,
+    submitScore: submitScore,
+    sendLobbyMessage: sendLobbyMessage,
+    getLobbyMessages: getLobbyMessages,
+    lobbyMessages: lobbyMessages,
+    registerError: registerError,
+    clearRegisterError: clearRegisterError,
+    renameUser: renameUser,
     getOnlineUsers: getOnlineUsers,
   };
 }
@@ -1219,13 +1271,9 @@ var MP_GAMES = [
 function OnlineUsersInvitePanel({ sock, onlineUsers, setOnlineUsers, invitedUsers, setInvitedUsers, roomId, gameId }) {
   useEffect(function() {
     if (!sock.getOnlineUsers) return;
-    sock.getOnlineUsers(function(res) {
-      if (res && res.users) setOnlineUsers(res.users);
-    });
+    sock.getOnlineUsers(function(res) { if (res && res.users) setOnlineUsers(res.users); });
     var t = setInterval(function() {
-      sock.getOnlineUsers(function(res) {
-        if (res && res.users) setOnlineUsers(res.users);
-      });
+      sock.getOnlineUsers(function(res) { if (res && res.users) setOnlineUsers(res.users); });
     }, 5000);
     return function() { clearInterval(t); };
   }, [!!sock.isRegistered]);
@@ -1249,14 +1297,11 @@ function OnlineUsersInvitePanel({ sock, onlineUsers, setOnlineUsers, invitedUser
                 </div>
                 <span style={{ fontSize: 14, fontWeight: 500 }}>{u.name}</span>
               </div>
-              <button
-                disabled={!!invited}
-                onClick={function() {
-                  if (!sock.inviteFriend) return;
-                  sock.inviteFriend(u.userId, roomId, gameId);
-                  setInvitedUsers(function(prev) { var n = Object.assign({}, prev); n[u.userId] = true; return n; });
-                }}
-                style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: invited ? '#d1fae5' : 'linear-gradient(135deg,#863bff,#5b21b6)', color: invited ? '#059669' : '#fff', fontWeight: 700, fontSize: 12, cursor: invited ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+              <button disabled={!!invited} onClick={function() {
+                if (!sock.inviteFriend) return;
+                sock.inviteFriend(u.userId, roomId, gameId);
+                setInvitedUsers(function(prev) { var n = Object.assign({}, prev); n[u.userId] = true; return n; });
+              }} style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: invited ? '#d1fae5' : 'linear-gradient(135deg,#863bff,#5b21b6)', color: invited ? '#059669' : '#fff', fontWeight: 700, fontSize: 12, cursor: invited ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                 {invited ? '✓ Davet gönderildi' : 'Davet Et'}
               </button>
             </div>
@@ -1390,7 +1435,7 @@ function MultiplayerLobby(props) {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={function() {
                 var code = sock.roomData.id;
-                navigator.clipboard && navigator.clipboard.writeText(code).catch(function(){});
+                try { navigator.clipboard.writeText(code); } catch(e) {}
                 var el = document.createElement('textarea'); el.value = code; document.body.appendChild(el); el.select(); try { document.execCommand('copy'); } catch(e){} document.body.removeChild(el);
               }} style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: 'var(--surface-hover)', color: 'var(--text)', fontWeight: 700, fontSize: 15, cursor: 'pointer', letterSpacing: 2, fontFamily: 'monospace' }}>
                 📋 {sock.roomData.id}
@@ -1455,25 +1500,16 @@ function MultiplayerLobby(props) {
         {sock.roomData.state === 'waiting' && canStart && isHost && (
           <button onClick={sock.startGame}
             style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #059669, #34D399)', color: '#fff', fontWeight: 700, fontSize: 16, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", marginBottom: 16 }}>
-            Oyunu Başlat
+            Oyunu Baslat
           </button>
         )}
         {sock.roomData.state === 'waiting' && !canStart && (
           <div>
             <div style={{ textAlign: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 12, marginBottom: 12, border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 24 }}>⏳</div>
-              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Rakip bekleniyor... Daveti kopyala ve arkadaşına gönder!</div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Rakip bekleniyor... Yukarıdaki kodu kopyalayıp arkadaşına gönder!</div>
             </div>
-            {/* Çevrimiçi oyuncular */}
-            <OnlineUsersInvitePanel
-              sock={sock}
-              onlineUsers={onlineUsers}
-              setOnlineUsers={setOnlineUsers}
-              invitedUsers={invitedUsers}
-              setInvitedUsers={setInvitedUsers}
-              roomId={sock.roomData.id}
-              gameId={sock.roomData.gameId}
-            />
+            <OnlineUsersInvitePanel sock={sock} onlineUsers={onlineUsers} setOnlineUsers={setOnlineUsers} invitedUsers={invitedUsers} setInvitedUsers={setInvitedUsers} roomId={sock.roomData.id} gameId={sock.roomData.gameId} />
           </div>
         )}
         {sock.roomData.state === 'waiting' && canStart && !isHost && (
@@ -5325,7 +5361,7 @@ const Header = ({
 // ============================================================
 // LOGIN PAGE
 // ============================================================
-const LoginPage = ({ onLogin, dark, onToggleDark }) => {
+const LoginPage = ({ onLogin, dark, onToggleDark, nameError, onClearNameError }) => {
   const [nickname, setNickname] = useState('');
   const googleBtnRef = useRef(null);
 
@@ -5447,12 +5483,17 @@ const LoginPage = ({ onLogin, dark, onToggleDark }) => {
             <span>veya</span>
             <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
           </div>
+          {nameError && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', marginBottom: 12, color: '#DC2626', fontSize: 13, fontWeight: 600 }}>
+              ⚠️ {nameError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
               placeholder="Takma ad gir..."
               value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
+              onChange={(e) => { setNickname(e.target.value); if (onClearNameError) onClearNameError(); }}
               onKeyDown={(e) =>
                 e.key === 'Enter' &&
                 nickname.trim() &&
@@ -5462,7 +5503,7 @@ const LoginPage = ({ onLogin, dark, onToggleDark }) => {
                 flex: 1,
                 padding: '12px 16px',
                 borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border)',
+                border: nameError ? '1px solid #EF4444' : '1px solid var(--border)',
                 fontSize: 15,
                 outline: 'none',
                 fontFamily: "'DM Sans', sans-serif",
@@ -6109,39 +6150,37 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
 // ============================================================
 // LEADERBOARD PAGE (per-game)
 // ============================================================
-const FAKE_LB = {
-  xox:         [ { name: 'Ahmet K.',   played: 52, wins: 38, avatar: 0 }, { name: 'Zeynep A.',  played: 41, wins: 31, avatar: 1 }, { name: 'Emre Y.',    played: 47, wins: 27, avatar: 3 }, { name: 'Elif S.',    played: 33, wins: 24, avatar: 4 }, { name: 'Murat D.',   played: 30, wins: 18, avatar: 2 } ],
-  wordle:      [ { name: 'Selin T.',   played: 30, wins: 24, avatar: 1 }, { name: 'Can M.',     played: 28, wins: 20, avatar: 0 }, { name: 'Ayşe B.',    played: 25, wins: 18, avatar: 5 }, { name: 'Kerem A.',   played: 22, wins: 15, avatar: 2 }, { name: 'Deniz K.',   played: 20, wins: 12, avatar: 3 } ],
-  sudoku:      [ { name: 'Cem Y.',     played: 45, wins: 40, avatar: 3 }, { name: 'Büşra K.',   played: 38, wins: 33, avatar: 4 }, { name: 'Tarık S.',   played: 32, wins: 28, avatar: 0 }, { name: 'Meltem A.',  played: 29, wins: 24, avatar: 1 }, { name: 'Ozan D.',    played: 25, wins: 19, avatar: 2 } ],
-  minesweeper: [ { name: 'Furkan E.',  played: 60, wins: 45, avatar: 2 }, { name: 'Nihan T.',   played: 50, wins: 38, avatar: 5 }, { name: 'Berk A.',    played: 44, wins: 32, avatar: 0 }, { name: 'Gizem Y.',   played: 38, wins: 27, avatar: 1 }, { name: 'Tolga M.',   played: 34, wins: 23, avatar: 3 } ],
-  rps:         [ { name: 'Merve K.',   played: 80, wins: 55, avatar: 4 }, { name: 'Alp D.',     played: 72, wins: 48, avatar: 0 }, { name: 'Ceren S.',   played: 65, wins: 42, avatar: 1 }, { name: 'Yusuf A.',   played: 60, wins: 38, avatar: 2 }, { name: 'Ecem B.',    played: 55, wins: 34, avatar: 5 } ],
-  connectfour: [ { name: 'Serkan Y.',  played: 40, wins: 30, avatar: 3 }, { name: 'Hande K.',   played: 35, wins: 26, avatar: 1 }, { name: 'İlker T.',   played: 30, wins: 22, avatar: 2 }, { name: 'Pınar A.',   played: 28, wins: 19, avatar: 4 }, { name: 'Onur M.',    played: 25, wins: 15, avatar: 0 } ],
-  snake:       [ { name: 'Kaan B.',    played: 35, wins: 20, avatar: 2 }, { name: 'İpek Y.',    played: 30, wins: 17, avatar: 5 }, { name: 'Mert A.',    played: 28, wins: 15, avatar: 0 }, { name: 'Seda T.',    played: 25, wins: 12, avatar: 1 }, { name: 'Koray D.',   played: 22, wins: 10, avatar: 3 } ],
-  memory:      [ { name: 'Arzu K.',    played: 28, wins: 22, avatar: 1 }, { name: 'Batu A.',    played: 25, wins: 19, avatar: 3 }, { name: 'Ceyda M.',   played: 22, wins: 16, avatar: 0 }, { name: 'Doruk Y.',   played: 20, wins: 14, avatar: 4 }, { name: 'Ela S.',     played: 18, wins: 11, avatar: 2 } ],
-  '2048':      [ { name: 'Fırat T.',   played: 40, wins: 18, avatar: 0 }, { name: 'Gamze K.',   played: 35, wins: 15, avatar: 5 }, { name: 'Hakan A.',   played: 30, wins: 13, avatar: 3 }, { name: 'Irmak Y.',   played: 27, wins: 11, avatar: 2 }, { name: 'Jale M.',    played: 24, wins: 9,  avatar: 1 } ],
-  mathduel:    [ { name: 'Kadir B.',   played: 55, wins: 42, avatar: 2 }, { name: 'Leyla D.',   played: 48, wins: 36, avatar: 4 }, { name: 'Mina S.',    played: 43, wins: 31, avatar: 1 }, { name: 'Nihat A.',   played: 38, wins: 27, avatar: 0 }, { name: 'Orhan T.',   played: 34, wins: 22, avatar: 3 } ],
-  dama:        [ { name: 'Pelin Y.',   played: 32, wins: 25, avatar: 5 }, { name: 'Rıza K.',    played: 28, wins: 21, avatar: 2 }, { name: 'Selma A.',   played: 25, wins: 18, avatar: 1 }, { name: 'Taner M.',   played: 22, wins: 15, avatar: 3 }, { name: 'Ufuk D.',    played: 19, wins: 12, avatar: 0 } ],
-  tavla:       [ { name: 'Veli T.',    played: 30, wins: 22, avatar: 3 }, { name: 'Yıldız K.',  played: 27, wins: 19, avatar: 1 }, { name: 'Zafer A.',   played: 24, wins: 17, avatar: 0 }, { name: 'Alper M.',   played: 21, wins: 14, avatar: 4 }, { name: 'Belma S.',   played: 18, wins: 11, avatar: 2 } ],
-  gomoku:      [ { name: 'Cem B.',     played: 36, wins: 28, avatar: 0 }, { name: 'Duygu A.',   played: 32, wins: 24, avatar: 2 }, { name: 'Ercan Y.',   played: 28, wins: 20, avatar: 4 }, { name: 'Fatma K.',   played: 24, wins: 17, avatar: 1 }, { name: 'Güner T.',   played: 21, wins: 14, avatar: 3 } ],
-  adamasmaca: [ { name: 'Zeynep K.',  played: 45, wins: 38, avatar: 1 }, { name: 'Berk A.',   played: 40, wins: 32, avatar: 0 }, { name: 'Seda T.',   played: 35, wins: 27, avatar: 3 }, { name: 'Mert Y.',   played: 30, wins: 22, avatar: 2 }, { name: 'Gül M.',    played: 25, wins: 17, avatar: 4 } ],
-  stroop:     [ { name: 'Ali K.',     played: 38, wins: 30, avatar: 2 }, { name: 'Ayşe T.',   played: 32, wins: 25, avatar: 5 }, { name: 'Can D.',    played: 28, wins: 21, avatar: 0 }, { name: 'Deniz Y.',  played: 25, wins: 18, avatar: 1 }, { name: 'Elif M.',   played: 22, wins: 15, avatar: 3 } ],
-};
-
 const LeaderboardPage = ({ user, stats }) => {
   const [activeTab, setActiveTab] = useState(GAMES[0].id);
+  const [lbData, setLbData] = useState({});
+  const [lbLoading, setLbLoading] = useState(false);
   const activeGame = GAMES.find((g) => g.id === activeTab);
   const medals = ['🥇', '🥈', '🥉'];
+
+  useEffect(() => {
+    if (lbData[activeTab]) return;
+    setLbLoading(true);
+    fetch(BACKEND_URL + '/api/leaderboard?game=' + activeTab)
+      .then(function(r) { return r.ok ? r.json() : { leaderboard: [] }; })
+      .then(function(d) {
+        setLbData(function(prev) { var n = Object.assign({}, prev); n[activeTab] = d.leaderboard || []; return n; });
+        setLbLoading(false);
+      })
+      .catch(function() {
+        setLbData(function(prev) { var n = Object.assign({}, prev); n[activeTab] = []; return n; });
+        setLbLoading(false);
+      });
+  }, [activeTab]);
 
   const userGameStats = stats.games[activeTab] || {
     played: 0,
     wins: 0,
     losses: 0,
   };
-  const fakePlayers = FAKE_LB[activeTab] || [];
-  const allPlayers = [
-    ...fakePlayers,
-    ...(userGameStats.played > 0 ? [{ name: user.name, played: userGameStats.played, wins: userGameStats.wins, avatar: 2 }] : []),
-  ].sort((a, b) => b.wins - a.wins);
+  const remotePlayers = lbData[activeTab] || [];
+  const allPlayers = remotePlayers.some(function(p) { return p.name === user.name; })
+    ? remotePlayers
+    : [...remotePlayers, ...(userGameStats.played > 0 ? [{ name: user.name, played: userGameStats.played, wins: userGameStats.wins }] : [])].sort((a, b) => b.wins - a.wins);
   const userRank = userGameStats.played > 0 ? (allPlayers.findIndex((p) => p.name === user.name) + 1) : null;
 
   return (
@@ -6313,6 +6352,8 @@ const LeaderboardPage = ({ user, stats }) => {
       </div>
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
+        {lbLoading && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>Yükleniyor...</div>}
+        {!lbLoading && allPlayers.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>Henüz kayıt yok. İlk sen ol!</div>}
         {allPlayers.map((p, i) => {
           const winRate =
             p.played > 0 ? Math.round((p.wins / p.played) * 100) : 0;
@@ -6938,6 +6979,9 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
         </button>
       </div>
 
+      {/* Lobi Sohbeti */}
+      <LobbyChatPanel sock={sock} user={user} />
+
       {/* Bağış */}
       <div style={{marginTop:16,padding:'20px',borderRadius:16,background:'var(--surface)',border:'1px solid var(--border)',textAlign:'center'}}>
         <div style={{fontSize:28,marginBottom:6}}>🙏</div>
@@ -6958,6 +7002,144 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
     </div>
   );
 };
+
+// ============================================================
+// LOBBY CHAT PANEL
+// ============================================================
+function LobbyChatPanel({ sock, user }) {
+  var [open, setOpen] = useState(false);
+  var [text, setText] = useState('');
+  var endRef = useRef(null);
+  var msgs = (sock && sock.lobbyMessages) || [];
+
+  useEffect(function() {
+    if (open && sock && sock.getLobbyMessages) sock.getLobbyMessages();
+  }, [open]);
+
+  useEffect(function() {
+    if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [msgs, open]);
+
+  function send() {
+    if (!text.trim() || !sock || !sock.sendLobbyMessage) return;
+    sock.sendLobbyMessage(text.trim());
+    setText('');
+  }
+
+  return (
+    <div style={{ marginTop: 16, borderRadius: 16, border: '1px solid var(--border)', background: 'var(--surface)', overflow: 'hidden' }}>
+      <button
+        onClick={function() { setOpen(function(o) { return !o; }); }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', fontFamily: "'DM Sans',sans-serif" }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>💬</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Lobi Sohbeti</span>
+          {msgs.length > 0 && !open && <span style={{ background: '#6366f1', color: '#fff', borderRadius: 20, fontSize: 11, fontWeight: 700, padding: '2px 7px' }}>{msgs.length}</span>}
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div>
+          <div style={{ maxHeight: 200, overflowY: 'auto', padding: '8px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {msgs.length === 0 && <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, padding: '12px 0' }}>Henüz mesaj yok. İlk sen yaz!</div>}
+            {msgs.map(function(m, i) {
+              var isMe = m.name === (user && user.name);
+              return (
+                <div key={i} style={{ display: 'flex', flexDirection: isMe ? 'row-reverse' : 'row', gap: 6, alignItems: 'flex-end' }}>
+                  {!isMe && <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{(m.name || '?').charAt(0).toUpperCase()}</div>}
+                  <div style={{ maxWidth: '72%' }}>
+                    {!isMe && <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2, fontWeight: 600 }}>{m.name}</div>}
+                    <div style={{ background: isMe ? 'linear-gradient(135deg,#863bff,#5b21b6)' : 'var(--surface-hover)', color: isMe ? '#fff' : 'var(--text)', borderRadius: isMe ? '12px 12px 4px 12px' : '12px 12px 12px 4px', padding: '7px 11px', fontSize: 13 }}>{m.text}</div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={endRef} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, padding: '10px 16px', borderTop: '1px solid var(--border)' }}>
+            <input
+              value={text}
+              onChange={function(e) { setText(e.target.value); }}
+              onKeyDown={function(e) { if (e.key === 'Enter') send(); }}
+              placeholder="Mesaj yaz..."
+              style={{ flex: 1, padding: '9px 13px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: "'DM Sans',sans-serif" }}
+            />
+            <button onClick={send} style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Gönder</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// ONBOARDING MODAL (first-run tour)
+// ============================================================
+function OnboardingModal({ onDone }) {
+  var [step, setStep] = useState(0);
+  var steps = [
+    { icon: '🎮', title: 'oyun.club\'a Hoş Geldin!', desc: '30\'dan fazla oyun, arkadaşlarınla gerçek zamanlı çok oyunculu modlar ve sonsuz eğlence seni bekliyor.' },
+    { icon: '👥', title: 'Arkadaşlarını Davet Et', desc: 'Profil sayfasından arkadaş ekle, onları odana davet et ve birlikte oyna. Çevrimiçi arkadaşlarını anında görebilirsin.' },
+    { icon: '⭐', title: 'XP Kazan, Seviye Atla!', desc: 'Her oyun XP kazandırır. Günlük görevleri tamamla, serini koru ve rozet koleksiyonunu büyüt. Liderboard\'da yerini al!' },
+  ];
+  var cur = steps[step];
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 24, padding: 32, maxWidth: 360, width: '100%', textAlign: 'center', animation: 'scaleIn 0.3s ease', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontSize: 60, marginBottom: 16 }}>{cur.icon}</div>
+        <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 20, marginBottom: 10 }}>{cur.title}</div>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>{cur.desc}</div>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 20 }}>
+          {steps.map(function(_, i) {
+            return <div key={i} style={{ width: i === step ? 24 : 8, height: 8, borderRadius: 4, background: i === step ? '#863bff' : 'var(--surface-hover)', transition: 'width 0.25s ease' }} />;
+          })}
+        </div>
+        <button
+          onClick={function() { if (step < steps.length - 1) setStep(function(s) { return s + 1; }); else onDone(); }}
+          style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}
+        >
+          {step < steps.length - 1 ? 'İleri →' : 'Hadi Başlayalım! 🚀'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// DAILY LOGIN REWARD MODAL
+// ============================================================
+function DailyLoginRewardModal({ onClaim, onClose, streak }) {
+  var rewards = [
+    { day: 1, xp: 30, label: 'Hoş Geldin' },
+    { day: 2, xp: 40, label: 'Devam Et' },
+    { day: 3, xp: 50, label: 'Üç Gün!' },
+    { day: 7, xp: 100, label: 'Haftalık!' },
+  ];
+  var todayReward = (streak || 0) >= 7 ? rewards[3] : (streak || 0) >= 3 ? rewards[2] : (streak || 0) >= 2 ? rewards[1] : rewards[0];
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 24, padding: 32, maxWidth: 340, width: '100%', textAlign: 'center', animation: 'scaleIn 0.3s ease', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontSize: 56, marginBottom: 12 }}>🎁</div>
+        <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 22, marginBottom: 6 }}>Günlük Ödül!</div>
+        <div style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
+          {streak && streak > 1 ? `${streak} günlük serin var! 🔥` : 'Bugün oynamaya devam et!'}
+        </div>
+        <div style={{ background: 'linear-gradient(135deg,#863bff,#5b21b6)', borderRadius: 16, padding: '20px', marginBottom: 20, color: '#fff' }}>
+          <div style={{ fontSize: 36, fontWeight: 800, fontFamily: "'Sora',sans-serif" }}>+{todayReward.xp} XP</div>
+          <div style={{ opacity: 0.85, fontSize: 14, marginTop: 4 }}>{todayReward.label}</div>
+        </div>
+        <button
+          onClick={function() { onClaim(todayReward.xp); }}
+          style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', fontSize: 16, fontWeight: 800, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}
+        >
+          Odul Al!
+        </button>
+        <button onClick={onClose} style={{ marginTop: 10, background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', width: '100%', padding: '8px' }}>Daha sonra</button>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================
 // ROOM LOBBY
@@ -8877,12 +9059,13 @@ function getLevelInfo(xp) {
   return Object.assign({}, cur, { next: next, progress: progress });
 }
 
-function calcXpGain(result, winStreak, difficulty) {
+function calcXpGain(result, winStreak, difficulty, isDailyGame) {
   var base;
   if (result === 'win') { base = 30; if (winStreak >= 3) base += 10; if (winStreak >= 5) base += 10; }
   else if (result === 'loss') base = 10;
   else base = 5;
   var mult = difficulty === 'hard' ? 1.5 : difficulty === 'easy' ? 0.75 : 1;
+  if (isDailyGame) mult *= 2;
   return Math.round(base * mult);
 }
 
@@ -9801,7 +9984,7 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
 // ============================================================
 const SORUGECESI_QS = [
   { q:'Türkiye\'nin başkenti hangisidir?', a:0, opts:['Ankara','İstanbul','İzmir','Bursa'] },
-  { q:'Osmanlı İmparatorluğu kaç yılında kuruldu?', a:2, opts:['1299','1453','1071','1326'] },
+  { q:'Osmanlı İmparatorluğu kaç yılında kuruldu?', a:0, opts:['1299','1453','1071','1326'] },
   { q:'Türkiye\'nin en yüksek dağı hangisidir?', a:1, opts:['Uludağ','Ağrı Dağı','Erciyes','Süphan'] },
   { q:'Hangi gezegen Güneş Sistemi\'nin en büyüğüdür?', a:3, opts:['Satürn','Neptün','Uranüs','Jüpiter'] },
   { q:'Su kaç derecede kaynar?', a:0, opts:['100°C','90°C','80°C','110°C'] },
@@ -11051,10 +11234,33 @@ export default function App() {
   useEffect(() => { localStorage.setItem('oyunclub_dark', dark); }, [dark]);
   useEffect(() => { localStorage.setItem('oyunclub_sound', soundOn); }, [soundOn]);
 
+  useEffect(() => {
+    if (!user || page !== 'lobby') return;
+    const today = new Date().toDateString();
+    try {
+      const lastReward = localStorage.getItem('oyunclub_lastReward');
+      if (lastReward !== today) {
+        setShowDailyReward(true);
+      }
+    } catch(e) {}
+  }, [user, page]);
+
   const [shareResult, setShareResult] = useState(null);
   const [floatingXP, setFloatingXP] = useState(null);
   const [profileInitialTab, setProfileInitialTab] = useState('profil');
+  const [showDailyReward, setShowDailyReward] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   var sock = useSocket(user ? user.name : 'Oyuncu');
+  const [loginNameError, setLoginNameError] = useState(null);
+
+  useEffect(() => {
+    if (sock.registerError) {
+      setLoginNameError(sock.registerError);
+      setUser(null);
+      setPage('login');
+      sock.clearRegisterError();
+    }
+  }, [sock.registerError]);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -11064,6 +11270,7 @@ export default function App() {
   const handleGameEnd = (result, opts) => {
     if (!selectedGame) return;
     const difficulty = (opts && opts.difficulty) || null;
+    const isDailyGame = selectedGame.id === getDailyGameId();
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86400000).toDateString();
     const gid = selectedGame.id;
@@ -11081,7 +11288,7 @@ export default function App() {
 
       const wsNow = result === 'win' ? (prev.currentWinStreak || 0) + 1 : 0;
       const bestWs = Math.max(prev.bestWinStreak || 0, wsNow);
-      const xpGain = calcXpGain(result, wsNow, difficulty);
+      const xpGain = calcXpGain(result, wsNow, difficulty, isDailyGame);
       const newXp = (prev.xp || 0) + xpGain;
       const newLevel = getLevelInfo(newXp).level;
 
@@ -11164,9 +11371,11 @@ export default function App() {
       return draft;
     });
 
-    const xpGain = calcXpGain(result, stats.currentWinStreak || 0, difficulty);
+    const xpGain = calcXpGain(result, stats.currentWinStreak || 0, difficulty, isDailyGame);
     const gameName = selectedGame.name;
     const gameToReplay = selectedGame;
+    // Submit score to backend for leaderboard tracking
+    if (sock && sock.submitScore) sock.submitScore(gid, result);
     // Hemen lobby'ye geç — oyun ekranı kapansın, çift çağrı önlensin
     setPage('lobby');
     setSelectedGame(null);
@@ -11179,9 +11388,10 @@ export default function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     setPage('lobby');
-    // Welcome bonus for brand-new users (no existing stats)
+    // Welcome bonus and onboarding for brand-new users (no existing stats)
     try {
       const existing = localStorage.getItem('oyunclub_stats');
+      const onboarded = localStorage.getItem('oyunclub_onboarded');
       if (!existing) {
         const welcomeXp = 50;
         setStats((prev) => {
@@ -11189,6 +11399,9 @@ export default function App() {
           return { ...prev, xp: (prev.xp || 0) + welcomeXp, badges: newBadges };
         });
         setTimeout(() => showToast('🎉 Hoş geldin! +50 XP ve Hoş Geldin rozeti kazandın!'), 800);
+      }
+      if (!onboarded) {
+        setTimeout(() => setShowOnboarding(true), 600);
       }
     } catch(e) {}
   };
@@ -11257,6 +11470,8 @@ export default function App() {
           onLogin={handleLogin}
           dark={dark}
           onToggleDark={() => setDark((d) => !d)}
+          nameError={loginNameError}
+          onClearNameError={() => setLoginNameError(null)}
         />
       </>
     );
@@ -11641,15 +11856,39 @@ export default function App() {
           />
         )}
         {page === 'lobby' && (
-          <Lobby
-            onSelectGame={handleSelectGame}
-            onJoinRoom={handleJoinRoom}
-            onMultiplayer={() => setPage('multiplayer')}
-            user={user}
-            stats={stats}
-            sock={sock}
-            onGoFriends={() => { setProfileInitialTab('arkadaşlar'); setPage('profile'); }}
-          />
+          <>
+            <Lobby
+              onSelectGame={handleSelectGame}
+              onJoinRoom={handleJoinRoom}
+              onMultiplayer={() => setPage('multiplayer')}
+              user={user}
+              stats={stats}
+              sock={sock}
+              onGoFriends={() => { setProfileInitialTab('arkadaşlar'); setPage('profile'); }}
+            />
+            {showOnboarding && (
+              <OnboardingModal onDone={() => {
+                setShowOnboarding(false);
+                try { localStorage.setItem('oyunclub_onboarded', '1'); } catch(e) {}
+              }} />
+            )}
+            {!showOnboarding && showDailyReward && (
+              <DailyLoginRewardModal
+                streak={stats.streak ? stats.streak.count : 0}
+                onClaim={(xp) => {
+                  setShowDailyReward(false);
+                  try { localStorage.setItem('oyunclub_lastReward', new Date().toDateString()); } catch(e) {}
+                  setStats((prev) => ({ ...prev, xp: (prev.xp || 0) + xp }));
+                  showToast(`🎁 Günlük ödül: +${xp} XP kazandın!`);
+                  setFloatingXP(xp);
+                }}
+                onClose={() => {
+                  setShowDailyReward(false);
+                  try { localStorage.setItem('oyunclub_lastReward', new Date().toDateString()); } catch(e) {}
+                }}
+              />
+            )}
+          </>
         )}
         {page === 'profile' && (
           <ProfilePage
@@ -11671,9 +11910,18 @@ export default function App() {
             dark={dark}
             onToggleDark={() => setDark((d) => !d)}
             onRenameUser={(newName) => {
-              const updated = { ...user, name: newName };
-              setUser(updated);
-              try { localStorage.setItem('oyunclub_user', JSON.stringify(updated)); } catch {}
+              if (sock && sock.renameUser) {
+                sock.renameUser(newName, function(res) {
+                  if (!res || res.error) return;
+                  const updated = { ...user, name: newName };
+                  setUser(updated);
+                  try { localStorage.setItem('oyunclub_user', JSON.stringify(updated)); } catch {}
+                });
+              } else {
+                const updated = { ...user, name: newName };
+                setUser(updated);
+                try { localStorage.setItem('oyunclub_user', JSON.stringify(updated)); } catch {}
+              }
             }}
             onResetStats={() => {
               const empty = { games: Object.fromEntries(Object.keys(stats.games).map((k) => [k, { played: 0, wins: 0, losses: 0 }])), history: [] };
