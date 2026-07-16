@@ -486,6 +486,11 @@ function useSocket(username) {
     socketRef.current.emit('invite_friend', { toUserId, roomId, gameId }, cb || function(){});
   }, []);
 
+  var getOnlineUsers = useCallback(function(cb) {
+    if (!socketRef.current) return;
+    socketRef.current.emit('get_online_users', null, cb || function(){});
+  }, []);
+
   return {
     isConnected: isConnected,
     isRegistered: isRegistered,
@@ -521,6 +526,7 @@ function useSocket(username) {
     removeFriend: removeFriend,
     searchUser: searchUser,
     inviteFriend: inviteFriend,
+    getOnlineUsers: getOnlineUsers,
   };
 }
 
@@ -1210,6 +1216,57 @@ var MP_GAMES = [
   { id: 'wordrace',    name: 'Kelime Yarışı',         icon: '🔤',     players: 2, local: true   },
 ];
 
+function OnlineUsersInvitePanel({ sock, onlineUsers, setOnlineUsers, invitedUsers, setInvitedUsers, roomId, gameId }) {
+  useEffect(function() {
+    if (!sock.getOnlineUsers) return;
+    sock.getOnlineUsers(function(res) {
+      if (res && res.users) setOnlineUsers(res.users);
+    });
+    var t = setInterval(function() {
+      sock.getOnlineUsers(function(res) {
+        if (res && res.users) setOnlineUsers(res.users);
+      });
+    }, 5000);
+    return function() { clearInterval(t); };
+  }, [!!sock.isRegistered]);
+
+  var others = onlineUsers.filter(function(u) { return u.userId !== sock.myUserId; });
+  if (others.length === 0) return null;
+
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 14, marginBottom: 12, border: '1px solid var(--border)' }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--text-secondary)' }}>
+        🟢 Çevrimiçi Oyuncular ({others.length})
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {others.slice(0, 8).map(function(u) {
+          var invited = invitedUsers[u.userId];
+          return (
+            <div key={u.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#22c55e,#16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12 }}>
+                  {u.name ? u.name[0].toUpperCase() : '?'}
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>{u.name}</span>
+              </div>
+              <button
+                disabled={!!invited}
+                onClick={function() {
+                  if (!sock.inviteFriend) return;
+                  sock.inviteFriend(u.userId, roomId, gameId);
+                  setInvitedUsers(function(prev) { var n = Object.assign({}, prev); n[u.userId] = true; return n; });
+                }}
+                style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: invited ? '#d1fae5' : 'linear-gradient(135deg,#863bff,#5b21b6)', color: invited ? '#059669' : '#fff', fontWeight: 700, fontSize: 12, cursor: invited ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                {invited ? '✓ Davet gönderildi' : 'Davet Et'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MultiplayerLobby(props) {
   var passedName = props && props.userName ? props.userName : "";
   var s1 = useState(null); var selectedMPGame = s1[0]; var setSelectedMPGame = s1[1];
@@ -1218,6 +1275,8 @@ function MultiplayerLobby(props) {
   var s4 = useState(false); var showPrivacyModal = s4[0]; var setShowPrivacyModal = s4[1];
   var s5 = useState(false); var autoJoined = s5[0]; var setAutoJoined = s5[1];
   var s6 = useState({}); var sentFriendReqs = s6[0]; var setSentFriendReqs = s6[1];
+  var s7ml = useState([]); var onlineUsers = s7ml[0]; var setOnlineUsers = s7ml[1];
+  var s8ml = useState({}); var invitedUsers = s8ml[0]; var setInvitedUsers = s8ml[1];
   var lastMoveRef = useRef(null);
 
   var sock = props.sock || { isConnected: false, isRegistered: false, roomData: null, players: [], messages: [], myUserId: null, friendList: [], friendRequests: [], friendToast: null, gameInvite: null };
@@ -1328,14 +1387,31 @@ function MultiplayerLobby(props) {
                 Masa Kodu: <strong style={{ letterSpacing: 2, fontFamily: 'monospace', fontSize: 16 }}>{sock.roomData.id}</strong>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleCopyLink}
-                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
-                Davet Linki
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={function() {
+                var code = sock.roomData.id;
+                navigator.clipboard && navigator.clipboard.writeText(code).catch(function(){});
+                var el = document.createElement('textarea'); el.value = code; document.body.appendChild(el); el.select(); try { document.execCommand('copy'); } catch(e){} document.body.removeChild(el);
+              }} style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: 'var(--surface-hover)', color: 'var(--text)', fontWeight: 700, fontSize: 15, cursor: 'pointer', letterSpacing: 2, fontFamily: 'monospace' }}>
+                📋 {sock.roomData.id}
+              </button>
+              <button onClick={function() {
+                var link = window.location.origin + '/?room=' + sock.roomData.id;
+                var text = '🎮 Benimle oyna! Kod: ' + sock.roomData.id + '\n' + link;
+                window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(text), '_blank');
+              }} style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: '#25D366', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                WhatsApp
+              </button>
+              <button onClick={function() {
+                var link = window.location.origin + '/?room=' + sock.roomData.id;
+                var text = '🎮 Benimle oyna! Kod: ' + sock.roomData.id;
+                window.open('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text), '_blank');
+              }} style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: '#229ED9', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                Telegram
               </button>
               <button onClick={sock.leaveRoom}
-                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
-                Cik
+                style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                Çık
               </button>
             </div>
           </div>
@@ -1379,13 +1455,25 @@ function MultiplayerLobby(props) {
         {sock.roomData.state === 'waiting' && canStart && isHost && (
           <button onClick={sock.startGame}
             style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #059669, #34D399)', color: '#fff', fontWeight: 700, fontSize: 16, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", marginBottom: 16 }}>
-            Oyunu Baslat
+            Oyunu Başlat
           </button>
         )}
         {sock.roomData.state === 'waiting' && !canStart && (
-          <div style={{ textAlign: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 12, marginBottom: 16, border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 24 }}>⏳</div>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Rakip bekleniyor... Daveti kopyala ve arkadasina gonder!</div>
+          <div>
+            <div style={{ textAlign: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 12, marginBottom: 12, border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 24 }}>⏳</div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Rakip bekleniyor... Daveti kopyala ve arkadaşına gönder!</div>
+            </div>
+            {/* Çevrimiçi oyuncular */}
+            <OnlineUsersInvitePanel
+              sock={sock}
+              onlineUsers={onlineUsers}
+              setOnlineUsers={setOnlineUsers}
+              invitedUsers={invitedUsers}
+              setInvitedUsers={setInvitedUsers}
+              roomId={sock.roomData.id}
+              gameId={sock.roomData.gameId}
+            />
           </div>
         )}
         {sock.roomData.state === 'waiting' && canStart && !isHost && (
@@ -11126,6 +11214,9 @@ export default function App() {
     const fullGame = GAMES.find(g => g.id === gameId);
     if (fullGame) setSelectedGame(fullGame);
     setPage('multiplayer');
+    if (sock.isRegistered && !sock.roomData) {
+      setTimeout(function() { sock.createRoom(gameId, true); }, 80);
+    }
   };
   const handleStartGame = () => {
     if (selectedGame.players > 1 && players.length < selectedGame.players)
