@@ -2241,6 +2241,8 @@ function applyDamaMove(board, move) {
 }
 
 function DamaGame({ game, onGameEnd, soundOn }) {
+  const [difficulty, setDifficulty] = useState('medium');
+  const [damaStarted, setDamaStarted] = useState(false);
   const [board, setBoard] = useState(initDamaBoard);
   const [selected, setSelected] = useState(null);
   const [turn, setTurn] = useState('white');
@@ -2283,7 +2285,25 @@ function DamaGame({ game, onGameEnd, soundOn }) {
         setTimeout(() => {
           const botMoves = getAllDamaMoves(nb, 'black');
           if (botMoves.length > 0) {
-            const botMove = botMoves[Math.floor(Math.random() * botMoves.length)];
+            var botMove;
+            if (difficulty === 'easy') {
+              botMove = botMoves[Math.floor(Math.random() * botMoves.length)];
+            } else if (difficulty === 'hard') {
+              // 1-ply: pick move that minimizes opponent's next captures and maximizes own advancement
+              var bestScore2 = -Infinity;
+              for (var bm of botMoves) {
+                var nb3 = applyDamaMove(nb, bm);
+                var oppCaps = getAllDamaMoves(nb3, 'white').filter(function(m){return m.capture;}).length;
+                var isKing2 = nb3[bm.to[0]*8+bm.to[1]]?.king ? 5 : 0;
+                var sc = (bm.capture ? 5 : 0) + bm.to[0] * 0.5 + isKing2 - oppCaps * 2;
+                if (sc > bestScore2) { bestScore2 = sc; botMove = bm; }
+              }
+            } else {
+              // Medium: prefer captures + advance toward king row
+              var captures2 = botMoves.filter(function(m){return m.capture;});
+              var pool2 = captures2.length > 0 ? captures2 : botMoves;
+              botMove = pool2.reduce(function(best, m){ return m.to[0] > best.to[0] ? m : best; }, pool2[0]);
+            }
             const nb2 = applyDamaMove(nb, botMove);
             if (soundOn) playSound('place');
             setBoard(nb2);
@@ -2325,7 +2345,7 @@ function DamaGame({ game, onGameEnd, soundOn }) {
     }
   };
 
-  const restart = () => {
+  const restart = (keepDiff) => {
     setBoard(initDamaBoard());
     setSelected(null);
     setTurn('white');
@@ -2333,7 +2353,32 @@ function DamaGame({ game, onGameEnd, soundOn }) {
     setWon(false);
     setBotThinking(false);
     setValidMoves([]);
+    if (!keepDiff) setDamaStarted(false);
   };
+
+  if (!damaStarted) return (
+    <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
+      <div style={{fontSize:56,marginBottom:12}}>⚫</div>
+      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Dama</h2>
+      <p style={{color:'var(--text-secondary)',marginBottom:28,fontSize:15}}>Klasik Türk Daması — Bot ile oyna</p>
+      <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)',maxWidth:280,margin:'0 auto'}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+        <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+          {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(([d,label,color])=>(
+            <button key={d} onClick={()=>setDifficulty(d)}
+              style={{flex:1,padding:'10px 4px',borderRadius:10,border:`2px solid ${difficulty===d?color:'var(--border)'}`,
+                background:difficulty===d?color+'22':'transparent',color:difficulty===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <button onClick={()=>setDamaStarted(true)}
+          style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#8B4513,#D2691E)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+          Oyna
+        </button>
+      </div>
+    </div>
+  );
 
   const whites = board.filter(p => p?.color === 'white').length;
   const blacks = board.filter(p => p?.color === 'black').length;
@@ -2344,12 +2389,14 @@ function DamaGame({ game, onGameEnd, soundOn }) {
         <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24 }}>⚫ Dama</h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 14 }}>⚪{whites} ⚫{blacks}</span>
-          <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+          <Button onClick={()=>restart(true)} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
+          <Button onClick={()=>restart(false)} style={{ fontSize: 13, padding: '6px 12px', background:'var(--surface-hover)', color:'var(--text-secondary)' }}>Menü</Button>
         </div>
       </div>
 
-      <div style={{ marginBottom: 8, fontSize: 14, color: 'var(--text-secondary)' }}>
-        {botThinking ? '🤖 Bot düşünüyor...' : turn === 'white' ? '⚪ Senin sıran' : '⚫ Botun sırası'}
+      <div style={{ marginBottom: 8, fontSize: 14, color: 'var(--text-secondary)', display:'flex', justifyContent:'center', gap:12 }}>
+        <span>{botThinking ? '🤖 Bot düşünüyor...' : turn === 'white' ? '⚪ Senin sıran' : '⚫ Botun sırası'}</span>
+        <span style={{opacity:0.6}}>• {difficulty==='easy'?'Kolay':difficulty==='hard'?'Zor':'Orta'}</span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 0, border: '2px solid var(--border)', borderRadius: 8, overflow: 'hidden', aspectRatio: '1' }}>
@@ -2397,7 +2444,10 @@ function DamaGame({ game, onGameEnd, soundOn }) {
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
               {won ? 'Kazandın!' : 'Kaybettin!'}
             </h2>
-            <Button onClick={restart}>Tekrar Oyna</Button>
+            <div style={{display:'flex',gap:8,justifyContent:'center'}}>
+              <Button onClick={()=>restart(true)}>Tekrar Oyna</Button>
+              <Button onClick={()=>restart(false)} style={{background:'var(--surface-hover)',color:'var(--text)'}}>Menü</Button>
+            </div>
           </Card>
         </div>
       )}
@@ -7996,6 +8046,8 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     { id: 'scissors', emoji: '✌️', name: 'Makas', beats: 'paper' },
   ];
   const [mode, setMode] = useState(null); // null | 'bot' | '2p'
+  const [difficulty, setDifficulty] = useState('medium');
+  const lastPlayerChoiceRef = useRef(null);
   const [p1Choice, setP1Choice] = useState(null);
   const [p2Choice, setP2Choice] = useState(null);
   const [p2Hidden, setP2Hidden] = useState(null);
@@ -8021,7 +8073,22 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
             <div style={{fontSize:12,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
           </button>
         )}
-        <button onClick={()=>setMode('bot')} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#2A9D8F,#76C893)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>🤖 Bota Karşı</button>
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(([d,label,color])=>(
+              <button key={d} onClick={()=>setDifficulty(d)}
+                style={{flex:1,padding:'10px 4px',borderRadius:10,border:`2px solid ${difficulty===d?color:'var(--border)'}`,
+                  background:difficulty===d?color+'22':'transparent',color:difficulty===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>{ lastPlayerChoiceRef.current=null; setMode('bot'); }}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#2A9D8F,#76C893)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={()=>{ setMode('2p'); setTurn2p('p1pick'); setSecretP1(null); }} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
@@ -8081,7 +8148,18 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
   const play = (choice) => {
     if (showResult) return;
     if (soundOn) playSound('place');
-    const bot = CHOICES[Math.floor(Math.random() * 3)];
+    var bot;
+    var last = lastPlayerChoiceRef.current;
+    if (difficulty === 'easy') {
+      bot = CHOICES[Math.floor(Math.random() * 3)];
+    } else if (difficulty === 'hard') {
+      // Always counter player's last choice (assumes player will repeat)
+      bot = last ? (CHOICES.find(function(c){ return last.beats === c.id; }) || CHOICES[Math.floor(Math.random() * 3)]) : CHOICES[Math.floor(Math.random() * 3)];
+    } else {
+      // Medium: 50% counter player's last choice, 50% random
+      bot = (last && Math.random() < 0.5) ? (CHOICES.find(function(c){ return last.beats === c.id; }) || CHOICES[Math.floor(Math.random() * 3)]) : CHOICES[Math.floor(Math.random() * 3)];
+    }
+    lastPlayerChoiceRef.current = choice;
     setP1Choice(choice);
     setP2Choice(bot);
     setShowResult(true);
@@ -8118,6 +8196,7 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     setResult(null);
     setShowResult(false);
     setGameWinner(null);
+    lastPlayerChoiceRef.current = null;
   };
 
   return (
@@ -8137,7 +8216,7 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
           marginBottom: 8,
         }}
       >
-        Raund {round} • İlk 3'e ulaşan kazanır
+        Raund {round} • İlk 3'e ulaşan kazanır{mode==='bot' ? ` • ${difficulty==='easy'?'Kolay':difficulty==='hard'?'Zor':'Orta'}` : ''}
       </div>
       <div
         style={{
@@ -9795,6 +9874,7 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
   var s6 = useState(null); var winner = s6[0]; var setWinner = s6[1];
   var s7 = useState([]); var moves = s7[0]; var setMoves = s7[1];
   var s8 = useState(false); var botThinking = s8[0]; var setBotThinking = s8[1];
+  var s9d = useState('medium'); var tavlaDiff = s9d[0]; var setTavlaDiff = s9d[1];
 
   function rollDice() { return [Math.ceil(Math.random()*6), Math.ceil(Math.random()*6)]; }
 
@@ -9937,8 +10017,30 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
         legal.forEach(function(m){ allMoves.push({from:i, to:m.to, die:m.die}); });
       }
       if (allMoves.length === 0) break;
-      // Pick highest-value move (prefer hitting, prefer advancing)
-      var pick = allMoves[Math.floor(Math.random() * allMoves.length)];
+      // Pick move based on difficulty
+      var pick;
+      if (tavlaDiff === 'easy') {
+        pick = allMoves[Math.floor(Math.random() * allMoves.length)];
+      } else if (tavlaDiff === 'hard') {
+        // Prefer hitting blots, then avoid leaving blots, then advance most
+        var hitMoves = allMoves.filter(function(m){ return myBoard[m.to] && myBoard[m.to].color===1 && myBoard[m.to].count===1; });
+        if (hitMoves.length > 0) {
+          pick = hitMoves[Math.floor(Math.random() * hitMoves.length)];
+        } else {
+          // Avoid moving to points where we'd leave a blot (only 1 of our pieces after move)
+          var safeMoves = allMoves.filter(function(m){ return m.to >= 0 && m.to <= 23 && myBoard[m.to].color===color && myBoard[m.to].count > 0; });
+          if (safeMoves.length > 0) {
+            // Among safe moves, advance most (highest index = farther from home for black)
+            pick = safeMoves.reduce(function(best,m){ return m.to > best.to ? m : best; }, safeMoves[0]);
+          } else {
+            pick = allMoves.reduce(function(best,m){ return m.to > best.to ? m : best; }, allMoves[0]);
+          }
+        }
+      } else {
+        // Medium: prefer hitting blots, otherwise random
+        var hitMovesMed = allMoves.filter(function(m){ return myBoard[m.to] && myBoard[m.to].color===1 && myBoard[m.to].count===1; });
+        pick = hitMovesMed.length > 0 ? hitMovesMed[Math.floor(Math.random()*hitMovesMed.length)] : allMoves[Math.floor(Math.random() * allMoves.length)];
+      }
       var r = applyMove(pick.from, pick.to, 'black', myBoard, myBar, myBorne, myDice);
       myBoard = r.board; myBar = r.bar; myBorne = r.borne; myDice = r.dice;
       moved = true;
@@ -10037,13 +10139,24 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Tavla</h2>
       <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:32}}>Klasik Türk tavlası — hem bot hem 2 kişilik</p>
       <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:24}}>
-        <button onClick={function(){startGame('bot');}} style={{padding:'20px 24px',borderRadius:18,border:'2px solid rgba(146,64,14,0.3)',background:'linear-gradient(135deg,#92400E,#D97706)',color:'#fff',fontSize:16,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:12}}>
-          <span style={{fontSize:28}}>🤖</span>
-          <div style={{textAlign:'left'}}>
-            <div>Bot ile Oyna</div>
-            <div style={{fontSize:12,fontWeight:400,opacity:0.85}}>Yapay zekaya karşı tek başına oyna</div>
+        <div style={{background:'rgba(146,64,14,0.08)',borderRadius:18,padding:'16px',border:'2px solid rgba(146,64,14,0.2)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'#D97706'}}>🤖 Bot ile Oyna — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
+              var d=item[0],label=item[1],color=item[2];
+              return (
+                <button key={d} onClick={function(){setTavlaDiff(d);}}
+                  style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(tavlaDiff===d?color:'var(--border)'),
+                    background:tavlaDiff===d?color+'22':'transparent',color:tavlaDiff===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
-        </button>
+          <button onClick={function(){startGame('bot');}} style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#92400E,#D97706)',color:'#fff',fontSize:15,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={function(){startGame('local');}} style={{padding:'20px 24px',borderRadius:18,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:12}}>
           <span style={{fontSize:28}}>👥</span>
           <div style={{textAlign:'left'}}>
