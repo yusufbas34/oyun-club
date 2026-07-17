@@ -2729,6 +2729,41 @@ function c4BotMove(board) {
   for (const c of center) { const nb = dropC4(board, c, bot); if (nb) return c; }
   return 0;
 }
+function c4ScoreBoard(b, color) {
+  var opp = color === 'yellow' ? 'red' : 'yellow';
+  var score = 0;
+  for (var r = 0; r < ROWS; r++) { if (b[r*COLS+3] === color) score += 3; }
+  function sw(w) {
+    var my=w.filter(function(p){return p===color;}).length, em=w.filter(function(p){return p===null;}).length, op=w.filter(function(p){return p===opp;}).length;
+    if(my===4) return 10000; if(my===3&&em===1) return 50; if(my===2&&em===2) return 10;
+    if(op===3&&em===1) return -80; return 0;
+  }
+  for(var r2=0;r2<ROWS;r2++) for(var c2=0;c2<=COLS-4;c2++) score+=sw([b[r2*COLS+c2],b[r2*COLS+c2+1],b[r2*COLS+c2+2],b[r2*COLS+c2+3]]);
+  for(var c3=0;c3<COLS;c3++) for(var r3=0;r3<=ROWS-4;r3++) score+=sw([b[r3*COLS+c3],b[(r3+1)*COLS+c3],b[(r3+2)*COLS+c3],b[(r3+3)*COLS+c3]]);
+  for(var r4=0;r4<=ROWS-4;r4++) for(var c4=0;c4<=COLS-4;c4++) score+=sw([b[r4*COLS+c4],b[(r4+1)*COLS+c4+1],b[(r4+2)*COLS+c4+2],b[(r4+3)*COLS+c4+3]]);
+  for(var r5=3;r5<ROWS;r5++) for(var c5=0;c5<=COLS-4;c5++) score+=sw([b[r5*COLS+c5],b[(r5-1)*COLS+c5+1],b[(r5-2)*COLS+c5+2],b[(r5-3)*COLS+c5+3]]);
+  return score;
+}
+function c4Minimax(board, depth, isMax, alpha, beta) {
+  if(checkC4Win(board,'yellow')) return 10000+depth;
+  if(checkC4Win(board,'red')) return -10000-depth;
+  if(board.every(function(c){return c!==null;})||depth===0) return c4ScoreBoard(board,'yellow');
+  if(isMax) {
+    var val=-Infinity;
+    for(var c=0;c<COLS;c++){var nb=dropC4(board,c,'yellow');if(!nb)continue;val=Math.max(val,c4Minimax(nb,depth-1,false,alpha,beta));alpha=Math.max(alpha,val);if(alpha>=beta)break;}
+    return val;
+  } else {
+    var val2=Infinity;
+    for(var c2=0;c2<COLS;c2++){var nb2=dropC4(board,c2,'red');if(!nb2)continue;val2=Math.min(val2,c4Minimax(nb2,depth-1,true,alpha,beta));beta=Math.min(beta,val2);if(alpha>=beta)break;}
+    return val2;
+  }
+}
+function c4HardBotMove(board) {
+  var best=-Infinity, bestCol=3;
+  var order=[3,2,4,1,5,0,6];
+  for(var i=0;i<order.length;i++){var col=order[i];var nb=dropC4(board,col,'yellow');if(!nb)continue;var sc=c4Minimax(nb,5,false,-Infinity,Infinity);if(sc>best){best=sc;bestCol=col;}}
+  return bestCol;
+}
 
 function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const [board, setBoard] = useState(initC4Board);
@@ -2798,6 +2833,8 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
           var emptyC4 = [];
           for (var ci=0;ci<COLS;ci++) { var tmpNb=dropC4(nb,ci,'yellow'); if(tmpNb) emptyC4.push(ci); }
           bc = emptyC4[Math.floor(Math.random()*emptyC4.length)];
+        } else if (c4Diff === 'hard') {
+          bc = c4HardBotMove(nb);
         } else {
           bc = c4BotMove(nb);
         }
@@ -3208,8 +3245,18 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
         var pick;
         if (typeof gomokuDiff !== 'undefined' && gomokuDiff === 'easy') {
           pick = empty[Math.floor(Math.random()*empty.length)];
+        } else if (typeof gomokuDiff !== 'undefined' && gomokuDiff === 'hard') {
+          // Hard: check win → block opponent win → adjacent preference
+          var foundHard = null;
+          for (var hi=0;hi<empty.length&&!foundHard;hi++){var tb=[...nb];tb[empty[hi]]='white';var hr=Math.floor(empty[hi]/GT_SIZE),hc=empty[hi]%GT_SIZE;if(checkGomokuWin(tb,hr,hc,'white'))foundHard=empty[hi];}
+          if (!foundHard) for (var bi2=0;bi2<empty.length&&!foundHard;bi2++){var tb2=[...nb];tb2[empty[bi2]]='black';var br=Math.floor(empty[bi2]/GT_SIZE),bc2=empty[bi2]%GT_SIZE;if(checkGomokuWin(tb2,br,bc2,'black'))foundHard=empty[bi2];}
+          if (foundHard !== null) { pick = foundHard; }
+          else {
+            var adjH=empty.filter(function(idx2){var r2=Math.floor(idx2/GT_SIZE),c2=idx2%GT_SIZE;for(var dr2=-1;dr2<=1;dr2++)for(var dc2=-1;dc2<=1;dc2++){if(dr2===0&&dc2===0)continue;var nr2=r2+dr2,nc2=c2+dc2;if(nr2>=0&&nr2<GT_SIZE&&nc2>=0&&nc2<GT_SIZE&&nb[nr2*GT_SIZE+nc2])return true;}return false;});
+            pick=(adjH.length>0?adjH:empty)[Math.floor(Math.random()*(adjH.length>0?adjH:empty).length)];
+          }
         } else {
-          // Medium/Hard: prefer cells adjacent to existing pieces
+          // Medium: prefer cells adjacent to existing pieces
           var adjacent = empty.filter(function(idx2) {
             var r2=Math.floor(idx2/GT_SIZE), c2=idx2%GT_SIZE;
             for (var dr2=-1;dr2<=1;dr2++) for (var dc2=-1;dc2<=1;dc2++) {
@@ -10531,8 +10578,8 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
         </button>
       )}
       <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:24}}>
-        <div style={{background:'rgba(146,64,14,0.08)',borderRadius:18,padding:'16px',border:'2px solid rgba(146,64,14,0.2)'}}>
-          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'#D97706'}}>🤖 Bot ile Oyna — Zorluk</div>
+        <div style={{background:'var(--surface-hover)',borderRadius:18,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bot ile Oyna — Zorluk</div>
           <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
             {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
               var d=item[0],label=item[1],color=item[2];
