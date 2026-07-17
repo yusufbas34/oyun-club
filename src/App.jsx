@@ -6301,12 +6301,13 @@ const RANKS = [
 ];
 function getRank(wins) { return RANKS.find(r => wins >= r.min && wins <= r.max) || RANKS[0]; }
 
-const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, soundOn, onToggleSound, dark, onToggleDark, onRenameUser, onResetStats, initialTab }) => {
+const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, soundOn, onToggleSound, dark, onToggleDark, onRenameUser, onResetStats, initialTab, installPrompt, onInstall }) => {
   const [activeTab, setActiveTab] = useState(initialTab || 'profil');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [newName, setNewName] = useState(user.name);
   const [nameSaved, setNameSaved] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [notifPerm, setNotifPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
   const totalGames = Object.values(stats.games).reduce(
     (a, g) => a + g.played,
     0
@@ -6712,6 +6713,35 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
           <button onClick={onToggleDark} style={{ width: 48, height: 28, borderRadius: 14, border: 'none', background: dark ? '#6366f1' : 'var(--surface-hover)', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
             <span style={{ position: 'absolute', top: 3, left: dark ? 23 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left .2s', display: 'block' }} />
           </button>
+        </div>
+
+        {/* Notifications (PWA only) */}
+        <div style={{ paddingBottom: 14, borderBottom: '1px solid var(--border)', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isPWA() ? 0 : 8 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>🔔 Bildirimler</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {isPWA()
+                  ? notifPerm === 'granted' ? 'Bildirimler açık — oyun davetleri ve arkadaş istekleri gelir' : notifPerm === 'denied' ? 'Bildirimler engellendi — telefon ayarlarından aç' : 'Oyun davetleri ve arkadaş istekleri için açın'
+                  : 'Yalnızca uygulama kuruluyken çalışır'}
+              </div>
+            </div>
+            {isPWA() && notifPerm === 'default' && (
+              <button onClick={function() {
+                Notification.requestPermission().then(function(r) { setNotifPerm(r); });
+              }} style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                Aç
+              </button>
+            )}
+            {isPWA() && notifPerm === 'granted' && <span style={{ fontSize: 20 }}>✅</span>}
+            {isPWA() && notifPerm === 'denied' && <span style={{ fontSize: 20 }}>🚫</span>}
+          </div>
+          {/* Install prompt for non-PWA users */}
+          {!isPWA() && (
+            <button onClick={onInstall} style={{ width: '100%', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 10, padding: '11px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+              📲 Uygulamayı Yükle (Bildirim Al)
+            </button>
+          )}
         </div>
 
         {/* Reset stats */}
@@ -11366,6 +11396,24 @@ export default function App() {
   useEffect(() => { localStorage.setItem('oyunclub_dark', dark); }, [dark]);
   useEffect(() => { localStorage.setItem('oyunclub_sound', soundOn); }, [soundOn]);
 
+  // PWA install prompt capture
+  const [installPrompt, setInstallPrompt] = useState(null);
+  useEffect(() => {
+    var handler = function(e) { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return function() { window.removeEventListener('beforeinstallprompt', handler); };
+  }, []);
+
+  // Request notification permission once user is logged in, only in PWA mode
+  useEffect(() => {
+    if (!user || !isPWA()) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+    var t = setTimeout(function() {
+      Notification.requestPermission().catch(function() {});
+    }, 3000);
+    return function() { clearTimeout(t); };
+  }, [!!user]);
+
   useEffect(() => {
     if (!user || page !== 'lobby') return;
     const today = new Date().toDateString();
@@ -12065,6 +12113,13 @@ export default function App() {
               const empty = { games: Object.fromEntries(Object.keys(stats.games).map((k) => [k, { played: 0, wins: 0, losses: 0 }])), history: [] };
               setStats(empty);
               try { localStorage.removeItem('oyunclub_stats'); } catch {}
+            }}
+            installPrompt={installPrompt}
+            onInstall={() => {
+              if (installPrompt) {
+                installPrompt.prompt();
+                installPrompt.userChoice.then(function() { setInstallPrompt(null); });
+              }
             }}
           />
         )}
