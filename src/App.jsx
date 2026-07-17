@@ -1266,6 +1266,10 @@ var MP_GAMES = [
   { id: 'cardbattle',  name: 'Kart Savaşı',          icon: '🃏',     players: 2, local: true   },
   { id: 'memorybattle',name: 'Hafıza Savaşı',        icon: '🧠',     players: 2, local: true   },
   { id: 'wordrace',    name: 'Kelime Yarışı',         icon: '🔤',     players: 2, local: true   },
+  { id: 'nim',         name: 'Çubuk Oyunu',          icon: '🪵',     players: 2, local: true   },
+  { id: 'mangala',     name: 'Mangala',              icon: '🪨',     players: 2, local: true   },
+  { id: 'reversi',     name: 'Reversi',              icon: '⬛⬜',   players: 2, local: true   },
+  { id: 'tavla',       name: 'Tavla',                icon: '🎲',     players: 2, local: true   },
 ];
 
 function OnlineUsersInvitePanel({ sock, onlineUsers, setOnlineUsers, invitedUsers, setInvitedUsers, roomId, gameId }) {
@@ -1386,13 +1390,15 @@ function MultiplayerLobby(props) {
   }
 
   var gameNames = {
-    xox: 'XOX', rps: 'Tas Kagit Makas', connectfour: '4 Sira', gomoku: 'Bes Tas',
-    reaction: 'Tepki Yarisi', mathduel: 'Matematik Duellosu', cardbattle: 'Kart Savasi',
-    memorybattle: 'Hafiza Savasi', wordrace: 'Kelime Yarisi'
+    xox: 'XOX', rps: 'Taş Kağıt Makas', connectfour: '4 Sıra', gomoku: 'Beş Taş',
+    reaction: 'Tepki Yarışı', mathduel: 'Matematik Düellosu', cardbattle: 'Kart Savaşı',
+    memorybattle: 'Hafıza Savaşı', wordrace: 'Kelime Yarışı',
+    nim: 'Çubuk Oyunu', mangala: 'Mangala', reversi: 'Reversi', tavla: 'Tavla'
   };
   var gameIcons = {
     xox: '❌⭕', rps: '✊✋✌️', connectfour: '🔵', gomoku: '⚫',
-    reaction: '⚡', mathduel: '🧮', cardbattle: '🃏', memorybattle: '🧠', wordrace: '🔤'
+    reaction: '⚡', mathduel: '🧮', cardbattle: '🃏', memorybattle: '🧠', wordrace: '🔤',
+    nim: '🪵', mangala: '🪨', reversi: '⬛⬜', tavla: '🎲'
   };
 
   // --- ROOM VIEW ---
@@ -1545,6 +1551,18 @@ function MultiplayerLobby(props) {
         )}
         {sock.roomData.state === 'playing' && currentGame === 'wordrace' && (
           <WordRaceGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'nim' && (
+          <NimGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'mangala' && (
+          <MangalaGame onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'reversi' && (
+          <ReversiGame game={{id:'reversi',color:'#14532d',bg:'linear-gradient(135deg,#14532d,#16a34a)'}} onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'tavla' && (
+          <TavlaGame game={{id:'tavla',color:'#92400E',bg:'linear-gradient(135deg,#92400E,#D97706)'}} onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
 
         {/* Game finished */}
@@ -3907,7 +3925,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
 // ============================================================
 // GAME: MANGALA (Traditional Turkish Board Game)
 // ============================================================
-function MangalaGame({ onGameEnd, soundOn }) {
+function MangalaGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   // pits[0..5] = player 0 bottom row (left to right), pits[6..11] = player 1 top row (right to left)
   // hazne[0] = player 0 store, hazne[1] = player 1 store
   const initState = () => ({ pits: Array(12).fill(3), hazne: [0, 0] });
@@ -3916,6 +3934,16 @@ function MangalaGame({ onGameEnd, soundOn }) {
   const [lastCapture, setLastCapture] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
+  const [mode, setMode] = useState(onlineProps ? 'online' : null);
+
+  // Online: receive remote moves
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'mangala_move' && typeof mv.playerIndex !== 'undefined' && mv.playerIndex !== onlineProps.myIndex) {
+      applyPit(mv.pitIdx, mv.playerIndex);
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
 
   const endGame = (pits, hazne) => {
     const total = [...hazne];
@@ -3924,50 +3952,85 @@ function MangalaGame({ onGameEnd, soundOn }) {
     setGameOver(true);
     const w = total[0] > total[1] ? 0 : total[0] < total[1] ? 1 : 2;
     setWinner(w);
-    onGameEnd(w === 0 ? 'win' : w === 1 ? 'loss' : 'draw');
+    var myIdx = onlineProps ? onlineProps.myIndex : 0;
+    onGameEnd(w === myIdx ? 'win' : w === 2 ? 'draw' : 'loss');
+  };
+
+  const applyPit = (pitIdx, currentTurn) => {
+    setState(function(prevState) {
+      const { pits, hazne } = prevState;
+      const np = [...pits]; const nh = [...hazne];
+      const owner = pitIdx < 6 ? 0 : 1;
+      if (np[pitIdx] === 0) return prevState;
+      let stones = np[pitIdx]; np[pitIdx] = 0;
+      let cur = pitIdx;
+      let extraTurn = false;
+      while (stones > 0) {
+        cur = (cur + 1) % 14;
+        if (cur === 12 + (1 - currentTurn)) { cur = (cur + 1) % 14; }
+        if (cur === 12 + currentTurn) { nh[currentTurn]++; }
+        else { np[cur % 12]++; }
+        stones--;
+      }
+      if (cur === 12 + currentTurn) extraTurn = true;
+      if (!extraTurn && cur < 12 && owner === currentTurn) {
+        const isOwnPit = (currentTurn === 0 && cur < 6) || (currentTurn === 1 && cur >= 6);
+        if (isOwnPit && np[cur] === 1) {
+          const mirror = 11 - cur;
+          if (np[mirror] > 0) {
+            nh[currentTurn] += np[mirror] + 1; np[cur] = 0; np[mirror] = 0;
+            setLastCapture(cur);
+            setTimeout(() => setLastCapture(null), 600);
+          }
+        }
+      }
+      if (soundOn) playSound('place');
+      const p0empty = np.slice(0, 6).every(v => v === 0);
+      const p1empty = np.slice(6, 12).every(v => v === 0);
+      if (p0empty || p1empty) {
+        setTimeout(function(){ endGame(np, nh); }, 100);
+        return { pits: np, hazne: nh };
+      }
+      if (!extraTurn) setTurn(1 - currentTurn);
+      return { pits: np, hazne: nh };
+    });
   };
 
   const handlePit = (pitIdx) => {
-    if (gameOver) return;
-    const { pits, hazne } = state;
-    const np = [...pits]; const nh = [...hazne];
-    // pitIdx 0-5 = player 0, 6-11 = player 1
+    if (gameOver || mode === null) return;
     const owner = pitIdx < 6 ? 0 : 1;
-    if (owner !== turn || np[pitIdx] === 0) return;
-    let stones = np[pitIdx]; np[pitIdx] = 0;
-    let cur = pitIdx;
-    let extraTurn = false;
-    while (stones > 0) {
-      cur = (cur + 1) % 14;
-      if (cur === 12 + (1 - turn)) { cur = (cur + 1) % 14; } // skip opponent's hazne (12=p0 hazne, 13=p1 hazne)
-      if (cur === 12 + turn) { nh[turn]++; } // own hazne
-      else { np[cur % 12]++; }
-      stones--;
+    if (owner !== turn) return;
+    if (state.pits[pitIdx] === 0) return;
+    // Online: only allow my turn
+    if (onlineProps && turn !== onlineProps.myIndex) return;
+    applyPit(pitIdx, turn);
+    if (onlineProps) {
+      onlineProps.onMove({ type: 'mangala_move', pitIdx, playerIndex: onlineProps.myIndex, _ts: Date.now() });
     }
-    // extra turn if last stone in own hazne
-    if (cur === 12 + turn) extraTurn = true;
-    // capture: last stone in own empty pit → capture mirror
-    if (!extraTurn && cur < 12 && owner === turn) {
-      const isOwnPit = (turn === 0 && cur < 6) || (turn === 1 && cur >= 6);
-      if (isOwnPit && np[cur] === 1) {
-        const mirror = 11 - cur;
-        if (np[mirror] > 0) {
-          nh[turn] += np[mirror] + 1; np[cur] = 0; np[mirror] = 0;
-          setLastCapture(cur);
-          setTimeout(() => setLastCapture(null), 600);
-        }
-      }
-    }
-    if (soundOn) playSound('place');
-    // check end: either row empty
-    const p0empty = np.slice(0, 6).every(v => v === 0);
-    const p1empty = np.slice(6, 12).every(v => v === 0);
-    if (p0empty || p1empty) { setState({ pits: np, hazne: nh }); endGame(np, nh); return; }
-    setState({ pits: np, hazne: nh });
-    if (!extraTurn) setTurn(1 - turn);
   };
 
   const restart = () => { setState(initState()); setTurn(0); setGameOver(false); setWinner(null); };
+
+  if (mode === null && !onlineProps) return (
+    <div style={{ maxWidth: 380, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 56, marginBottom: 12 }}>🪨</div>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>Mangala</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 28, fontSize: 15 }}>Taşları topla, hazneyi doldur!</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 280, margin: '0 auto' }}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>
+            🌐 Çevrimiçi Oyna
+            <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 3 }}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <button onClick={() => setMode('local')} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#92400E,#D97706)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
+
+  var isOnline = !!onlineProps;
+  var myIdx = isOnline ? onlineProps.myIndex : -1;
+  var isMyTurn = !gameOver && (isOnline ? turn === myIdx : true);
 
   const { pits, hazne } = state;
   const cellStyle = (pitIdx, disabled) => ({
@@ -3979,6 +4042,9 @@ function MangalaGame({ onGameEnd, soundOn }) {
     outline: lastCapture === pitIdx ? '3px solid #ef4444' : 'none',
   });
 
+  var p0label = isOnline ? (myIdx === 0 ? 'Sen' : (onlineProps.opponentName || 'Rakip')) : 'Oyuncu 1';
+  var p1label = isOnline ? (myIdx === 1 ? 'Sen' : (onlineProps.opponentName || 'Rakip')) : 'Oyuncu 2';
+
   return (
     <div style={{ maxWidth: 420, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -3986,7 +4052,11 @@ function MangalaGame({ onGameEnd, soundOn }) {
         <Button onClick={restart} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni</Button>
       </div>
       <div style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-        {gameOver ? (winner === 2 ? 'Berabere!' : `Oyuncu ${winner + 1} kazandı!`) : `Sıra: Oyuncu ${turn + 1}`}
+        {gameOver
+          ? (winner === 2 ? 'Berabere!' : `${winner === 0 ? p0label : p1label} kazandı!`)
+          : isOnline
+          ? (turn === myIdx ? '⚡ Senin sıran' : '⏳ Rakip oynuyor...')
+          : `Sıra: ${turn === 0 ? p0label : p1label}`}
       </div>
       {/* Board */}
       <div style={{ background: '#78350F', borderRadius: 16, padding: 12, userSelect: 'none' }}>
@@ -3994,7 +4064,7 @@ function MangalaGame({ onGameEnd, soundOn }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, justifyContent: 'center' }}>
           <div style={{ width: 52, height: 52, borderRadius: 8, background: '#1A1A2E', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, border: '2px solid #F59E0B' }}>{hazne[1]}</div>
           {[11, 10, 9, 8, 7, 6].map(i => (
-            <div key={i} onClick={() => handlePit(i)} style={cellStyle(i, gameOver || turn !== 1 || pits[i] === 0)}>
+            <div key={i} onClick={() => handlePit(i)} style={cellStyle(i, gameOver || !isMyTurn || turn !== 1 || pits[i] === 0)}>
               <span style={{ fontSize: 11, lineHeight: 1 }}>🪨</span>
               <span>{pits[i]}</span>
             </div>
@@ -4005,7 +4075,7 @@ function MangalaGame({ onGameEnd, soundOn }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
           <div style={{ width: 52 }} />
           {[0, 1, 2, 3, 4, 5].map(i => (
-            <div key={i} onClick={() => handlePit(i)} style={cellStyle(i, gameOver || turn !== 0 || pits[i] === 0)}>
+            <div key={i} onClick={() => handlePit(i)} style={cellStyle(i, gameOver || !isMyTurn || turn !== 0 || pits[i] === 0)}>
               <span>{pits[i]}</span>
               <span style={{ fontSize: 11, lineHeight: 1 }}>🪨</span>
             </div>
@@ -4014,14 +4084,14 @@ function MangalaGame({ onGameEnd, soundOn }) {
         </div>
       </div>
       <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
-        Oyuncu 1: {hazne[0]} taş &nbsp;|&nbsp; Oyuncu 2: {hazne[1]} taş
+        {p0label}: {hazne[0]} taş &nbsp;|&nbsp; {p1label}: {hazne[1]} taş
       </div>
       {gameOver && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>{winner === 0 ? '🏆' : winner === 1 ? '😔' : '🤝'}</div>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{winner === (isOnline ? myIdx : 0) ? '🏆' : winner === 2 ? '🤝' : '😔'}</div>
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
-              {winner === 2 ? 'Berabere!' : `Oyuncu ${winner + 1} Kazandı!`}
+              {winner === 2 ? 'Berabere!' : `${winner === 0 ? p0label : p1label} Kazandı!`}
             </h2>
             <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>{hazne[0]} - {hazne[1]}</p>
             <Button onClick={restart}>Tekrar Oyna</Button>
@@ -4243,40 +4313,89 @@ function LightsOutGame({ onGameEnd, soundOn }) {
 // ============================================================
 // GAME: NIM (Çubuk Oyunu)
 // ============================================================
-function NimGame({ onGameEnd, soundOn }) {
+function NimGame({ onGameEnd, soundOn, onlineProps, onGoOnline, game }) {
   const INIT = [3, 5, 7];
   const [rows, setRows] = useState([...INIT]);
   const [turn, setTurn] = useState(0);
   const [selectedRow, setSelectedRow] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState(onlineProps ? 'online' : null);
   const [removing, setRemoving] = useState(0);
+  const [difficulty, setDifficulty] = useState('hard');
 
-  const nimValue = (r) => r.reduce((xor, v) => xor ^ v, 0);
+  // Online: receive remote moves
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'nim_move' && typeof mv.playerIndex !== 'undefined' && mv.playerIndex !== onlineProps.myIndex) {
+      setRows(function(prev) {
+        var nr = [...prev];
+        nr[mv.row] = Math.max(0, nr[mv.row] - mv.count);
+        if (nr.every(function(v){ return v===0; })) {
+          setGameOver(true); setWinner(1 - mv.playerIndex);
+          onGameEnd(mv.playerIndex === onlineProps.myIndex ? 'win' : 'loss');
+        } else {
+          setTurn(function(t){ return 1 - t; });
+        }
+        return nr;
+      });
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
+
+  const nimValueCalc = (r) => r.reduce((xor, v) => xor ^ v, 0);
 
   const applyMove = (r, rowIdx, count) => {
     const nr = [...r];
     nr[rowIdx] = Math.max(0, nr[rowIdx] - count);
-    // last stick taken = loser
     if (nr.every(v => v === 0)) return { rows: nr, loser: turn };
     return { rows: nr, loser: null };
   };
 
   const botMove = (r) => {
-    const nv = nimValue(r);
-    // optimal: find a move that sets xor to 0
+    if (difficulty === 'easy') {
+      // Random: pick random non-empty row, remove random count
+      var nonEmpty = r.map(function(v,i){ return v>0?i:null; }).filter(function(i){ return i!==null; });
+      var row2 = nonEmpty[Math.floor(Math.random()*nonEmpty.length)];
+      var count2 = Math.ceil(Math.random() * r[row2]);
+      return { row: row2, count: count2 };
+    }
+    if (difficulty === 'medium') {
+      // 50% optimal, 50% random
+      if (Math.random() < 0.5) {
+        var nonEmptyM = r.map(function(v,i){ return v>0?i:null; }).filter(function(i){ return i!==null; });
+        var rowM = nonEmptyM[Math.floor(Math.random()*nonEmptyM.length)];
+        return { row: rowM, count: Math.ceil(Math.random() * r[rowM]) };
+      }
+    }
+    // Hard (or 50% of medium): optimal Nim strategy
+    const nv = nimValueCalc(r);
     for (let i = 0; i < r.length; i++) {
       const target = r[i] ^ nv;
       if (target < r[i]) return { row: i, count: r[i] - target };
     }
-    // no winning move: remove 1 from largest row
     const maxRow = r.indexOf(Math.max(...r));
     return { row: maxRow, count: 1 };
   };
 
   const confirm = () => {
     if (removing === 0 || selectedRow === null) return;
+    if (onlineProps) {
+      // Online: send move
+      var myIdx = onlineProps.myIndex;
+      var nr2 = [...rows];
+      nr2[selectedRow] = Math.max(0, nr2[selectedRow] - removing);
+      if (soundOn) playSound('place');
+      setRows(nr2); setSelectedRow(null); setRemoving(0);
+      if (nr2.every(function(v){ return v===0; })) {
+        setGameOver(true); setWinner(1-myIdx);
+        onGameEnd('loss');
+      } else {
+        setTurn(function(t){ return 1-t; });
+      }
+      onlineProps.onMove({ type:'nim_move', row:selectedRow, count:removing, playerIndex:myIdx, _ts:Date.now() });
+      return;
+    }
     const { rows: nr, loser } = applyMove(rows, selectedRow, removing);
     if (soundOn) playSound('place');
     setRows(nr); setSelectedRow(null); setRemoving(0);
@@ -4298,19 +4417,45 @@ function NimGame({ onGameEnd, soundOn }) {
 
   const restart = () => { setRows([...INIT]); setTurn(0); setSelectedRow(null); setRemoving(0); setGameOver(false); setWinner(null); };
 
-  if (!mode) return (
+  if (!mode && !onlineProps) return (
     <div style={{ maxWidth: 360, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🪵</div>
       <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24, marginBottom: 8 }}>Çubuk Oyunu (Nim)</h2>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 6, fontSize: 14 }}>Son çubuğu alan <strong>kaybeder</strong>. Her sırada istediğin kadar al.</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 260, margin: '0 auto 0' }}>
-        <button onClick={() => setMode('bot')} style={{ padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#065F46,#34D399)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>🤖 Bota Karşı</button>
-        <button onClick={() => setMode('2p')} style={{ padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#0369A1,#38BDF8)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>📱 2 Kişi</button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 280, margin: '0 auto' }}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{ padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            🌐 Çevrimiçi Oyna
+            <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 3 }}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <div style={{ background: 'var(--surface-hover)', borderRadius: 14, padding: '16px', border: '1px solid var(--border)' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--text-secondary)' }}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
+              var d=item[0],label=item[1],color=item[2];
+              return (
+                <button key={d} onClick={function(){ setDifficulty(d); }}
+                  style={{ flex:1, padding:'10px 4px', borderRadius:10, border:'2px solid '+(difficulty===d?color:'var(--border)'),
+                    background:difficulty===d?color+'22':'transparent', color:difficulty===d?color:'var(--text-secondary)', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => setMode('bot')}
+            style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#065F46,#34D399)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            Oyna
+          </button>
+        </div>
+        <button onClick={() => setMode('2p')} style={{ padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#0369A1,#38BDF8)', color: '#FFF', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
 
-  const isMyTurn = !gameOver && (mode === '2p' || turn === 0);
+  var isOnline = !!onlineProps;
+  var myPlayerIdx = isOnline ? onlineProps.myIndex : -1;
+  var isMyTurn = !gameOver && (mode === '2p' || (!isOnline && turn === 0) || (isOnline && turn === myPlayerIdx));
 
   return (
     <div style={{ maxWidth: 380, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
@@ -4319,7 +4464,9 @@ function NimGame({ onGameEnd, soundOn }) {
         <Button onClick={() => { restart(); setMode(null); }} style={{ fontSize: 12, padding: '6px 10px' }}>Menü</Button>
       </div>
       <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--text-secondary)' }}>
-        {gameOver ? `Oyuncu ${winner + 1} kazandı!` : mode === 'bot' && turn === 1 ? '🤖 Bot düşünüyor...' : `Sıra: Oyuncu ${turn + 1}`}
+        {gameOver
+          ? (isOnline ? (winner === myPlayerIdx ? '🏆 Kazandın!' : '😔 Kaybettin!') : (mode === 'bot' ? (winner === 0 ? 'Kazandın!' : 'Bot Kazandı!') : `Oyuncu ${winner + 1} kazandı!`))
+          : (isOnline ? (turn === myPlayerIdx ? '⚡ Senin sıran' : '⏳ Rakip düşünüyor...') : (mode === 'bot' && turn === 1 ? '🤖 Bot düşünüyor...' : `Sıra: Oyuncu ${turn + 1}`))}
       </div>
       {INIT.map((_, ri) => (
         <div key={ri} onClick={() => isMyTurn && rows[ri] > 0 && setSelectedRow(ri === selectedRow ? null : ri)}
@@ -4350,9 +4497,9 @@ function NimGame({ onGameEnd, soundOn }) {
       {gameOver && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>{winner === 0 ? '🏆' : '😔'}</div>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{(isOnline ? winner === myPlayerIdx : winner === 0) ? '🏆' : '😔'}</div>
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
-              {mode === 'bot' ? (winner === 0 ? 'Kazandın!' : 'Bot Kazandı!') : `Oyuncu ${winner + 1} Kazandı!`}
+              {isOnline ? (winner === myPlayerIdx ? 'Kazandın!' : 'Kaybettin!') : (mode === 'bot' ? (winner === 0 ? 'Kazandın!' : 'Bot Kazandı!') : `Oyuncu ${winner + 1} Kazandı!`)}
             </h2>
             <Button onClick={restart}>Tekrar Oyna</Button>
           </Card>
@@ -4821,9 +4968,9 @@ const GAMES = [
   {
     id: 'tavla',
     name: 'Tavla',
-    desc: 'Klasik Türk tavlası — bota karşı oyna',
+    desc: 'Klasik Türk tavlası — bot veya arkadaşınla',
     icon: '🎲',
-    players: 1,
+    players: 2,
     genre: 'klasik',
     isNew: true,
     color: '#92400E',
@@ -12052,8 +12199,9 @@ export default function App() {
                 const invite = sock.gameInvite;
                 sock.clearGameInvite();
                 if (invite.roomId) {
-                  window.location.hash = '#room=' + invite.roomId;
-                  window.location.reload();
+                  setRoomId(invite.roomId);
+                  setPage('multiplayer');
+                  setTimeout(() => sock.joinRoom(invite.roomId), 150);
                 }
               }}
                 style={{ flex: 2, padding: '12px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
