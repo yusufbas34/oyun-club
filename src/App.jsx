@@ -2258,9 +2258,9 @@ function applyDamaMove(board, move) {
   return nb;
 }
 
-function DamaGame({ game, onGameEnd, soundOn }) {
+function DamaGame({ game, onGameEnd, soundOn, onGoOnline, onlineProps }) {
   const [difficulty, setDifficulty] = useState('medium');
-  const [damaStarted, setDamaStarted] = useState(false);
+  const [damaMode, setDamaMode] = useState(onlineProps ? 'online' : null);
   const [board, setBoard] = useState(initDamaBoard);
   const [selected, setSelected] = useState(null);
   const [turn, setTurn] = useState('white');
@@ -2268,6 +2268,22 @@ function DamaGame({ game, onGameEnd, soundOn }) {
   const [won, setWon] = useState(false);
   const [botThinking, setBotThinking] = useState(false);
   const [validMoves, setValidMoves] = useState([]);
+
+  // Online: receive remote moves
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'dama_move' && typeof mv.playerIndex !== 'undefined' && mv.playerIndex !== onlineProps.myIndex) {
+      var move = { from: mv.from, to: mv.to, capture: mv.capture };
+      setBoard(function(prev) {
+        var nb = applyDamaMove(prev, move);
+        return nb;
+      });
+      setSelected(null);
+      setValidMoves([]);
+      setTurn(function(prev) { return prev === 'white' ? 'black' : 'white'; });
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
 
   const checkWin = (b, nextTurn) => {
     const blacks = b.filter(p => p?.color === 'black').length;
@@ -2279,7 +2295,12 @@ function DamaGame({ game, onGameEnd, soundOn }) {
   };
 
   const handleCellClick = (r, c) => {
-    if (gameOver || turn !== 'white' || botThinking) return;
+    var isOnline = !!onlineProps;
+    var myDamaColor = isOnline ? (onlineProps.myIndex === 0 ? 'white' : 'black') : 'white';
+    // In bot mode: only white's turn. In 2P: either color. In online: only myColor's turn.
+    if (gameOver || botThinking) return;
+    if (damaMode === 'bot' && turn !== 'white') return;
+    if (isOnline && turn !== myDamaColor) return;
     const piece = board[r*8+c];
 
     if (selected) {
@@ -2290,6 +2311,23 @@ function DamaGame({ game, onGameEnd, soundOn }) {
         setBoard(nb);
         setSelected(null);
         setValidMoves([]);
+        var isOnline2 = !!onlineProps;
+        if (isOnline2) {
+          var myDamaColor2 = onlineProps.myIndex === 0 ? 'white' : 'black';
+          var next2 = turn === 'white' ? 'black' : 'white';
+          onlineProps.onMove({ type: 'dama_move', from: [selected[0], selected[1]], to: [r, c], capture: move.capture ? move.capture : null, color: turn, playerIndex: onlineProps.myIndex, _ts: Date.now() });
+          var winner2 = checkWin(nb, next2);
+          if (winner2) { setGameOver(true); setWon(winner2 === myDamaColor2); onGameEnd(winner2 === myDamaColor2 ? 'win' : 'loss'); if (soundOn) playSound('win'); return; }
+          setTurn(next2);
+          return;
+        }
+        if (damaMode === '2p') {
+          var next2p = turn === 'white' ? 'black' : 'white';
+          var winner2p = checkWin(nb, next2p);
+          if (winner2p) { setGameOver(true); setWon(false); onGameEnd('draw'); if (soundOn) playSound('win'); return; }
+          setTurn(next2p);
+          return;
+        }
         const winner = checkWin(nb, 'black');
         if (winner) {
           setGameOver(true);
@@ -2341,9 +2379,9 @@ function DamaGame({ game, onGameEnd, soundOn }) {
         }, 500);
         return;
       }
-      if (piece?.color === 'white') {
+      if (piece?.color === turn) {
         setSelected([r, c]);
-        const allMoves = getAllDamaMoves(board, 'white');
+        const allMoves = getAllDamaMoves(board, turn);
         const hasCaptures = allMoves.some(m => m.capture);
         const pieceMoves = getDamaMoves(board, r, c);
         setValidMoves(hasCaptures ? pieceMoves.filter(m => m.capture) : pieceMoves);
@@ -2354,9 +2392,9 @@ function DamaGame({ game, onGameEnd, soundOn }) {
       return;
     }
 
-    if (piece?.color === 'white') {
+    if (piece?.color === turn) {
       setSelected([r, c]);
-      const allMoves = getAllDamaMoves(board, 'white');
+      const allMoves = getAllDamaMoves(board, turn);
       const hasCaptures = allMoves.some(m => m.capture);
       const pieceMoves = getDamaMoves(board, r, c);
       setValidMoves(hasCaptures ? pieceMoves.filter(m => m.capture) : pieceMoves);
@@ -2371,28 +2409,43 @@ function DamaGame({ game, onGameEnd, soundOn }) {
     setWon(false);
     setBotThinking(false);
     setValidMoves([]);
-    if (!keepDiff) setDamaStarted(false);
+    if (!keepDiff) setDamaMode(null);
   };
 
-  if (!damaStarted) return (
+  if (!damaMode && !onlineProps) return (
     <div style={{maxWidth:380,margin:'0 auto',padding:'32px 16px',textAlign:'center'}}>
       <div style={{fontSize:56,marginBottom:12}}>⚫</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:26,marginBottom:8}}>Dama</h2>
-      <p style={{color:'var(--text-secondary)',marginBottom:28,fontSize:15}}>Klasik Türk Daması — Bot ile oyna</p>
-      <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)',maxWidth:280,margin:'0 auto'}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
-        <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
-          {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(([d,label,color])=>(
-            <button key={d} onClick={()=>setDifficulty(d)}
-              style={{flex:1,padding:'10px 4px',borderRadius:10,border:`2px solid ${difficulty===d?color:'var(--border)'}`,
-                background:difficulty===d?color+'22':'transparent',color:difficulty===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
-              {label}
-            </button>
-          ))}
+      <p style={{color:'var(--text-secondary)',marginBottom:20,fontSize:15}}>Klasik Türk Daması</p>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:300,margin:'0 auto'}}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>
+            🌐 Çevrimiçi Oyna
+            <div style={{fontSize:12,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
+              var d=item[0],label=item[1],color=item[2];
+              return (
+                <button key={d} onClick={function(){setDifficulty(d);}}
+                  style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(difficulty===d?color:'var(--border)'),
+                    background:difficulty===d?color+'22':'transparent',color:difficulty===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={function(){setDamaMode('bot');}}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#8B4513,#D2691E)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
         </div>
-        <button onClick={()=>setDamaStarted(true)}
-          style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#8B4513,#D2691E)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
-          Oyna
+        <button onClick={function(){setDamaMode('2p');}}
+          style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#0369A1,#38BDF8)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+          📱 Aynı Cihazda 2 Kişi
         </button>
       </div>
     </div>
@@ -2413,8 +2466,15 @@ function DamaGame({ game, onGameEnd, soundOn }) {
       </div>
 
       <div style={{ marginBottom: 8, fontSize: 14, color: 'var(--text-secondary)', display:'flex', justifyContent:'center', gap:12 }}>
-        <span>{botThinking ? '🤖 Bot düşünüyor...' : turn === 'white' ? '⚪ Senin sıran' : '⚫ Botun sırası'}</span>
-        <span style={{opacity:0.6}}>• {difficulty==='easy'?'Kolay':difficulty==='hard'?'Zor':'Orta'}</span>
+        {(function(){
+          var isOL = !!onlineProps;
+          var myDC = isOL ? (onlineProps.myIndex===0?'white':'black') : 'white';
+          if (botThinking) return <span>🤖 Bot düşünüyor...</span>;
+          if (isOL) return <span>{turn===myDC?'⚡ Senin sıran':'⏳ Rakip düşünüyor...'}</span>;
+          if (damaMode==='2p') return <span>{turn==='white'?'⚪ Beyaz\'ın sırası':'⚫ Siyah\'ın sırası'}</span>;
+          return <span>{turn==='white'?'⚪ Senin sıran':'⚫ Botun sırası'}</span>;
+        })()}
+        {damaMode==='bot' && <span style={{opacity:0.6}}>• {difficulty==='easy'?'Kolay':difficulty==='hard'?'Zor':'Orta'}</span>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 0, border: '2px solid var(--border)', borderRadius: 8, overflow: 'hidden', aspectRatio: '1' }}>
@@ -2460,7 +2520,7 @@ function DamaGame({ game, onGameEnd, soundOn }) {
           <Card style={{ padding: 32, textAlign: 'center', maxWidth: 280 }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>{won ? '🏆' : '😔'}</div>
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
-              {won ? 'Kazandın!' : 'Kaybettin!'}
+              {damaMode==='2p' ? (won ? 'Beyaz Kazandı!' : 'Siyah Kazandı!') : (won ? 'Kazandın!' : 'Kaybettin!')}
             </h2>
             <div style={{display:'flex',gap:8,justifyContent:'center'}}>
               <Button onClick={()=>restart(true)}>Tekrar Oyna</Button>
@@ -2878,6 +2938,8 @@ function ReversiGame({ game, players, onGameEnd, soundOn, onlineProps, onGoOnlin
   const [over, setOver] = useState(false);
   const [msg, setMsg] = useState('');
   const [mode, setMode] = useState(onlineProps ? 'online' : (players && players.length ? 'local' : null));
+  const [reversiDiff, setReversiDiff] = useState('medium');
+  const [botThinkingR, setBotThinkingR] = useState(false);
 
   // Online: receive remote moves
   useEffect(function() {
@@ -2946,8 +3008,40 @@ function ReversiGame({ game, players, onGameEnd, soundOn, onlineProps, onGoOnlin
     });
   }
 
+  function getReversiBot(b, color, diff) {
+    var validBot = [];
+    for (var bi = 0; bi < SZ*SZ; bi++) { if (getFlips(b, bi, color).length > 0) validBot.push(bi); }
+    if (!validBot.length) return null;
+    if (diff === 'easy') return validBot[Math.floor(Math.random() * validBot.length)];
+    var corners = [0, 7, 56, 63];
+    if (diff === 'hard') { for (var ci = 0; ci < corners.length; ci++) { if (validBot.includes(corners[ci])) return corners[ci]; } }
+    var xSquares = [1, 6, 8, 9, 14, 15, 48, 49, 54, 55, 57, 62];
+    var bestScore = -999, bestIdx = validBot[0];
+    for (var vi = 0; vi < validBot.length; vi++) {
+      var vidx = validBot[vi];
+      var score = getFlips(b, vidx, color).length;
+      if (diff === 'hard' && xSquares.includes(vidx)) score -= 5;
+      if (score > bestScore) { bestScore = score; bestIdx = vidx; }
+    }
+    return bestIdx;
+  }
+
+  useEffect(function() {
+    if (mode !== 'bot' || over || turn !== 'W' || botThinkingR) return;
+    setBotThinkingR(true);
+    var t = setTimeout(function() {
+      var botIdx = getReversiBot(board, 'W', reversiDiff);
+      if (botIdx !== null) {
+        applyReversiMove(botIdx, 'W');
+      }
+      setBotThinkingR(false);
+    }, 600);
+    return function() { clearTimeout(t); };
+  }, [mode, turn, over]);
+
   const place = (idx) => {
     if (over || !mode) return;
+    if (mode === 'bot' && turn === 'W') return;
     if (onlineProps) {
       var myColor = onlineProps.myIndex === 0 ? 'B' : 'W';
       if (board[idx] || turn !== myColor) return;
@@ -2975,15 +3069,34 @@ function ReversiGame({ game, players, onGameEnd, soundOn, onlineProps, onGoOnlin
     <div style={{ maxWidth: 380, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
       <div style={{ fontSize: 56, marginBottom: 12 }}>⬛⬜</div>
       <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>Reversi</h2>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: 28, fontSize: 15 }}>Taşları çevir, tahtayı kap!</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 280, margin: '0 auto' }}>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 20, fontSize: 15 }}>Taşları çevir, tahtayı kap!</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 300, margin: '0 auto' }}>
         {onGoOnline && (
-          <button onClick={onGoOnline} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>
+          <button onClick={onGoOnline} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
             🌐 Çevrimiçi Oyna
             <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 3 }}>Arkadaşını davet et</div>
           </button>
         )}
-        <button onClick={() => setMode('local')} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#14532d,#16a34a)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>📱 Aynı Cihazda 2 Kişi</button>
+        <div style={{ background: 'var(--surface-hover)', borderRadius: 14, padding: '16px', border: '1px solid var(--border)' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--text-secondary)' }}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
+              var d=item[0],label=item[1],color=item[2];
+              return (
+                <button key={d} onClick={function(){setReversiDiff(d);}}
+                  style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(reversiDiff===d?color:'var(--border)'),
+                    background:reversiDiff===d?color+'22':'transparent',color:reversiDiff===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={function(){setMode('bot');}}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#14532d,#16a34a)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
+        <button onClick={function(){setMode('local');}} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#0369A1,#38BDF8)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
   );
