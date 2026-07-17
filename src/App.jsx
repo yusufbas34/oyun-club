@@ -109,6 +109,15 @@ function useSocket(username) {
                         setFriendToast('🤝 ' + (r.pending || r.requests).length + ' bekleyen arkadaşlık isteği var!');
                         setTimeout(function(){ setFriendToast(null); }, 5000);
                       }
+                      // Cross-ref with online users so friends who are already online show correctly
+                      socket.emit('get_online_users', null, function(onlineRes) {
+                        if (onlineRes && onlineRes.users) {
+                          var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId; }));
+                          setFriendList(function(prev) {
+                            return prev.map(function(f) { return Object.assign({}, f, { online: onlineIds.has(f.userId) }); });
+                          });
+                        }
+                      });
                     }
                   });
                 }
@@ -1330,6 +1339,10 @@ function MultiplayerLobby(props) {
   var lastMoveRef = useRef(null);
 
   var sock = props.sock || { isConnected: false, isRegistered: false, roomData: null, players: [], messages: [], myUserId: null, friendList: [], friendRequests: [], friendToast: null, gameInvite: null };
+
+  // Reset invited state when room changes so stale "Davet gönderildi" doesn't persist
+  var roomId = sock.roomData && sock.roomData.id;
+  useEffect(function() { setInvitedUsers({}); }, [roomId]);
 
   // Auto-join from URL params
   useEffect(function() {
