@@ -16,6 +16,33 @@ if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D
 
 var BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
 var SockContext = React.createContext(null);
+
+// PWA detection — true only when installed (standalone), not in browser tab
+function isPWA() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         window.navigator.standalone === true;
+}
+
+// Show a system notification only when running as installed PWA
+async function showPWANotification(title, body, opts) {
+  if (!isPWA()) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    if ('serviceWorker' in navigator) {
+      var reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, Object.assign({
+        body: body,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: 'oyunclub',
+        renotify: true,
+        vibrate: [100, 50, 100],
+      }, opts || {}));
+    } else {
+      new Notification(title, { body: body, icon: '/icon-192.png' });
+    }
+  } catch(e) {}
+}
  
 function useSocket(username) {
   var socketRef = useRef(null);
@@ -162,9 +189,7 @@ function useSocket(username) {
                 });
                 if (newPlayer) {
                   setPlayerJoinedToast({ name: newPlayer.name });
-                  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                    try { new Notification('Oyuncu katıldı! 🎮', { body: newPlayer.name + ' masaya katıldı', icon: '/icon-192x192.png' }); } catch(e) {}
-                  }
+                  showPWANotification('Oyuncu katıldı! 🎮', newPlayer.name + ' masaya katıldı', { tag: 'player-join' });
                 }
               }
               if (
@@ -305,6 +330,7 @@ function useSocket(username) {
             setFriendRequests(function(prev) { return prev.concat([data]); });
             setFriendToast('🤝 ' + data.fromName + ' arkadaşlık isteği gönderdi!');
             setTimeout(function(){ setFriendToast(null); }, 4000);
+            showPWANotification('Arkadaşlık İsteği 🤝', data.fromName + ' sana arkadaşlık isteği gönderdi', { tag: 'friend-req' });
           });
           socket.on('friend_accepted', function(data) {
             var uid = data.byId || data.userId;
@@ -312,12 +338,14 @@ function useSocket(username) {
             setFriendList(function(prev) { return prev.concat([{userId:uid,name:uname,online:true}]); });
             setFriendToast('✅ ' + uname + ' arkadaşlık isteğini kabul etti!');
             setTimeout(function(){ setFriendToast(null); }, 4000);
+            showPWANotification('Arkadaşlık Kabul! ✅', uname + ' arkadaşlık isteğini kabul etti', { tag: 'friend-accept' });
           });
           socket.on('friend_removed', function(data) {
             setFriendList(function(prev) { return prev.filter(function(f){return f.userId!==data.userId;}); });
           });
           socket.on('game_invite', function(data) {
             setGameInvite(data);
+            showPWANotification('Oyun Daveti! 🎮', data.fromName + ' seni oyuna davet etti', { tag: 'game-invite', renotify: true });
           });
         })
         .catch(function () {
@@ -1345,12 +1373,15 @@ function MultiplayerLobby(props) {
     if (props.initialGame) setSelectedMPGame(props.initialGame);
   }, [props.initialGame]);
 
-  // Request notification permission when joining/creating a room
+  // Request notification permission only when installed as PWA
   useEffect(function() {
-    if (sock.roomData && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    if (!isPWA()) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+    var t = setTimeout(function() {
       Notification.requestPermission().catch(function() {});
-    }
-  }, [!!sock.roomData]);
+    }, 4000);
+    return function() { clearTimeout(t); };
+  }, []);
 
   // Auto-dismiss player joined toast after 3s
   useEffect(function() {
