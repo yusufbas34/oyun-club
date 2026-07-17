@@ -152,7 +152,6 @@ function useSocket(username) {
           });
 
           socket.on('room_updated', function (data) {
-            console.log('Oda guncellendi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
               if (data.players && prev.players && data.players.length > prev.players.length) {
@@ -214,7 +213,6 @@ function useSocket(username) {
           });
 
           socket.on('game_started', function (data) {
-            console.log('Oyun basladi:', data);
             setRoomData(function (prev) {
               if (!prev) return data;
               return Object.assign({}, prev, data, {
@@ -235,7 +233,6 @@ function useSocket(username) {
           });
 
           socket.on('game_finished', function (data) {
-            console.log('Oyun bitti:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -252,11 +249,9 @@ function useSocket(username) {
           });
 
           socket.on('rps_opponent_chose', function () {
-            console.log('Rakip secim yapti');
           });
 
           socket.on('rps_reveal', function (data) {
-            console.log('RPS sonuc:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -277,7 +272,6 @@ function useSocket(username) {
           });
 
           socket.on('rps_new_round', function (data) {
-            console.log('Yeni raund:', data);
             setRoomData(function (prev) {
               if (!prev) return prev;
               return Object.assign({}, prev, {
@@ -361,9 +355,7 @@ function useSocket(username) {
       if (!socketRef.current) { setSocketError('Bağlantı yok, lütfen bekleyin'); return; }
       if (!isRegistered) { setSocketError('Sunucuya kayıt bekleniyor...'); return; }
       setSocketError(null);
-      console.log('[joinRoom] kod:', roomCode);
       socketRef.current.emit('join_room', { roomId: roomCode.toUpperCase().trim() }, function (res) {
-        console.log('[joinRoom] yanit:', res);
         if (res && res.success) {
           setRoomData(res.room);
           setMessages([]);
@@ -409,7 +401,6 @@ function useSocket(username) {
       { cellIndex: cellIndex },
       function (res) {
         if (res && res.error) {
-          console.log('Hamle:', res.error);
         }
       }
     );
@@ -420,7 +411,6 @@ function useSocket(username) {
     setSocketError(null);
     socketRef.current.emit('rps_choice', { choice: choice }, function (res) {
       if (res && res.error) {
-        console.log('RPS:', res.error);
       }
     });
   }, []);
@@ -430,7 +420,6 @@ function useSocket(username) {
     setSocketError(null);
     socketRef.current.emit('restart_game', null, function (res) {
       if (res && res.error) {
-        console.log('Restart:', res.error);
       } else {
         setRoomData(function (prev) {
           if (!prev) return prev;
@@ -811,7 +800,6 @@ function MultiplayerXOX(props) {
   var gs = props.gameState;
   var players = props.players;
   var username = props.username;
-  console.log("DEBUG-USER:", username);
   var onMove = props.onMove;
   if (!gs) return null;
   var myIndex = -1;
@@ -1395,12 +1383,6 @@ function MultiplayerLobby(props) {
 
   function handleJoinPublicRoom(roomId) {
     sock.joinRoom(roomId);
-  }
-
-  function handleCopyLink() {
-    if (!sock.roomData) return;
-    var link = window.location.origin + '/?room=' + sock.roomData.id;
-    navigator.clipboard.writeText(link).catch(function() {});
   }
 
   var gameNames = {
@@ -5146,17 +5128,6 @@ const GAMES = [
     bg: 'linear-gradient(135deg, #BBADA0 0%, #F59563 100%)',
   },
   {
-    id: 'memory',
-    name: 'Hafıza Kartları',
-    desc: 'Eşleri bul, hafızanı test et',
-    icon: '🃏',
-    players: 1,
-    genre: 'hafıza',
-    popular: true,
-    color: '#7C3AED',
-    bg: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)',
-  },
-  {
     id: 'wordle',
     name: 'Wordle TR',
     desc: 'Türkçe kelime tahmin oyunu',
@@ -5317,18 +5288,6 @@ const GAMES = [
     isNew: true,
     color: '#6366F1',
     bg: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
-  },
-  {
-    id: 'stroop',
-    name: 'Stroop Testi',
-    desc: 'Kelimenin rengini seç — zihin oyunu',
-    icon: '🎨',
-    players: 1,
-    genre: 'hız',
-    isNew: true,
-    popular: true,
-    color: '#BE185D',
-    bg: 'linear-gradient(135deg, #BE185D 0%, #F472B6 100%)',
   },
 ];
 
@@ -6324,7 +6283,7 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
   const totalWins = Object.values(stats.games).reduce((a, g) => a + g.wins, 0);
   const winRate =
     totalGames > 0 ? Math.round((totalWins / totalGames) * 100) : 0;
-  const rank = getRank(totalWins);
+  const levelInfo = getLevelInfo(stats.xp || 0);
 
   const TABS = [
     { id: 'profil', label: '👤 Profil' },
@@ -6391,17 +6350,18 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
           </p>
         )}
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:12,flexWrap:'wrap'}}>
-          <span style={{padding:'4px 14px',borderRadius:20,fontSize:13,fontWeight:700,background:rank.bg,color:rank.color}}>
-            {rank.icon} {rank.label}
+          <span style={{padding:'4px 14px',borderRadius:20,fontSize:13,fontWeight:700,background:levelInfo.color+'22',color:levelInfo.color}}>
+            {levelInfo.icon} {levelInfo.name}
           </span>
-          <span style={{padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,background:'#F3F4F6',color:'#6B7280'}}>
+          <span style={{padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,background:'var(--surface-hover)',color:'var(--text-secondary)'}}>
             {totalWins} galibiyet
           </span>
         </div>
-        <div style={{marginTop:12,padding:'8px 16px',borderRadius:12,background:'var(--surface-hover)',display:'inline-flex',gap:16,fontSize:12,color:'var(--text-secondary)'}}>
-          {RANKS.map((r,i)=>(
-            <span key={i} style={{opacity:totalWins>=r.min?1:0.35,fontWeight:totalWins>=r.min&&totalWins<=r.max?700:400}}>{r.icon}</span>
-          ))}
+        <div style={{marginTop:12,padding:'8px 16px',borderRadius:12,background:'var(--surface-hover)',display:'inline-flex',gap:12,fontSize:12,color:'var(--text-secondary)'}}>
+          {XP_LEVELS.map(function(l,i){
+            var reached = (stats.xp||0) >= l.min;
+            return <span key={i} style={{opacity:reached?1:0.3,fontWeight:levelInfo.level===l.level?700:400}}>{l.icon}</span>;
+          })}
         </div>
         <XPBar xp={stats.xp || 0} streakCount={stats.streak?.count || 0} />
         {/* Season info */}
@@ -7741,180 +7701,6 @@ function DailyLoginRewardModal({ onClaim, onClose, streak }) {
 }
 
 // ============================================================
-// ROOM LOBBY
-// ============================================================
-const RoomLobby = ({ game, roomId, players, onStart, onCopyLink }) => (
-  <div
-    style={{
-      maxWidth: 500,
-      margin: '0 auto',
-      padding: '48px 20px',
-      animation: 'scaleIn 0.4s ease',
-      textAlign: 'center',
-    }}
-  >
-    <div
-      style={{
-        width: 72,
-        height: 72,
-        borderRadius: 20,
-        background: game.bg,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 32,
-        margin: '0 auto 20px',
-      }}
-    >
-      {game.icon}
-    </div>
-    <h2
-      style={{
-        fontFamily: "'Sora', sans-serif",
-        fontSize: 28,
-        fontWeight: 700,
-        marginBottom: 8,
-      }}
-    >
-      {game.name}
-    </h2>
-    <Card style={{ marginTop: 24, marginBottom: 24, padding: 20 }}>
-      <div
-        style={{
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-          marginBottom: 8,
-        }}
-      >
-        Masa Kodu
-      </div>
-      <span
-        style={{
-          fontFamily: "'Sora', sans-serif",
-          fontSize: 32,
-          fontWeight: 800,
-          letterSpacing: 6,
-          color: game.color,
-        }}
-      >
-        {roomId}
-      </span>
-      <Button
-        variant="secondary"
-        onClick={onCopyLink}
-        style={{ marginTop: 16, width: '100%' }}
-      >
-        📋 Davet Linkini Kopyala
-      </Button>
-    </Card>
-    <Card style={{ padding: 20 }}>
-      <div
-        style={{
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-          marginBottom: 16,
-        }}
-      >
-        Oyuncular ({players.length}/{game.players})
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {players.map((p, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '10px 16px',
-              background: 'var(--surface-hover)',
-              borderRadius: 'var(--radius-sm)',
-            }}
-          >
-            <Avatar name={p} size={32} />
-            <span style={{ fontWeight: 500, fontSize: 15 }}>{p}</span>
-            {i === 0 && (
-              <span
-                style={{
-                  marginLeft: 'auto',
-                  fontSize: 11,
-                  padding: '2px 8px',
-                  background: game.bg,
-                  color: '#fff',
-                  borderRadius: 20,
-                  fontWeight: 600,
-                }}
-              >
-                HOST
-              </span>
-            )}
-          </div>
-        ))}
-        {Array.from({ length: game.players - players.length }).map((_, i) => (
-          <div
-            key={`e-${i}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '10px 16px',
-              borderRadius: 'var(--radius-sm)',
-              border: '2px dashed var(--border)',
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                border: '2px dashed var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              ?
-            </div>
-            <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-              Bekleniyor...
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
-    {game.players === 1 || players.length >= game.players ? (
-      <Button
-        onClick={onStart}
-        style={{
-          marginTop: 24,
-          width: '100%',
-          padding: '16px',
-          fontSize: 16,
-          background: game.bg,
-        }}
-      >
-        ▶ Oyunu Başlat
-      </Button>
-    ) : (
-      <p
-        style={{ marginTop: 24, color: 'var(--text-secondary)', fontSize: 14 }}
-      >
-        Oyuncular bekleniyor...
-      </p>
-    )}
-    {game.players > 1 && players.length < game.players && (
-      <Button
-        variant="ghost"
-        onClick={onStart}
-        style={{ marginTop: 8, fontSize: 13 }}
-      >
-        Bot ile başlat (Demo)
-      </Button>
-    )}
-  </div>
-);
-
-// ============================================================
 // XOX GAME
 // ============================================================
 const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
@@ -8858,264 +8644,6 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
         </div>
       )}
       <Confetti active={showConfetti} color={game.color} />
-    </div>
-  );
-};
-
-// ============================================================
-// MEMORY GAME
-// ============================================================
-const CARD_EMOJIS = ['🍎', '🍋', '🍇', '🍊', '🌸', '🌈', '⭐', '🎯'];
-const MemoryGame = ({ game, onGameEnd, soundOn }) => {
-  const initCards = useCallback(() => {
-    const pairs = [...CARD_EMOJIS, ...CARD_EMOJIS];
-    for (let i = pairs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
-    }
-    return pairs.map((emoji, i) => ({
-      id: i,
-      emoji,
-      flipped: false,
-      matched: false,
-    }));
-  }, []);
-
-  const [cards, setCards] = useState(() => initCards());
-  const [flipped, setFlipped] = useState([]);
-  const [moves, setMoves] = useState(0);
-  const [matchCount, setMatchCount] = useState(0);
-  const [won, setWon] = useState(false);
-  const [time, setTime] = useState(0);
-  const [started, setStarted] = useState(false);
-  const timerRef = useRef(null);
-  const lockRef = useRef(false);
-
-  useEffect(() => {
-    if (started && !won)
-      timerRef.current = setInterval(() => setTime((t) => t + 1), 1000);
-    return () => clearInterval(timerRef.current);
-  }, [started, won]);
-
-  const handleFlip = (idx) => {
-    if (
-      lockRef.current ||
-      cards[idx].flipped ||
-      cards[idx].matched ||
-      flipped.length >= 2
-    )
-      return;
-    if (!started) setStarted(true);
-    if (soundOn) playSound('flip');
-    const nc = cards.map((c) => ({ ...c }));
-    nc[idx].flipped = true;
-    setCards(nc);
-    const newFlipped = [...flipped, idx];
-    setFlipped(newFlipped);
-
-    if (newFlipped.length === 2) {
-      setMoves((m) => m + 1);
-      lockRef.current = true;
-      const [a, b] = newFlipped;
-      if (nc[a].emoji === nc[b].emoji) {
-        if (soundOn) setTimeout(() => playSound('match'), 200);
-        setTimeout(() => {
-          setCards((prev) =>
-            prev.map((c, i) =>
-              i === a || i === b ? { ...c, matched: true } : c
-            )
-          );
-          const nm = matchCount + 1;
-          setMatchCount(nm);
-          if (nm === CARD_EMOJIS.length) {
-            setWon(true);
-            clearInterval(timerRef.current);
-            onGameEnd('win');
-            if (soundOn) playSound('win');
-          }
-          setFlipped([]);
-          lockRef.current = false;
-        }, 400);
-      } else {
-        if (soundOn) setTimeout(() => playSound('lose'), 400);
-        setTimeout(() => {
-          setCards((prev) =>
-            prev.map((c, i) =>
-              i === a || i === b ? { ...c, flipped: false } : c
-            )
-          );
-          setFlipped([]);
-          lockRef.current = false;
-        }, 800);
-      }
-    }
-  };
-
-  const reset = () => {
-    setCards(initCards());
-    setFlipped([]);
-    setMoves(0);
-    setMatchCount(0);
-    setWon(false);
-    setTime(0);
-    setStarted(false);
-    lockRef.current = false;
-    clearInterval(timerRef.current);
-  };
-
-  const stars = moves <= 10 ? 3 : moves <= 16 ? 2 : 1;
-
-  return (
-    <div
-      style={{
-        maxWidth: 440,
-        margin: '0 auto',
-        padding: '24px 20px',
-        animation: 'fadeUp 0.4s ease',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 20,
-          padding: '12px 16px',
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px solid var(--border)',
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "'Sora', sans-serif",
-            fontWeight: 700,
-            fontSize: 16,
-          }}
-        >
-          🎯 {moves} hamle
-        </div>
-        <Button
-          variant="secondary"
-          onClick={reset}
-          style={{ padding: '8px 16px', fontSize: 13 }}
-        >
-          🔄 Yeni
-        </Button>
-        <div
-          style={{
-            fontFamily: "'Sora', sans-serif",
-            fontWeight: 700,
-            fontSize: 16,
-          }}
-        >
-          ⏱ {time}s
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 8,
-          maxWidth: 360,
-          margin: '0 auto',
-        }}
-      >
-        {cards.map((card, i) => (
-          <button
-            key={card.id}
-            onClick={() => handleFlip(i)}
-            style={{
-              width: '100%',
-              aspectRatio: '1',
-              borderRadius: 'var(--radius-sm)',
-              border: '2px solid',
-              borderColor: card.matched
-                ? '#A78BFA'
-                : card.flipped
-                ? game.color
-                : 'var(--border)',
-              background:
-                card.flipped || card.matched
-                  ? card.matched
-                    ? 'var(--surface-hover)'
-                    : 'var(--surface)'
-                  : game.bg,
-              cursor: card.flipped || card.matched ? 'default' : 'pointer',
-              fontSize: 'clamp(24px, 7vw, 36px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.3s ease',
-              opacity: card.matched ? 0.7 : 1,
-            }}
-          >
-            {card.flipped || card.matched ? (
-              <span style={{ animation: 'scaleIn 0.25s ease' }}>
-                {card.emoji}
-              </span>
-            ) : (
-              <span
-                style={{
-                  color: 'rgba(255,255,255,0.3)',
-                  fontSize: 'clamp(18px, 5vw, 24px)',
-                }}
-              >
-                ?
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <div
-        style={{
-          textAlign: 'center',
-          marginTop: 16,
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-        }}
-      >
-        {matchCount}/{CARD_EMOJIS.length} eşleşme bulundu
-      </div>
-
-      {won && (
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: 24,
-            animation: 'scaleIn 0.4s ease',
-          }}
-        >
-          <div style={{ fontSize: 32, marginBottom: 8 }}>
-            {'⭐'.repeat(stars)}
-            {'☆'.repeat(3 - stars)}
-          </div>
-          <p
-            style={{
-              fontFamily: "'Sora', sans-serif",
-              fontSize: 22,
-              fontWeight: 700,
-              marginBottom: 4,
-            }}
-          >
-            Tebrikler! 🎉
-          </p>
-          <p
-            style={{
-              color: 'var(--text-secondary)',
-              fontSize: 14,
-              marginBottom: 16,
-            }}
-          >
-            {moves} hamlede, {time} saniyede tamamladın
-          </p>
-          <Button onClick={reset} style={{ background: game.bg }}>
-            Tekrar Oyna
-          </Button>
-        </div>
-      )}
     </div>
   );
 };
@@ -10926,7 +10454,7 @@ function DailyQuestBanner({ stats }) {
   var ds = stats.dailyStats || {};
   var dayPlayed = (ds.date === today) ? (ds.played || 0) : 0;
   var dayWins   = (ds.date === today) ? (ds.wins   || 0) : 0;
-  var variety   = Object.keys(stats.games || {}).filter(function(k){ return (stats.games[k].played||0)>0; }).length;
+  var variety   = (ds.date === today && ds.varieties) ? ds.varieties.length : 0;
 
   var quests = [
     { icon:'🎮', label:'Bugün 3 oyun oyna',      cur: Math.min(dayPlayed,3),  goal:3,  xp:15 },
@@ -11116,151 +10644,6 @@ function AdamAsmacaGame({ game, onGameEnd, soundOn }) {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-// ============================================================
-// STROOP TESTİ — Color-Word Interference Game
-// ============================================================
-var STROOP_COLORS = [
-  { name:'KIRMIZI', color:'#E63946', label:'KIRMIZI' },
-  { name:'MAVİ',    color:'#2563EB', label:'MAVİ' },
-  { name:'YEŞİL',   color:'#16A34A', label:'YEŞİL' },
-  { name:'SARI',    color:'#D97706', label:'SARI' },
-  { name:'MOR',     color:'#7C3AED', label:'MOR' },
-  { name:'TURUNCU', color:'#EA580C', label:'TURUNCU' },
-];
-
-function generateStroopRound() {
-  var word = STROOP_COLORS[Math.floor(Math.random()*STROOP_COLORS.length)];
-  var colorObj;
-  do { colorObj = STROOP_COLORS[Math.floor(Math.random()*STROOP_COLORS.length)]; } while(colorObj.name===word.name);
-  return { word: word.name, wordColor: colorObj.color, correctName: colorObj.name, correctColor: colorObj.color };
-}
-
-function StroopTestiGame({ game, onGameEnd, soundOn }) {
-  var TOTAL = 20;
-  var s0 = React.useState(null); var phase = s0[0]; var setPhase = s0[1];
-  var s1 = React.useState(0); var score = s1[0]; var setScore = s1[1];
-  var s2 = React.useState(0); var qIdx = s2[0]; var setQIdx = s2[1];
-  var s3 = React.useState(function(){ return generateStroopRound(); }); var round = s3[0]; var setRound = s3[1];
-  var s4 = React.useState(null); var feedback = s4[0]; var setFeedback = s4[1];
-  var s5 = React.useState(0); var combo = s5[0]; var setCombo = s5[1];
-  var s6 = React.useState(45); var timeLeft = s6[0]; var setTimeLeft = s6[1];
-
-  React.useEffect(function(){
-    if(phase!=='playing') return;
-    if(timeLeft<=0){ setPhase('done'); return; }
-    var t = setTimeout(function(){ setTimeLeft(function(v){ return v-1; }); },1000);
-    return function(){ clearTimeout(t); };
-  },[phase,timeLeft]);
-
-  function handleAnswer(colorName) {
-    if(phase!=='playing'||feedback) return;
-    var correct = colorName === round.correctName;
-    if(correct){
-      var newCombo = combo+1;
-      setCombo(newCombo);
-      var pts = 10 + (newCombo>=3?5:0);
-      setScore(function(s){ return s+pts; });
-      if(soundOn) playSound('correct');
-      playHaptic('correct');
-      setFeedback('correct');
-    } else {
-      setCombo(0);
-      if(soundOn) playSound('wrong');
-      playHaptic('wrong');
-      setFeedback('wrong');
-    }
-    setTimeout(function(){
-      setFeedback(null);
-      var next = qIdx+1;
-      if(next>=TOTAL){ setPhase('done'); return; }
-      setQIdx(next);
-      setRound(generateStroopRound());
-    }, 400);
-  }
-
-  var buttons = React.useMemo(function(){
-    var correct = STROOP_COLORS.find(function(c){ return c.name===round.correctName; });
-    var others = STROOP_COLORS.filter(function(c){ return c.name!==round.correctName; });
-    for(var i=others.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=others[i];others[i]=others[j];others[j]=t;}
-    var sel = [correct].concat(others.slice(0,3));
-    for(var k=sel.length-1;k>0;k--){var l=Math.floor(Math.random()*(k+1));var tmp=sel[k];sel[k]=sel[l];sel[l]=tmp;}
-    return sel;
-  },[round]);
-
-  if(!phase) return (
-    <div style={{maxWidth:380,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
-      <div style={{fontSize:72,marginBottom:8}}>🎨</div>
-      <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Stroop Testi</h2>
-      <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:8}}>Kelimenin rengini seç, yazdığını değil!</p>
-      <div style={{background:'var(--surface)',borderRadius:14,padding:'16px',marginBottom:20}}>
-        <div style={{fontSize:32,fontWeight:900,color:'#2563EB',marginBottom:8}}>KIRMIZI</div>
-        <p style={{fontSize:12,color:'var(--text-secondary)'}}>⬆️ Bu kelime "KIRMIZI" yazıyor ama MAVİ renkte. Doğru cevap: MAVİ</p>
-      </div>
-      <button onClick={function(){setPhase('playing');}} style={{padding:'16px 48px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#BE185D,#F472B6)',color:'#fff',fontSize:17,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
-        Başla
-      </button>
-    </div>
-  );
-
-  if(phase==='done') {
-    var rank = score>=150?'win':score>=80?'draw':'loss';
-    return (
-      <div style={{maxWidth:400,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
-        <div style={{fontSize:64,marginBottom:12}}>{score>=150?'🧠':score>=80?'😊':'🤔'}</div>
-        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:26,marginBottom:8}}>
-          {score>=150?'Olağanüstü Beyin!':score>=80?'İyi İş!':'Pratik Yapalım!'}
-        </h2>
-        <div style={{fontSize:48,fontWeight:900,color:'#BE185D',marginBottom:4}}>{score}</div>
-        <div style={{color:'var(--text-secondary)',fontSize:14,marginBottom:8}}>puan · {qIdx} soru</div>
-        <div style={{background:'var(--surface)',borderRadius:12,padding:'12px',marginBottom:20,fontSize:13,color:'var(--text-secondary)'}}>
-          💡 Stroop Etkisi: Beyin renk ve kelime anlamını aynı anda işler. Bu çatışma tepki sürenizi uzatır!
-        </div>
-        <button onClick={function(){onGameEnd(rank);}} style={{display:'block',width:'100%',padding:14,borderRadius:12,background:'linear-gradient(135deg,#BE185D,#F472B6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer'}}>
-          Bitir
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{maxWidth:420,margin:'0 auto',padding:'20px 16px'}}>
-      {/* Header */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <div style={{fontSize:14,color:'var(--text-secondary)',fontWeight:600}}>{qIdx+1}/{TOTAL}</div>
-        <div style={{padding:'6px 14px',borderRadius:999,background:timeLeft<=10?'rgba(239,68,68,0.12)':'rgba(190,24,93,0.1)',color:timeLeft<=10?'#EF4444':'#BE185D',fontWeight:700,fontSize:14}}>
-          ⏱ {timeLeft}s
-        </div>
-        <div style={{fontWeight:800,fontSize:16,color:'#BE185D'}}>{score}p {combo>=3?'🔥×'+combo:''}</div>
-      </div>
-      {/* The word */}
-      <div style={{textAlign:'center',marginBottom:32,padding:'24px',background:'var(--surface)',borderRadius:20,border:'2px solid var(--border)'}}>
-        <div style={{fontSize:11,color:'var(--text-secondary)',fontWeight:700,letterSpacing:1,marginBottom:8}}>BU KELİMENİN RENGİ NEDİR?</div>
-        <div style={{fontSize:44,fontWeight:900,color:round.wordColor,letterSpacing:2,fontFamily:'monospace'}}>{round.word}</div>
-      </div>
-      {/* Color buttons */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        {buttons.map(function(c){
-          return (
-            <button key={c.name} onClick={function(){ handleAnswer(c.name); }}
-              style={{padding:'16px 8px',borderRadius:14,border:'2px solid '+c.color,
-                background:feedback&&c.name===round.correctName?c.color+'22':'var(--surface)',
-                color:c.color,fontWeight:800,fontSize:14,cursor:'pointer',
-                fontFamily:"'Sora',sans-serif",transition:'transform 0.1s',
-                transform:'scale(1)'}}>
-              ● {c.name}
-            </button>
-          );
-        })}
-      </div>
-      {feedback && (
-        <div style={{textAlign:'center',marginTop:12,fontSize:16,fontWeight:700,color:feedback==='correct'?'#16A34A':'#EF4444'}}>
-          {feedback==='correct'?(combo>=3?'🔥 COMBO! +15':'✅ Doğru! +10'):'❌ Yanlış!'}
-        </div>
-      )}
     </div>
   );
 }
@@ -12007,8 +11390,6 @@ export default function App() {
       const wsNow = result === 'win' ? (prev.currentWinStreak || 0) + 1 : 0;
       const bestWs = Math.max(prev.bestWinStreak || 0, wsNow);
       const xpGain = calcXpGain(result, wsNow, difficulty, isDailyGame);
-      const newXp = (prev.xp || 0) + xpGain;
-      const newLevel = getLevelInfo(newXp).level;
 
       // Streak with freeze auto-apply
       const prevS = prev.streak || { count: 0, lastPlayDate: null };
@@ -12043,10 +11424,35 @@ export default function App() {
         newFreeze = { count: 1, weekUsed: null };
       }
 
-      const prevDs = prev.dailyStats || { date: null, played: 0, wins: 0 };
-      const newDs = prevDs.date === today
-        ? { ...prevDs, played: prevDs.played + 1, wins: prevDs.wins + (result === 'win' ? 1 : 0) }
-        : { date: today, played: 1, wins: result === 'win' ? 1 : 0 };
+      const prevDs = prev.dailyStats || { date: null, played: 0, wins: 0, varieties: [], questsRewarded: {} };
+      const isToday = prevDs.date === today;
+      const newVarieties = isToday
+        ? Array.from(new Set([...(prevDs.varieties || []), gid]))
+        : [gid];
+      const newDs = isToday
+        ? { ...prevDs, played: prevDs.played + 1, wins: prevDs.wins + (result === 'win' ? 1 : 0), varieties: newVarieties }
+        : { date: today, played: 1, wins: result === 'win' ? 1 : 0, varieties: newVarieties, questsRewarded: {} };
+
+      // Daily quest bonus XP
+      var prevQr = isToday ? (prevDs.questsRewarded || {}) : {};
+      var newQr = Object.assign({}, prevQr);
+      var questBonus = 0;
+      if (!newQr.q1 && newDs.played >= 3) {
+        newQr.q1 = true; questBonus += 15;
+        setTimeout(function(){ showToast('🎮 Görev tamamlandı: 3 oyun oyna! +15 XP'); }, 1500);
+      }
+      if (!newQr.q2 && newDs.wins >= 2) {
+        newQr.q2 = true; questBonus += 20;
+        setTimeout(function(){ showToast('🏆 Görev tamamlandı: 2 galibiyet! +20 XP'); }, 2000);
+      }
+      if (!newQr.q3 && newVarieties.length >= 5) {
+        newQr.q3 = true; questBonus += 25;
+        setTimeout(function(){ showToast('🎯 Görev tamamlandı: 5 farklı oyun! +25 XP'); }, 2500);
+      }
+      newDs.questsRewarded = newQr;
+
+      const newXp = (prev.xp || 0) + xpGain + questBonus;
+      const newLevel = getLevelInfo(newXp).level;
 
       // Season XP — monthly reset
       const curMonth = new Date().toISOString().slice(0,7); // "2026-07"
@@ -12149,28 +11555,12 @@ export default function App() {
       setTimeout(function() { sock.createRoom(gameId, true); }, 80);
     }
   };
-  const handleStartGame = () => {
-    if (selectedGame.players > 1 && players.length < selectedGame.players)
-      setPlayers((p) => [...p, 'Bot 🤖']);
-    setPage('game');
-  };
-  const handleCopyLink = () => {
-    if (navigator.clipboard) navigator.clipboard.writeText(roomId);
-    showToast(`Oda kodu kopyalandı: ${roomId}`);
-  };
   const handleJoinRoom = (code) => {
     setPage('multiplayer');
     setRoomId(code);
   };
   const handleBack = () => {
     if (page === 'game') {
-      // Only go to room for online multiplayer setup, not local 2-player games
-      if (selectedGame?.online && players.length > 1 && page !== 'game') setPage('room');
-      else {
-        setPage('lobby');
-        setSelectedGame(null);
-      }
-    } else if (page === 'room') {
       setPage('lobby');
       setSelectedGame(null);
     } else setPage('lobby');
@@ -12223,14 +11613,6 @@ export default function App() {
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
             onGoOnline={() => handleGoOnline('rps')}
-          />
-        );
-      case 'memory':
-        return (
-          <MemoryGame
-            game={selectedGame}
-            onGameEnd={handleGameEnd}
-            soundOn={soundOn}
           />
         );
       case 'snake':
@@ -12455,14 +11837,6 @@ export default function App() {
             soundOn={soundOn}
           />
         );
-      case 'stroop':
-        return (
-          <StroopTestiGame
-            game={selectedGame}
-            onGameEnd={handleGameEnd}
-            soundOn={soundOn}
-          />
-        );
       case 'reversi':
         return (
           <ReversiGame
@@ -12677,15 +12051,6 @@ export default function App() {
             sock={sock}
           />
         </div>
-        {page === 'room' && selectedGame && (
-          <RoomLobby
-            game={selectedGame}
-            roomId={roomId}
-            players={players}
-            onStart={handleStartGame}
-            onCopyLink={handleCopyLink}
-          />
-        )}
         {page === 'game' && selectedGame && renderGame()}
       </div>
       <Toast message={toast.message} visible={toast.visible} />
