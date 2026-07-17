@@ -2672,6 +2672,7 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
   const [winner, setWinner] = useState(null);
   const [isDraw, setIsDraw] = useState(false);
   const [mode, setMode] = useState(onlineProps ? 'online' : null);
+  const [c4Diff, setC4Diff] = useState('medium');
   const [botThinking, setBotThinking] = useState(false);
   const [hoverCol, setHoverCol] = useState(null);
 
@@ -2728,7 +2729,14 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
     if (mode === 'bot' && next === 'yellow') {
       setBotThinking(true);
       setTimeout(() => {
-        const bc = c4BotMove(nb);
+        var bc;
+        if (c4Diff === 'easy') {
+          var emptyC4 = [];
+          for (var ci=0;ci<COLS;ci++) { var tmpNb=dropC4(nb,ci,'yellow'); if(tmpNb) emptyC4.push(ci); }
+          bc = emptyC4[Math.floor(Math.random()*emptyC4.length)];
+        } else {
+          bc = c4BotMove(nb);
+        }
         const nb2 = dropC4(nb, bc, 'yellow');
         if (soundOn) playSound('place');
         if (checkC4Win(nb2, 'yellow')) {
@@ -2761,7 +2769,25 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
             <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 3 }}>Arkadaşını davet et</div>
           </button>
         )}
-        <button onClick={() => setMode('bot')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#E63946,#F4845F)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>🤖 Bota Karşı</button>
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
+              var d=item[0],label=item[1],color=item[2];
+              return (
+                <button key={d} onClick={function(){ setC4Diff(d); }}
+                  style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(c4Diff===d?color:'var(--border)'),
+                    background:c4Diff===d?color+'22':'transparent',color:c4Diff===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => setMode('bot')}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={() => setMode('2p')} style={{ padding: '16px 24px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#059669,#34D399)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
@@ -2839,7 +2865,7 @@ function checkGomokuWin(board, r, c, color) {
 // ============================================================
 // REVERSİ (OTHELLo)
 // ============================================================
-function ReversiGame({ game, players, onGameEnd, soundOn }) {
+function ReversiGame({ game, players, onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const SZ = 8;
   const initBoard = () => {
     const b = Array(SZ*SZ).fill(null);
@@ -2851,6 +2877,16 @@ function ReversiGame({ game, players, onGameEnd, soundOn }) {
   const [scores, setScores] = useState({B:2,W:2});
   const [over, setOver] = useState(false);
   const [msg, setMsg] = useState('');
+  const [mode, setMode] = useState(onlineProps ? 'online' : (players && players.length ? 'local' : null));
+
+  // Online: receive remote moves
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'reversi_move' && typeof mv.playerIndex !== 'undefined' && mv.playerIndex !== onlineProps.myIndex) {
+      applyReversiMove(mv.idx, mv.color);
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
 
   function getFlips(b, idx, color) {
     if (b[idx]) return [];
@@ -2879,35 +2915,78 @@ function ReversiGame({ game, players, onGameEnd, soundOn }) {
 
   const valid = useMemo(()=>getValid(board,turn),[board,turn]);
 
-  const place = (idx) => {
-    if (over || board[idx]) return;
-    const flips = getFlips(board, idx, turn);
-    if (!flips.length) return;
-    if (soundOn) playSound('place');
-    const nb = [...board];
-    nb[idx]=turn;
-    for(const f of flips) nb[f]=turn;
-    const bC=nb.filter(c=>c==='B').length, wC=nb.filter(c=>c==='W').length;
-    setScores({B:bC,W:wC});
-    setBoard(nb);
-    const opp=turn==='B'?'W':'B';
-    const oppV=getValid(nb,opp);
-    if(oppV.length){setTurn(opp);setMsg('');}
-    else {
-      const myV=getValid(nb,turn);
-      if(myV.length){setMsg('Rakip geçiyor, sen devam et');} // keep turn
+  function applyReversiMove(idx, color) {
+    setBoard(function(prev) {
+      var flips2 = getFlips(prev, idx, color);
+      if (!flips2.length) return prev;
+      if (soundOn) playSound('place');
+      var nb2 = [...prev];
+      nb2[idx] = color;
+      for (var f of flips2) nb2[f] = color;
+      var bC2 = nb2.filter(function(c){return c==='B';}).length;
+      var wC2 = nb2.filter(function(c){return c==='W';}).length;
+      setScores({B:bC2, W:wC2});
+      var opp2 = color==='B'?'W':'B';
+      var oppV2 = getValid(nb2, opp2);
+      if (oppV2.length) { setTurn(opp2); setMsg(''); }
       else {
-        setOver(true);
-        if(bC>wC){setMsg((players[0]||'Siyah')+' kazandı!');onGameEnd('win');}
-        else if(wC>bC){setMsg((players[1]||'Beyaz')+' kazandı!');onGameEnd('loss');}
-        else{setMsg('Berabere!');onGameEnd('draw');}
-        if(soundOn) playSound('win');
+        var myV2 = getValid(nb2, color);
+        if (myV2.length) { setMsg('Rakip geçiyor, sen devam et'); }
+        else {
+          setOver(true);
+          var myIdx2 = onlineProps ? onlineProps.myIndex : 0;
+          var myColor2 = onlineProps ? (myIdx2===0?'B':'W') : 'B';
+          if (bC2 > wC2) { setMsg((players&&players[0]?players[0]:'Siyah')+' kazandı!'); onGameEnd(myColor2==='B'?'win':'loss'); }
+          else if (wC2 > bC2) { setMsg((players&&players[1]?players[1]:'Beyaz')+' kazandı!'); onGameEnd(myColor2==='W'?'win':'loss'); }
+          else { setMsg('Berabere!'); onGameEnd('draw'); }
+          if (soundOn) playSound('win');
+        }
       }
+      return nb2;
+    });
+  }
+
+  const place = (idx) => {
+    if (over || !mode) return;
+    if (onlineProps) {
+      var myColor = onlineProps.myIndex === 0 ? 'B' : 'W';
+      if (board[idx] || turn !== myColor) return;
+      var flipsO = getFlips(board, idx, myColor);
+      if (!flipsO.length) return;
+      applyReversiMove(idx, myColor);
+      onlineProps.onMove({ type: 'reversi_move', idx, color: myColor, playerIndex: onlineProps.myIndex, _ts: Date.now() });
+      return;
     }
+    if (board[idx]) return;
+    var flips = getFlips(board, idx, turn);
+    if (!flips.length) return;
+    applyReversiMove(idx, turn);
   };
 
-  const p1=players&&players[0]?players[0]:'Siyah';
-  const p2=players&&players[1]?players[1]:'Beyaz';
+  const resetGame = () => { setBoard(initBoard()); setTurn('B'); setScores({B:2,W:2}); setOver(false); setMsg(''); };
+
+  var isOnline = !!onlineProps;
+  var myIdx = isOnline ? onlineProps.myIndex : -1;
+  var myColor = isOnline ? (myIdx===0?'B':'W') : null;
+  var p1 = isOnline ? (myIdx===0?'Sen':(onlineProps.opponentName||'Rakip')) : (players&&players[0]?players[0]:'Siyah');
+  var p2 = isOnline ? (myIdx===1?'Sen':(onlineProps.opponentName||'Rakip')) : (players&&players[1]?players[1]:'Beyaz');
+
+  if (!mode && !onlineProps) return (
+    <div style={{ maxWidth: 380, margin: '0 auto', padding: '32px 16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 56, marginBottom: 12 }}>⬛⬜</div>
+      <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 8 }}>Reversi</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 28, fontSize: 15 }}>Taşları çevir, tahtayı kap!</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 280, margin: '0 auto' }}>
+        {onGoOnline && (
+          <button onClick={onGoOnline} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>
+            🌐 Çevrimiçi Oyna
+            <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.85, marginTop: 3 }}>Arkadaşını davet et</div>
+          </button>
+        )}
+        <button onClick={() => setMode('local')} style={{ padding: '16px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#14532d,#16a34a)', color: '#FFF', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: "'Sora',sans-serif" }}>📱 Aynı Cihazda 2 Kişi</button>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{maxWidth:400,margin:'0 auto',padding:'16px',textAlign:'center'}}>
@@ -2920,21 +2999,27 @@ function ReversiGame({ game, players, onGameEnd, soundOn }) {
           </div>
         ))}
       </div>
+      {isOnline && !over && (
+        <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--text-secondary)' }}>
+          {turn === myColor ? '⚡ Senin sıran' : '⏳ Rakip düşünüyor...'}
+        </div>
+      )}
       {msg&&<div style={{marginBottom:10,padding:'8px 16px',borderRadius:10,background:'var(--surface)',fontSize:14,fontWeight:600,color:over?'#059669':'var(--text)'}}>{msg}</div>}
       <div style={{display:'grid',gridTemplateColumns:`repeat(${SZ},1fr)`,gap:2,background:'#14532d',padding:4,borderRadius:10,margin:'0 auto',maxWidth:340}}>
         {board.map((cell,i)=>{
           const isV=valid.includes(i);
+          const canPlay = isOnline ? turn===myColor : true;
           return (
-            <div key={i} onClick={()=>place(i)}
-              style={{aspectRatio:'1',borderRadius:3,background:'#16a34a',display:'flex',alignItems:'center',justifyContent:'center',cursor:isV?'pointer':'default',border:isV?'1.5px solid rgba(255,255,255,0.6)':'1.5px solid transparent',transition:'border 0.1s'}}>
+            <div key={i} onClick={()=>canPlay&&place(i)}
+              style={{aspectRatio:'1',borderRadius:3,background:'#16a34a',display:'flex',alignItems:'center',justifyContent:'center',cursor:(isV&&canPlay)?'pointer':'default',border:isV&&canPlay?'1.5px solid rgba(255,255,255,0.6)':'1.5px solid transparent',transition:'border 0.1s'}}>
               {cell&&<div style={{width:'78%',height:'78%',borderRadius:'50%',background:cell==='B'?'#111827':'#f8fafc',boxShadow:cell==='B'?'inset 1px 1px 3px rgba(255,255,255,0.2)':'inset 1px 1px 3px rgba(0,0,0,0.15)',transition:'all 0.15s'}}/>}
-              {isV&&!cell&&<div style={{width:'28%',height:'28%',borderRadius:'50%',background:turn==='B'?'rgba(0,0,0,0.35)':'rgba(255,255,255,0.45)'}}/>}
+              {isV&&!cell&&canPlay&&<div style={{width:'28%',height:'28%',borderRadius:'50%',background:turn==='B'?'rgba(0,0,0,0.35)':'rgba(255,255,255,0.45)'}}/>}
             </div>
           );
         })}
       </div>
       {!over&&<div style={{marginTop:12,fontSize:13,color:'var(--text-secondary)'}}>{turn==='B'?p1:p2} hamle yapıyor</div>}
-      {over&&<button onClick={()=>{setBoard(initBoard());setTurn('B');setScores({B:2,W:2});setOver(false);setMsg('');}} style={{marginTop:14,padding:'12px 28px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#059669,#34d399)',color:'#fff',fontWeight:700,fontSize:15,cursor:'pointer'}}>Yeniden Oyna</button>}
+      {over&&<button onClick={resetGame} style={{marginTop:14,padding:'12px 28px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#059669,#34d399)',color:'#fff',fontWeight:700,fontSize:15,cursor:'pointer'}}>Yeniden Oyna</button>}
     </div>
   );
 }
@@ -2944,6 +3029,7 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const [turn, setTurn] = useState('black');
   const [winner, setWinner] = useState(null);
   const [mode, setMode] = useState(onlineProps ? 'online' : null);
+  const [gomokuDiff, setGomokuDiff] = useState('medium');
   const [botThinking, setBotThinking] = useState(false);
   const [lastMove, setLastMove] = useState(null);
 
@@ -3002,7 +3088,22 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       setBotThinking(true);
       setTimeout(() => {
         const empty = nb.map((v,i)=>v?null:i).filter(i=>i!==null);
-        const pick = empty[Math.floor(Math.random()*empty.length)];
+        var pick;
+        if (typeof gomokuDiff !== 'undefined' && gomokuDiff === 'easy') {
+          pick = empty[Math.floor(Math.random()*empty.length)];
+        } else {
+          // Medium/Hard: prefer cells adjacent to existing pieces
+          var adjacent = empty.filter(function(idx2) {
+            var r2=Math.floor(idx2/GT_SIZE), c2=idx2%GT_SIZE;
+            for (var dr2=-1;dr2<=1;dr2++) for (var dc2=-1;dc2<=1;dc2++) {
+              if (dr2===0&&dc2===0) continue;
+              var nr2=r2+dr2,nc2=c2+dc2;
+              if (nr2>=0&&nr2<GT_SIZE&&nc2>=0&&nc2<GT_SIZE&&nb[nr2*GT_SIZE+nc2]) return true;
+            }
+            return false;
+          });
+          pick = (adjacent.length>0?adjacent:empty)[Math.floor(Math.random()*(adjacent.length>0?adjacent:empty).length)];
+        }
         const nb2=[...nb]; nb2[pick]='white';
         if (soundOn) playSound('place');
         const pr=Math.floor(pick/GT_SIZE),pc=pick%GT_SIZE;
@@ -3025,7 +3126,25 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
             <div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div>
           </button>
         )}
-        <button onClick={()=>setMode('bot')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#1A1A2E,#4B5563)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🤖 Bota Karşı</button>
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(item){
+              var d=item[0],label=item[1],color=item[2];
+              return (
+                <button key={d} onClick={function(){ setGomokuDiff(d); }}
+                  style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(gomokuDiff===d?color:'var(--border)'),
+                    background:gomokuDiff===d?color+'22':'transparent',color:gomokuDiff===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={()=>setMode('bot')}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#1A1A2E,#4B5563)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={()=>setMode('2p')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#059669,#34D399)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
@@ -9995,7 +10114,7 @@ function DeyimTamamlaGame({ game, onGameEnd, soundOn }) {
 // ============================================================
 // TAVLA GAME
 // ============================================================
-function TavlaGame({ game, onGameEnd, soundOn }) {
+function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
   var s_mode = useState(null); var gameMode = s_mode[0]; var setGameMode = s_mode[1];
   // Simplified Tavla: 24 points, 2 players. White=1 moves 23→0, Black=-1 moves 0→23
   var INITIAL = (function() {
@@ -10285,6 +10404,15 @@ function TavlaGame({ game, onGameEnd, soundOn }) {
       <div style={{fontSize:72,marginBottom:8}}>🎲</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Tavla</h2>
       <p style={{color:'var(--text-secondary)',fontSize:14,marginBottom:32}}>Klasik Türk tavlası — hem bot hem 2 kişilik</p>
+      {onGoOnline && (
+        <button onClick={onGoOnline} style={{padding:'20px 24px',borderRadius:18,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#fff',fontSize:16,fontWeight:800,cursor:'pointer',fontFamily:"'Sora',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:12,marginBottom:14}}>
+          <span style={{fontSize:28}}>🌐</span>
+          <div style={{textAlign:'left'}}>
+            <div>Çevrimiçi Oyna</div>
+            <div style={{fontSize:12,fontWeight:400,opacity:0.85}}>Arkadaşını davet et</div>
+          </div>
+        </button>
+      )}
       <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:24}}>
         <div style={{background:'rgba(146,64,14,0.08)',borderRadius:18,padding:'16px',border:'2px solid rgba(146,64,14,0.2)'}}>
           <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'#D97706'}}>🤖 Bot ile Oyna — Zorluk</div>
@@ -12038,6 +12166,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('mangala')}
           />
         );
       case 'simon':
@@ -12070,6 +12199,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('nim')}
           />
         );
       case 'hizcarpim':
@@ -12112,6 +12242,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('tavla')}
           />
         );
       case 'kelimezinciri':
@@ -12161,6 +12292,7 @@ export default function App() {
             players={players}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('reversi')}
           />
         );
       default:
