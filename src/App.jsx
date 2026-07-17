@@ -1270,6 +1270,7 @@ var MP_GAMES = [
   { id: 'mangala',     name: 'Mangala',              icon: '🪨',     players: 2, local: true   },
   { id: 'reversi',     name: 'Reversi',              icon: '⬛⬜',   players: 2, local: true   },
   { id: 'tavla',       name: 'Tavla',                icon: '🎲',     players: 2, local: true   },
+  { id: 'dama',        name: 'Dama',                 icon: '⚫',     players: 2, local: true   },
 ];
 
 function OnlineUsersInvitePanel({ sock, onlineUsers, setOnlineUsers, invitedUsers, setInvitedUsers, roomId, gameId }) {
@@ -1393,12 +1394,12 @@ function MultiplayerLobby(props) {
     xox: 'XOX', rps: 'Taş Kağıt Makas', connectfour: '4 Sıra', gomoku: 'Beş Taş',
     reaction: 'Tepki Yarışı', mathduel: 'Matematik Düellosu', cardbattle: 'Kart Savaşı',
     memorybattle: 'Hafıza Savaşı', wordrace: 'Kelime Yarışı',
-    nim: 'Çubuk Oyunu', mangala: 'Mangala', reversi: 'Reversi', tavla: 'Tavla'
+    nim: 'Çubuk Oyunu', mangala: 'Mangala', reversi: 'Reversi', tavla: 'Tavla', dama: 'Dama'
   };
   var gameIcons = {
     xox: '❌⭕', rps: '✊✋✌️', connectfour: '🔵', gomoku: '⚫',
     reaction: '⚡', mathduel: '🧮', cardbattle: '🃏', memorybattle: '🧠', wordrace: '🔤',
-    nim: '🪵', mangala: '🪨', reversi: '⬛⬜', tavla: '🎲'
+    nim: '🪵', mangala: '🪨', reversi: '⬛⬜', tavla: '🎲', dama: '⚫'
   };
 
   // --- ROOM VIEW ---
@@ -1563,6 +1564,9 @@ function MultiplayerLobby(props) {
         )}
         {sock.roomData.state === 'playing' && currentGame === 'tavla' && (
           <TavlaGame game={{id:'tavla',color:'#92400E',bg:'linear-gradient(135deg,#92400E,#D97706)'}} onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'dama' && (
+          <DamaGame game={{id:'dama',color:'#8B4513',bg:'linear-gradient(135deg,#8B4513,#D2691E)'}} onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
 
         {/* Game finished */}
@@ -12209,6 +12213,7 @@ export default function App() {
             game={selectedGame}
             onGameEnd={handleGameEnd}
             soundOn={soundOn}
+            onGoOnline={() => handleGoOnline('dama')}
           />
         );
       case 'sudoku':
