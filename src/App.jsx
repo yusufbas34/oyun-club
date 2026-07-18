@@ -3390,6 +3390,8 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const tapDone=useRef(false);
   const COLORS=['#E63946','#F59E0B','#10B981','#3B82F6','#8B5CF6'];
   const MAX_ROUNDS=7;
+  const [botDiff,setBotDiff]=useState(null);
+  const botTapRef=useRef(null);
 
   // Remote moves
   useEffect(function(){
@@ -3431,12 +3433,22 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   },[isOnline,soundOn]);
 
   useEffect(function(){
-    if(mode==='online'||mode==='local'){
+    if(mode==='online'||mode==='local'||mode==='bot'){
       if(isHost||!isOnline)startRound();
       else{setPhase('wait');setBgColor('#6B7280');}
     }
-    return function(){clearTimeout(timerRef.current);};
+    return function(){clearTimeout(timerRef.current);clearTimeout(botTapRef.current);};
   },[mode]);
+
+  useEffect(function(){
+    if(mode!=='bot')return;
+    clearTimeout(botTapRef.current);
+    if(phase==='tap'){
+      var bd=botDiff==='easy'?600+Math.random()*300:botDiff==='medium'?200+Math.random()*300:50+Math.random()*100;
+      botTapRef.current=setTimeout(function(){handleTap(1);},bd);
+    }
+    return function(){clearTimeout(botTapRef.current);};
+  },[phase,mode,botDiff]);
 
   const handleTap=function(player){
     if(tapDone.current||phase==='idle'||phase==='result')return;
@@ -3468,8 +3480,24 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       <div style={{fontSize:48,marginBottom:8}}>⚡</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Tepki Yarışı</h2>
       <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Ekrana kim daha hızlı basar?</p>
-      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:280,margin:'0 auto'}}>
         {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(it){var d=it[0],label=it[1],color=it[2];return(
+              <button key={d} onClick={function(){setBotDiff(d);}}
+                style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(botDiff===d?color:'var(--border)'),
+                  background:botDiff===d?color+'22':'transparent',color:botDiff===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                {label}
+              </button>
+            );})}
+          </div>
+          <button onClick={function(){if(!botDiff)setBotDiff('medium');setMode('bot');}}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#D97706,#FCD34D)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
@@ -3513,6 +3541,42 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
           <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
           <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
           <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#E63946',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+
+  if(mode==='bot')return(
+    <div style={{height:'88vh',display:'flex',flexDirection:'column',userSelect:'none',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 16px',background:'var(--surface)',borderBottom:'1px solid var(--border)'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16}}>⚡ Tepki Yarışı</span>
+        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Tur {round}/{MAX_ROUNDS}</span>
+        <div style={{display:'flex',gap:6}}>
+          <button onClick={function(){clearTimeout(botTapRef.current);restart();setMode(null);}} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontWeight:600,cursor:'pointer'}}>Menü</button>
+          <button onClick={restart} style={{padding:'6px 10px',borderRadius:8,border:'none',background:'#E63946',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
+        </div>
+      </div>
+      <div style={{flex:0.6,background:phase==='result'&&lastWinner===1?'#22C55E':phase==='result'&&lastWinner===0?'#EF4444':'#374151',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderBottom:'2px solid #1F2937'}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#9CA3AF',marginBottom:4}}>🤖 Bot</div>
+        <div style={{fontSize:36,fontWeight:900,color:'#FFF'}}>{scores[1]}</div>
+        <div style={{fontSize:12,color:'#6B7280',marginTop:4}}>{phase==='tap'?'⚡ Tepki veriyor...':phase==='result'?(lastWinner===1?'Hızlı! ✓':'Yavaş'):'⏳'}</div>
+      </div>
+      <div onPointerDown={function(e){e.preventDefault();handleTap(0);}}
+        style={{flex:1,background:phase==='tap'?bgColor:phase==='result'&&lastWinner===0?'#22C55E':phase==='result'?'#EF4444':'#6B7280',
+          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'background 0.15s',WebkitUserSelect:'none'}}>
+        <div style={{fontSize:18,fontWeight:800,color:'#FFF',marginBottom:8}}>Sen · {scores[0]}p</div>
+        <div style={{fontSize:52,fontWeight:900,color:'#FFF',marginBottom:8}}>{phase==='wait'?'⏳':phase==='tap'?'👆':lastWinner===0?'🏆':'😔'}</div>
+        <div style={{fontSize:16,fontWeight:700,color:'rgba(255,255,255,0.9)'}}>{phase==='wait'?'Bekle... Renk değişince bas!':phase==='tap'?'DOKUNDUR! 👆':lastWinner===0?'Kazandın bu turu!':'Kaybettin bu turu'}</div>
+      </div>
+      {round>=MAX_ROUNDS&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[0]<scores[1]?'🤖':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Kazandın!':scores[0]<scores[1]?'Bot Kazandı!':'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+            <button onClick={restart} style={{padding:'12px 20px',borderRadius:12,border:'none',background:'#E63946',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+            <button onClick={function(){restart();setMode(null);}} style={{padding:'12px 20px',borderRadius:12,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontWeight:700,fontSize:15,cursor:'pointer'}}>Menü</button>
+          </div>
         </div>
       </div>}
     </div>
@@ -3578,6 +3642,10 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const roundDone=useRef(false);
   const sentQ=useRef(false);
   const MAX=10;
+  const [botDiff,setBotDiff]=useState(null);
+  const botAnswerRef=useRef(null);
+  const answeredRef=useRef(false);
+  useEffect(function(){answeredRef.current=answered;},[answered]);
 
   // Host sends question to guest
   useEffect(function(){
@@ -3609,6 +3677,29 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     }
   },[isOnline&&onlineProps.remoteMove&&onlineProps.remoteMove._ts]);
 
+  // Bot answer effect for MathDuel
+  useEffect(function(){
+    if(mode!=='bot'||!q||answered)return;
+    clearTimeout(botAnswerRef.current);
+    var capturedQ=q;
+    var delay=botDiff==='easy'?3000+Math.random()*1000:botDiff==='medium'?1500+Math.random()*500:300+Math.random()*500;
+    botAnswerRef.current=setTimeout(function(){
+      if(answeredRef.current||roundDone.current)return;
+      var val;
+      if(botDiff==='easy'&&Math.random()<0.20){
+        var wrong=capturedQ.opts.filter(function(o){return o!==capturedQ.ans;});
+        val=wrong.length?wrong[Math.floor(Math.random()*wrong.length)]:capturedQ.ans;
+      } else if(botDiff==='medium'&&Math.random()<0.05){
+        var wrong2=capturedQ.opts.filter(function(o){return o!==capturedQ.ans;});
+        val=wrong2.length?wrong2[Math.floor(Math.random()*wrong2.length)]:capturedQ.ans;
+      } else {
+        val=capturedQ.ans;
+      }
+      answer(1,val);
+    },delay);
+    return function(){clearTimeout(botAnswerRef.current);};
+  },[mode,q,answered,botDiff]);
+
   const answer=function(player,val){
     if(answered||roundDone.current||!q)return;
     const ok=val===q.ans;
@@ -3631,6 +3722,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       return;
     }
     // local 2-player
+    roundDone.current=true;
     setAnswered(true);
     const ns=[...scores];if(ok)ns[player]++;
     setScores(ns);setLastW(ok?player:null);
@@ -3638,7 +3730,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     const nr=round+1;
     setTimeout(function(){
       if(nr>=MAX){setRound(nr);onGameEnd(ns[0]>=ns[1]?'win':'loss', { detail: '🧮 ' + ns[0] + ' — ' + ns[1] });if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
-      setRound(nr);setQ(genMathQ());setAnswered(false);setLastW(null);
+      setRound(nr);setQ(genMathQ());setAnswered(false);setLastW(null);roundDone.current=false;
     },1200);
   };
   const restart=function(){
@@ -3656,8 +3748,24 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       <div style={{fontSize:48,marginBottom:8}}>🧮</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:24,marginBottom:6}}>Matematik Düellosu</h2>
       <p style={{color:'var(--text-secondary)',marginBottom:24,fontSize:14}}>Soruları kim önce çözer?</p>
-      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:260,margin:'0 auto'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:280,margin:'0 auto'}}>
         {onGoOnline&&<button onClick={onGoOnline} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>🌐 Çevrimiçi Oyna<div style={{fontSize:11,fontWeight:400,opacity:0.85,marginTop:3}}>Arkadaşını davet et</div></button>}
+        <div style={{background:'var(--surface-hover)',borderRadius:14,padding:'16px',border:'1px solid var(--border)'}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:'var(--text-secondary)'}}>🤖 Bota Karşı — Zorluk</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:12}}>
+            {[['easy','Kolay','#059669'],['medium','Orta','#D97706'],['hard','Zor','#E63946']].map(function(it){var d=it[0],label=it[1],color=it[2];return(
+              <button key={d} onClick={function(){setBotDiff(d);}}
+                style={{flex:1,padding:'10px 4px',borderRadius:10,border:'2px solid '+(botDiff===d?color:'var(--border)'),
+                  background:botDiff===d?color+'22':'transparent',color:botDiff===d?color:'var(--text-secondary)',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+                {label}
+              </button>
+            );})}
+          </div>
+          <button onClick={function(){if(!botDiff)setBotDiff('medium');setMode('bot');}}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#0369A1,#38BDF8)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>
+            Oyna
+          </button>
+        </div>
         <button onClick={()=>setMode('local')} style={{padding:'15px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#0369A1,#38BDF8)',color:'#FFF',fontSize:15,fontWeight:700,cursor:'pointer'}}>📱 Aynı Cihazda 2 Kişi</button>
       </div>
     </div>
@@ -3713,6 +3821,58 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
           <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{myScore>oppScore?'Kazandın!':myScore<oppScore?`${oppName} Kazandı!`:'Berabere!'}</h2>
           <p style={{color:'var(--text-secondary)',marginBottom:16}}>{myScore} - {oppScore}</p>
           <button onClick={restart} style={{padding:'12px 24px',borderRadius:12,border:'none',background:'#3B82F6',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+        </div>
+      </div>}
+    </div>
+  );
+
+  if(mode==='bot')return(
+    <div style={{maxWidth:440,margin:'0 auto',padding:'16px 12px',touchAction:'manipulation'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,padding:'0 4px'}}>
+        <span style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18}}>🧮 Matematik Düellosu</span>
+        <div style={{display:'flex',gap:6}}>
+          <span style={{fontSize:12,color:'var(--text-secondary)',alignSelf:'center'}}>Tur {round}/{MAX}</span>
+          <button onClick={function(){clearTimeout(botAnswerRef.current);restart();setMode(null);}} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontWeight:600,cursor:'pointer'}}>Menü</button>
+          <button onClick={restart} style={{padding:'6px 10px',borderRadius:8,border:'none',background:'#3B82F6',color:'#FFF',fontSize:12,fontWeight:600,cursor:'pointer'}}>Yeni</button>
+        </div>
+      </div>
+      <div style={{display:'flex',gap:10,marginBottom:16}}>
+        <div style={{flex:1,textAlign:'center',padding:'10px',background:'rgba(99,102,241,0.1)',borderRadius:12,border:'2px solid #6366f1'}}>
+          <div style={{fontSize:12,color:'var(--text-secondary)'}}>Sen</div>
+          <div style={{fontSize:26,fontWeight:900,color:'#6366f1'}}>{scores[0]}</div>
+        </div>
+        <div style={{flex:1,textAlign:'center',padding:'10px',background:'rgba(239,68,68,0.08)',borderRadius:12,border:'1px solid var(--border)'}}>
+          <div style={{fontSize:12,color:'var(--text-secondary)'}}>🤖 Bot</div>
+          <div style={{fontSize:26,fontWeight:900,color:'#ef4444'}}>{scores[1]}</div>
+        </div>
+      </div>
+      <div style={{textAlign:'center',padding:'24px 16px',background:'var(--surface)',borderRadius:16,border:'1px solid var(--border)',marginBottom:16}}>
+        <div style={{fontSize:13,color:'var(--text-secondary)',marginBottom:8}}>Kim önce doğru cevabı bulur?</div>
+        <div style={{fontSize:32,fontWeight:900,fontFamily:"'Sora',sans-serif",color:'var(--text)'}}>{q&&q.q}</div>
+      </div>
+      {!answered?(
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center'}}>
+          {q&&q.opts.map(function(opt){return(
+            <button key={opt} onClick={function(){answer(0,opt);}}
+              style={{padding:'16px 24px',borderRadius:14,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:22,fontWeight:700,cursor:'pointer',minWidth:90}}>
+              {opt}
+            </button>
+          );})}
+        </div>
+      ):(
+        <div style={{textAlign:'center',padding:'20px',fontSize:18,fontWeight:700,color:lastW===0?'#22C55E':lastW===1?'#ef4444':'var(--text-secondary)'}}>
+          {lastW===0?'🎉 Sen kazandın bu turu!':lastW===1?'🤖 Bot daha hızlıydı!':'⏳'}
+        </div>
+      )}
+      {round>=MAX&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+        <div style={{background:'var(--surface)',borderRadius:20,padding:'28px 24px',textAlign:'center',maxWidth:280}}>
+          <div style={{fontSize:48,marginBottom:8}}>{scores[0]>scores[1]?'🏆':scores[0]<scores[1]?'🤖':'🤝'}</div>
+          <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:8}}>{scores[0]>scores[1]?'Kazandın!':scores[0]<scores[1]?'Bot Kazandı!':'Berabere!'}</h2>
+          <p style={{color:'var(--text-secondary)',marginBottom:16}}>{scores[0]} - {scores[1]}</p>
+          <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+            <button onClick={restart} style={{padding:'12px 20px',borderRadius:12,border:'none',background:'#3B82F6',color:'#FFF',fontWeight:700,fontSize:15,cursor:'pointer'}}>Tekrar</button>
+            <button onClick={function(){restart();setMode(null);}} style={{padding:'12px 20px',borderRadius:12,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontWeight:700,fontSize:15,cursor:'pointer'}}>Menü</button>
+          </div>
         </div>
       </div>}
     </div>
@@ -9692,7 +9852,8 @@ function KelimeZinciriGame({ game, onGameEnd, soundOn }) {
   var timerRef = React.useRef(null);
 
   var startWord = 'araba';
-  var lastLetter = chain.length > 0 ? chain[chain.length-1].slice(-1).toLowerCase() : startWord.slice(-1);
+  var lastLetter = chain.length > 0 ? chain[chain.length-1].slice(-1) : startWord.slice(-1);
+  function trUp(ch) { if(ch==='i') return 'İ'; if(ch==='ı') return 'I'; return ch.toUpperCase(); }
 
   React.useEffect(function() {
     if (phase !== 'playing') return;
@@ -9711,10 +9872,10 @@ function KelimeZinciriGame({ game, onGameEnd, soundOn }) {
 
   function submit(e) {
     e.preventDefault();
-    var word = input.trim().toLowerCase();
+    var word = turkishLower(input.trim());
     if (!word) return;
     if (chain.includes(word)) { setError('Bu kelime zaten kullanıldı!'); playHaptic('wrong'); return; }
-    if (word[0] !== lastLetter) { setError('Kelime "' + lastLetter.toUpperCase() + '" harfiyle başlamalı!'); playHaptic('wrong'); return; }
+    if (word[0] !== lastLetter) { setError('Kelime "' + trUp(lastLetter) + '" harfiyle başlamalı!'); playHaptic('wrong'); return; }
     if (!TR_WORD_SET.has(word) && word.length < 3) { setError('Geçerli bir Türkçe kelime giriniz.'); playHaptic('wrong'); return; }
     playHaptic('correct');
     if (soundOn) playSound('correct');
@@ -9766,10 +9927,10 @@ function KelimeZinciriGame({ game, onGameEnd, soundOn }) {
         {chain.length>0 ? chain.slice(-5).join(' → ') : 'Başlangıç: '+startWord}
       </div>
       <div style={{marginBottom:8,fontWeight:600,fontSize:14,color:'var(--text-secondary)'}}>
-        Sıradaki harf: <span style={{color:'#0F766E',fontWeight:800,fontSize:18}}>{lastLetter.toUpperCase()}</span>
+        Sıradaki harf: <span style={{color:'#0F766E',fontWeight:800,fontSize:18}}>{trUp(lastLetter)}</span>
       </div>
       <form onSubmit={submit} style={{display:'flex',gap:8}}>
-        <input value={input} onChange={function(e){setInput(e.target.value);setError('');}} placeholder={''+lastLetter.toUpperCase()+'... ile başlayan kelime'} autoFocus
+        <input value={input} onChange={function(e){setInput(e.target.value);setError('');}} placeholder={''+trUp(lastLetter)+'... ile başlayan kelime'} autoFocus
           style={{flex:1,padding:'12px 16px',borderRadius:12,border:'2px solid '+(error?'#E63946':'var(--border)'),background:'var(--surface)',color:'var(--text)',fontSize:16,outline:'none'}} />
         <button type="submit" style={{padding:'12px 20px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#0F766E,#2DD4BF)',color:'#FFF',fontWeight:700,fontSize:16,cursor:'pointer'}}>
           ✓
