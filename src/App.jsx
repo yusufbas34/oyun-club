@@ -18,8 +18,8 @@ var BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
 var SockContext = React.createContext(null);
 
 // ── Supabase cloud persistence ──────────────────────────────────────────────
-var SUPA_URL = 'REPLACE_WITH_SUPABASE_URL';
-var SUPA_KEY = 'REPLACE_WITH_SUPABASE_ANON_KEY';
+var SUPA_URL = 'https://cwhrpzrvswxwjlnwzuxx.supabase.co';
+var SUPA_KEY = 'sb_publishable_HuFOrm6AS8gMkwTwgm0dyw_jnmCmE_U';
 
 async function supaFetch(path, method, body) {
   try {
