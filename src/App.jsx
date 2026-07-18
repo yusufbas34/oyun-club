@@ -17,6 +17,46 @@ if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D
 var BACKEND_URL = 'https://oyun-club-backend-production.up.railway.app';
 var SockContext = React.createContext(null);
 
+// ── Supabase cloud persistence ──────────────────────────────────────────────
+var SUPA_URL = 'REPLACE_WITH_SUPABASE_URL';
+var SUPA_KEY = 'REPLACE_WITH_SUPABASE_ANON_KEY';
+
+async function supaFetch(path, method, body) {
+  try {
+    var res = await fetch(SUPA_URL + '/rest/v1/' + path, {
+      method: method || 'GET',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': method === 'POST' ? 'return=representation' : 'return=representation',
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch(e) { return null; }
+}
+
+async function cloudGetUser(username) {
+  var rows = await supaFetch('oyunclub_users?username=eq.' + encodeURIComponent(username) + '&limit=1');
+  return rows && rows[0] ? rows[0] : null;
+}
+
+async function cloudCreateUser(username, pin) {
+  var rows = await supaFetch('oyunclub_users', 'POST', { username, pin, stats: {}, avatar: '' });
+  return rows && rows[0] ? rows[0] : null;
+}
+
+async function cloudSaveUser(username, stats, avatar) {
+  return supaFetch('oyunclub_users?username=eq.' + encodeURIComponent(username), 'PATCH', {
+    stats,
+    avatar: avatar || '',
+    updated_at: new Date().toISOString(),
+  });
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 // PWA detection — true only when installed (standalone), not in browser tab
 function isPWA() {
   return window.matchMedia('(display-mode: standalone)').matches ||
@@ -6121,7 +6161,50 @@ const Header = ({
 // ============================================================
 const LoginPage = ({ onLogin, dark, onToggleDark, nameError, onClearNameError }) => {
   const [nickname, setNickname] = useState('');
+  const [step, setStep] = useState('name'); // 'name' | 'pin'
+  const [pin, setPin] = useState('');
+  const [pinMode, setPinMode] = useState(''); // 'new' | 'existing'
+  const [pinError, setPinError] = useState('');
+  const [loading, setLoading] = useState(false);
   const googleBtnRef = useRef(null);
+
+  async function handleNameContinue() {
+    var name = nickname.trim();
+    if (!name) return;
+    if (SUPA_URL === 'REPLACE_WITH_SUPABASE_URL') {
+      // Supabase not configured yet — fall through to direct login
+      onLogin({ name });
+      return;
+    }
+    setLoading(true);
+    var existing = await cloudGetUser(name);
+    setLoading(false);
+    if (existing) {
+      setPinMode('existing');
+    } else {
+      setPinMode('new');
+    }
+    setStep('pin');
+    setPin('');
+    setPinError('');
+  }
+
+  async function handlePinSubmit() {
+    var name = nickname.trim();
+    if (pin.length < 4) { setPinError('PIN en az 4 karakter olmalı'); return; }
+    setLoading(true);
+    if (pinMode === 'new') {
+      var created = await cloudCreateUser(name, pin);
+      setLoading(false);
+      if (!created) { setPinError('Hesap oluşturulamadı, tekrar dene'); return; }
+      onLogin({ name, cloudStats: null, cloudAvatar: '' });
+    } else {
+      var user = await cloudGetUser(name);
+      setLoading(false);
+      if (!user || user.pin !== pin) { setPinError('PIN yanlış'); return; }
+      onLogin({ name, cloudStats: user.stats, cloudAvatar: user.avatar });
+    }
+  }
 
   useEffect(() => {
     const scriptId = 'gsi-script';
@@ -6246,38 +6329,51 @@ const LoginPage = ({ onLogin, dark, onToggleDark, nameError, onClearNameError })
               ⚠️ {nameError}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              type="text"
-              placeholder="Takma ad gir..."
-              value={nickname}
-              onChange={(e) => { setNickname(e.target.value); if (onClearNameError) onClearNameError(); }}
-              onKeyDown={(e) =>
-                e.key === 'Enter' &&
-                nickname.trim() &&
-                onLogin({ name: nickname.trim() })
-              }
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-sm)',
-                border: nameError ? '1px solid #EF4444' : '1px solid var(--border)',
-                fontSize: 15,
-                outline: 'none',
-                fontFamily: "'DM Sans', sans-serif",
-                background: 'var(--surface)',
-                color: 'var(--text)',
-              }}
-            />
-            <Button
-              onClick={() =>
-                nickname.trim() && onLogin({ name: nickname.trim() })
-              }
-              disabled={!nickname.trim()}
-            >
-              Giriş
-            </Button>
-          </div>
+
+          {step === 'name' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                placeholder="Takma ad gir..."
+                value={nickname}
+                onChange={(e) => { setNickname(e.target.value); if (onClearNameError) onClearNameError(); }}
+                onKeyDown={(e) => e.key === 'Enter' && nickname.trim() && handleNameContinue()}
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: nameError ? '1px solid #EF4444' : '1px solid var(--border)', fontSize: 15, outline: 'none', fontFamily: "'DM Sans', sans-serif", background: 'var(--surface)', color: 'var(--text)' }}
+              />
+              <Button onClick={handleNameContinue} disabled={!nickname.trim() || loading}>
+                {loading ? '...' : 'İleri'}
+              </Button>
+            </div>
+          )}
+
+          {step === 'pin' && (
+            <div>
+              <div style={{ marginBottom: 12, fontSize: 14, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                {pinMode === 'new'
+                  ? <><strong>{nickname}</strong> için güvenlik PIN'i belirle (4+ karakter)<br/><span style={{fontSize:12}}>Bu PIN ile verilerini her zaman kurtarabilirsin</span></>
+                  : <><strong>{nickname}</strong> hesabının PIN'ini gir</>
+                }
+              </div>
+              {pinError && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '8px 12px', marginBottom: 10, color: '#DC2626', fontSize: 13, fontWeight: 600 }}>⚠️ {pinError}</div>}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input
+                  type="password"
+                  placeholder="PIN gir..."
+                  value={pin}
+                  onChange={(e) => { setPin(e.target.value); setPinError(''); }}
+                  onKeyDown={(e) => e.key === 'Enter' && handlePinSubmit()}
+                  autoFocus
+                  style={{ flex: 1, padding: '12px 16px', borderRadius: 'var(--radius-sm)', border: pinError ? '1px solid #EF4444' : '1px solid var(--border)', fontSize: 15, outline: 'none', fontFamily: "'DM Sans', sans-serif", background: 'var(--surface)', color: 'var(--text)' }}
+                />
+                <Button onClick={handlePinSubmit} disabled={pin.length < 4 || loading}>
+                  {loading ? '...' : (pinMode === 'new' ? 'Oluştur' : 'Giriş')}
+                </Button>
+              </div>
+              <button onClick={() => { setStep('name'); setPin(''); setPinError(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', padding: 0 }}>
+                ← Geri dön
+              </button>
+            </div>
+          )}
         </Card>
       </div>
     </div>
@@ -11642,9 +11738,18 @@ export default function App() {
   }, [user]);
 
   useEffect(() => { if (user) localStorage.setItem('oyunclub_user', JSON.stringify(user)); else localStorage.removeItem('oyunclub_user'); }, [user]);
-  useEffect(() => { localStorage.setItem('oyunclub_stats', JSON.stringify(stats)); }, [stats]);
   useEffect(() => { localStorage.setItem('oyunclub_dark', dark); }, [dark]);
   useEffect(() => { localStorage.setItem('oyunclub_sound', soundOn); }, [soundOn]);
+
+  // Sync stats to Supabase cloud (debounced 3s) — source of truth is cloud, localStorage is just cache
+  const cloudSyncTimer = useRef(null);
+  useEffect(() => {
+    if (!user || SUPA_URL === 'REPLACE_WITH_SUPABASE_URL') return;
+    clearTimeout(cloudSyncTimer.current);
+    cloudSyncTimer.current = setTimeout(function() {
+      cloudSaveUser(user.name, stats, userAvatar);
+    }, 3000);
+  }, [stats, userAvatar]);
 
   // PWA install prompt capture
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -11855,23 +11960,29 @@ export default function App() {
   };
 
   const handleLogin = (userData) => {
-    setUser(userData);
+    const { cloudStats, cloudAvatar, ...user } = userData;
+    setUser(user);
     setPage('lobby');
-    // Welcome bonus and onboarding for brand-new users (no existing stats)
-    try {
-      const existing = localStorage.getItem('oyunclub_stats');
-      const onboarded = localStorage.getItem('oyunclub_onboarded');
-      if (!existing) {
-        const welcomeXp = 50;
+
+    // Load stats from cloud if available
+    if (cloudStats && Object.keys(cloudStats).length > 0) {
+      setStats((prev) => ({ ...prev, ...PROG_DEFAULTS, history: [], ...cloudStats, games: { ...EMPTY_STATS, ...(cloudStats.games || {}) } }));
+      if (cloudAvatar) setUserAvatar(cloudAvatar);
+      setTimeout(() => showToast('☁️ Veriler buluttan yüklendi!'), 600);
+    } else {
+      // New user — welcome bonus
+      const isFirstEver = !cloudStats; // cloudStats===null means brand new account
+      if (isFirstEver) {
         setStats((prev) => {
           const newBadges = { ...prev.badges, welcome: true };
-          return { ...prev, xp: (prev.xp || 0) + welcomeXp, badges: newBadges };
+          return { ...prev, xp: (prev.xp || 0) + 50, badges: newBadges };
         });
         setTimeout(() => showToast('🎉 Hoş geldin! +50 XP ve Hoş Geldin rozeti kazandın!'), 800);
       }
-      if (!onboarded) {
-        setTimeout(() => setShowOnboarding(true), 600);
-      }
+    }
+    try {
+      const onboarded = localStorage.getItem('oyunclub_onboarded');
+      if (!onboarded) setTimeout(() => setShowOnboarding(true), 600);
     } catch(e) {}
   };
   const launchGame = (game) => {
