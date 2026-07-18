@@ -178,7 +178,7 @@ function useSocket(username) {
                   // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
                   socket.emit('get_friends', null, function(r) {
                     if (r) {
-                      setFriendList(r.friends || []);
+                      setFriendList(dedupFriends(r.friends));
                       var pending = r.pending || r.requests || [];
                       setFriendRequests(pending);
                       if (pending.length > 0) {
@@ -384,12 +384,19 @@ function useSocket(username) {
             showPWANotification('Arkadaşlık İsteği 🤝', data.fromName + ' sana arkadaşlık isteği gönderdi', { tag: 'friend-req' });
           });
           socket.on('friend_accepted', function(data) {
-            var uid = data.byId || data.userId;
-            var uname = data.byName || data.name;
-            setFriendList(function(prev) { return prev.concat([{userId:uid,name:uname,online:true}]); });
-            setFriendToast('✅ ' + uname + ' arkadaşlık isteğini kabul etti!');
+            var uid = data.byId || data.userId || data.id || data.friendId;
+            var uname = data.byName || data.name || data.username || data.friendName;
+            if (uid && uname) {
+              setFriendList(function(prev) {
+                // Don't add if already in list (by id or name)
+                var alreadyHas = prev.some(function(f){ return f.userId===uid || (f.name||'').toLowerCase()===(uname||'').toLowerCase(); });
+                if (alreadyHas) return prev;
+                return prev.concat([{userId:uid,name:uname,online:true}]);
+              });
+            }
+            setFriendToast('✅ ' + (uname||'Arkadaş') + ' arkadaşlık isteğini kabul etti!');
             setTimeout(function(){ setFriendToast(null); }, 4000);
-            showPWANotification('Arkadaşlık Kabul! ✅', uname + ' arkadaşlık isteğini kabul etti', { tag: 'friend-accept' });
+            showPWANotification('Arkadaşlık Kabul! ✅', (uname||'Arkadaş') + ' arkadaşlık isteğini kabul etti', { tag: 'friend-accept' });
           });
           socket.on('friend_removed', function(data) {
             setFriendList(function(prev) { return prev.filter(function(f){return f.userId!==data.userId;}); });
@@ -525,11 +532,22 @@ function useSocket(username) {
       .catch(function() {});
   }, []);
 
+  function dedupFriends(list) {
+    var seenIds = new Set(); var seenNames = new Set(); var out = [];
+    (list || []).forEach(function(f) {
+      var uid = f.userId || f.id; var nm = (f.name || '').toLowerCase().trim();
+      if (!uid || seenIds.has(uid) || seenNames.has(nm)) return;
+      seenIds.add(uid); seenNames.add(nm);
+      out.push(Object.assign({}, f, { userId: uid }));
+    });
+    return out;
+  }
+
   var getFriends = useCallback(function(cb) {
     if (!socketRef.current) return;
     socketRef.current.emit('get_friends', null, function(res) {
       if (res) {
-        setFriendList(res.friends || []);
+        setFriendList(dedupFriends(res.friends));
         setFriendRequests(res.pending || res.requests || []);
         // Cross-ref with currently online users to fix stale offline status
         socketRef.current.emit('get_online_users', null, function(onlineRes) {
@@ -555,7 +573,12 @@ function useSocket(username) {
     socketRef.current.emit('accept_friend', { fromId }, function(res) {
       if (res && res.success) {
         setFriendRequests(function(prev){ return prev.filter(function(r){ return r.fromId !== fromId; }); });
-        if (res.friendId) setFriendList(function(prev){ return prev.concat([{userId:res.friendId,name:res.friendName,online:true}]); });
+        var fid = res.friendId || res.userId || res.id;
+        var fname = res.friendName || res.name || res.username;
+        if (fid) setFriendList(function(prev){
+          var dup = prev.some(function(f){ return f.userId===fid || (f.name||'').toLowerCase()===(fname||'').toLowerCase(); });
+          return dup ? prev : prev.concat([{userId:fid,name:fname,online:true}]);
+        });
       }
       if (cb) cb(res);
     });
