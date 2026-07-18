@@ -158,15 +158,23 @@ function useSocket(username) {
             retryCount = 0;
             setIsConnected(true);
             setSocketError(null);
-            // Daha önce kaydedilmiş userId varsa gönder — sunucu arkadaş listesini geri yükler
+            // Daha önce kaydedilmiş userId varsa ve aynı kullanıcıysa gönder — sunucu arkadaş listesini geri yükler
             var storedUserId = null;
-            try { storedUserId = localStorage.getItem('oyunclub_userid'); } catch(e){}
+            try {
+              var storedName = localStorage.getItem('oyunclub_username');
+              var savedId = localStorage.getItem('oyunclub_userid');
+              // Sadece aynı kullanıcı adıyla giriş yapılıyorsa eski userId'yi gönder
+              if (savedId && storedName && storedName === username) storedUserId = savedId;
+            } catch(e){}
             socket.emit('register', { name: username, userId: storedUserId }, function (res) {
               if (res && res.success) {
                 setIsRegistered(true);
                 if (res.user && res.user.id) {
                   setMyUserId(res.user.id);
-                  try { localStorage.setItem('oyunclub_userid', res.user.id); } catch(e){}
+                  try {
+                    localStorage.setItem('oyunclub_userid', res.user.id);
+                    localStorage.setItem('oyunclub_username', username);
+                  } catch(e){}
                   // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
                   socket.emit('get_friends', null, function(r) {
                     if (r) {
