@@ -4337,6 +4337,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const [answered,setAnswered]=useState([false,false]);
   const roundDone=useRef(false);
   const sentWord=useRef(false);
+  const [wrongFlash,setWrongFlash]=useState(false);
 
   // Host sends word to guest
   useEffect(function(){
@@ -4388,7 +4389,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   const onlineSubmit=function(){
     if(roundDone.current||revealed||!myInput.trim())return;
     const ok=turkishUpper(myInput.trim())===item.word;
-    if(!ok){setMyInput('');return;}
+    if(!ok){setMyInput('');setWrongFlash(true);setTimeout(function(){setWrongFlash(false);},900);return;}
     roundDone.current=true;
     const winner=onlineProps.myIndex;
     const ns=[...scores];ns[winner]++;
@@ -4448,12 +4449,15 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
         </div>
       )}
       {scr&&!revealed&&(
-        <div style={{display:'flex',gap:10}}>
-          <input value={myInput} onChange={e=>setMyInput(e.target.value.toUpperCase())}
-            onKeyDown={e=>e.key==='Enter'&&onlineSubmit()}
-            placeholder="Cevabı yaz ve gönder..."
-            style={{flex:1,padding:'12px 14px',borderRadius:12,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:700,outline:'none',letterSpacing:2}}/>
-          <button onClick={onlineSubmit} style={{padding:'12px 16px',borderRadius:12,border:'none',background:'#22C55E',color:'#FFF',fontWeight:700,fontSize:18,cursor:'pointer'}}>✓</button>
+        <div>
+          <div style={{display:'flex',gap:10}}>
+            <input value={myInput} onChange={e=>setMyInput(turkishUpper(e.target.value))}
+              onKeyDown={e=>e.key==='Enter'&&onlineSubmit()}
+              placeholder="Cevabı yaz ve gönder..."
+              style={{flex:1,padding:'12px 14px',borderRadius:12,border:'2px solid '+(wrongFlash?'#EF4444':'var(--border)'),background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:700,outline:'none',letterSpacing:2,transition:'border-color 0.2s'}}/>
+            <button onClick={onlineSubmit} style={{padding:'12px 16px',borderRadius:12,border:'none',background:'#22C55E',color:'#FFF',fontWeight:700,fontSize:18,cursor:'pointer'}}>✓</button>
+          </div>
+          {wrongFlash&&<div style={{color:'#EF4444',fontWeight:700,fontSize:13,marginTop:6,textAlign:'center'}}>✗ Yanlış, tekrar dene!</div>}
         </div>
       )}
       {ri+1>=RACE_WORDS.length&&revealed&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
@@ -4485,14 +4489,14 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
             <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:8}}>Oyuncu {p+1} · {scores[p]}p</div>
             {!answered[p]&&!revealed?(
               <div style={{display:'flex',gap:8,width:'100%',maxWidth:300}}>
-                <input value={inputs[p]} onChange={e=>{const ni=[...inputs];ni[p]=e.target.value;setInputs(ni);}} onKeyDown={e=>e.key==='Enter'&&submit(p)}
+                <input value={inputs[p]} onChange={e=>{const ni=[...inputs];ni[p]=turkishUpper(e.target.value);setInputs(ni);}} onKeyDown={e=>e.key==='Enter'&&submit(p)}
                   placeholder="Kelimeyi yaz..."
                   style={{flex:1,padding:'10px 12px',borderRadius:10,border:'2px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:16,fontWeight:700,outline:'none'}}/>
                 <button onClick={()=>submit(p)} style={{padding:'10px 14px',borderRadius:10,border:'none',background:'#22C55E',color:'#FFF',fontWeight:700,cursor:'pointer',fontSize:16}}>✓</button>
               </div>
             ):(
-              <div style={{fontSize:16,fontWeight:700,color:inputs[p].toUpperCase().trim()===item.word?'#22C55E':'#EF4444'}}>
-                {answered[p]?(inputs[p].toUpperCase().trim()===item.word?'✓ Doğru!':'✗ Yanlış'):'⏳'}
+              <div style={{fontSize:16,fontWeight:700,color:turkishUpper(inputs[p].trim())===item.word?'#22C55E':'#EF4444'}}>
+                {answered[p]?(turkishUpper(inputs[p].trim())===item.word?'✓ Doğru!':'✗ Yanlış'):'⏳'}
               </div>
             )}
           </div>
