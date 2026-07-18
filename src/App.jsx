@@ -2104,12 +2104,12 @@ function WordleGame({ game, onGameEnd, soundOn }) {
     if (newGuess === target) {
       setGameOver(true);
       if (soundOn) playSound('win');
-      onGameEnd('win');
+      onGameEnd('win', { detail: '🟩 Kelime: ' + target + ' (' + newGuesses.length + '. denemede)' });
       showMsg('Tebrikler! 🎉', 3000);
     } else if (newGuesses.length >= 6) {
       setGameOver(true);
       if (soundOn) playSound('lose');
-      onGameEnd('loss');
+      onGameEnd('loss', { detail: '🔤 Kelime: ' + target });
       showMsg('Kelime: ' + target, 4000);
     }
   }, [current, guesses, gameOver, target, usedKeys, soundOn, onGameEnd]);
@@ -2120,7 +2120,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
       if (e.key === 'Enter') { submitGuess(); return; }
       if (e.key === 'Backspace') { setCurrent(c => c.slice(0, -1)); return; }
       let ch = e.key.toUpperCase();
-      if (ch === 'I') ch = 'İ';
+      // keep 'I' as-is; keyboard has both I and İ buttons
       if (/^[A-ZÇĞİÖŞÜ]$/.test(ch) && current.length < 5) setCurrent(c => c + ch);
     };
     window.addEventListener('keydown', onKey);
@@ -2829,8 +2829,8 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
       const nb = dropC4(board, col, myColor);
       if (!nb) return;
       if (soundOn) playSound('place');
-      if (checkC4Win(nb, myColor)) { setBoard(nb); setWinner(myColor); onGameEnd(myColor === 'red' ? 'win' : 'loss'); if (soundOn) playSound('win'); }
-      else if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw'); }
+      if (checkC4Win(nb, myColor)) { setBoard(nb); setWinner(myColor); onGameEnd(myColor === 'red' ? 'win' : 'loss', { difficulty: c4Diff, detail: '🟡 ' + (col+1) + '. sütunda kazandın' }); if (soundOn) playSound('win'); }
+      else if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw', { difficulty: c4Diff }); }
       else { setBoard(nb); setTurn(myColor === 'red' ? 'yellow' : 'red'); }
       onlineProps.onMove({ type: 'drop', col: col, color: myColor, playerIndex: onlineProps.myIndex, _ts: Date.now() });
       return;
@@ -2843,11 +2843,11 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
     if (checkC4Win(nb, turn)) {
       setBoard(nb);
       setWinner(turn);
-      onGameEnd(turn === 'red' ? 'win' : 'loss');
+      onGameEnd(turn === 'red' ? 'win' : 'loss', { difficulty: c4Diff, detail: '🟡 ' + (col+1) + '. sütunda kazandın' });
       if (soundOn) playSound(turn === 'red' ? 'win' : 'lose');
       return;
     }
-    if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw'); return; }
+    if (nb.every(Boolean)) { setBoard(nb); setIsDraw(true); onGameEnd('draw', { difficulty: c4Diff }); return; }
     const next = turn === 'red' ? 'yellow' : 'red';
     setBoard(nb);
     setTurn(next);
@@ -2868,10 +2868,10 @@ function ConnectFourGame({ game, onGameEnd, soundOn, onlineProps, onGoOnline }) 
         if (soundOn) playSound('place');
         if (checkC4Win(nb2, 'yellow')) {
           setBoard(nb2); setWinner('yellow');
-          onGameEnd('loss');
+          onGameEnd('loss', { difficulty: c4Diff, detail: '4 taş sıraladın! 🟡' });
           if (soundOn) playSound('lose');
         } else if (nb2.every(Boolean)) {
-          setBoard(nb2); setIsDraw(true); onGameEnd('draw');
+          setBoard(nb2); setIsDraw(true); onGameEnd('draw', { difficulty: c4Diff });
         } else {
           setBoard(nb2); setTurn('red');
         }
@@ -9666,7 +9666,7 @@ function KelimeZinciriGame({ game, onGameEnd, soundOn }) {
     clearInterval(timerRef.current);
     var score = chain.length;
     var result = score >= 10 ? 'win' : score >= 5 ? 'draw' : 'loss';
-    onGameEnd(result);
+    onGameEnd(result, { detail: '🔗 ' + chain.length + ' kelimelik zincir' });
   }
 
   if (!phase) return (
@@ -9818,7 +9818,7 @@ function DeyimTamamlaGame({ game, onGameEnd, soundOn }) {
 
   function handleEnd() {
     var result = score >= (questions ? questions.length * 2 : 10) ? 'win' : score >= (questions ? questions.length : 5) ? 'draw' : 'loss';
-    onGameEnd(result);
+    onGameEnd(result, { detail: '📚 ' + score + '/15 deyim doğru' });
   }
 
   if (!phase) return (
@@ -9912,6 +9912,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
   var s7 = useState([]); var moves = s7[0]; var setMoves = s7[1];
   var s8 = useState(false); var botThinking = s8[0]; var setBotThinking = s8[1];
   var s9d = useState('medium'); var tavlaDiff = s9d[0]; var setTavlaDiff = s9d[1];
+  var s9e = useState(null); var tavlaOver = s9e[0]; var setTavlaOver = s9e[1];
 
   function rollDice() { return [Math.ceil(Math.random()*6), Math.ceil(Math.random()*6)]; }
 
@@ -9926,6 +9927,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
     setBorne({white:0,black:0});
     setSelected(null);
     setWinner(null);
+    setTavlaOver(null);
   }
 
   function getLegalMoves(fromPoint, currentPhase, currentDice, currentBoard, currentBar) {
@@ -10002,7 +10004,8 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
     var w = checkWin(newBorne);
     if (w) {
       setWinner(w);
-      onGameEnd(w === 'white' ? 'win' : 'loss');
+      setTavlaOver(w);
+      onGameEnd(w === 'white' ? 'win' : 'loss', { detail: '🎲 ' + newBorne.white + '/15 taş çıkardın' });
       return;
     }
     if (newDice.length === 0) {
@@ -10086,7 +10089,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
     setBoard(myBoard); setBar(myBar); setBorne(myBorne);
     var w = checkWin(myBorne);
     if (w) {
-      setWinner(w); onGameEnd(w==='white'?'win':'loss');
+      setWinner(w); setTavlaOver(w); onGameEnd(w==='white'?'win':'loss', { detail: '🎲 ' + myBorne.white + '/15 taş çıkardın' });
       setBotThinking(false); return;
     }
     var d2 = rollDice();
@@ -10123,7 +10126,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
         setSelected(null);
         if (res.dice.length === 0) {
           var w = checkWin(res.borne);
-          if (w) { setWinner(w); onGameEnd(w==='white'?'win':'loss'); return; }
+          if (w) { setWinner(w); setTavlaOver(w); onGameEnd(w==='white'?'win':'loss', { detail: '🎲 ' + res.borne.white + '/15 taş çıkardın' }); return; }
           var nextPhase = phase === 'white' ? 'black' : 'white';
           var d3 = rollDice();
           var nm3 = d3[0]===d3[1]?[d3[0],d3[0],d3[0],d3[0]]:[...d3];
@@ -10153,7 +10156,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
       setBoard(res2.board); setBar(res2.bar); setBorne(res2.borne); setSelected(null);
       if (res2.dice.length === 0) {
         var w2 = checkWin(res2.borne);
-        if (w2) { setWinner(w2); onGameEnd(w2==='white'?'win':'loss'); return; }
+        if (w2) { setWinner(w2); setTavlaOver(w2); onGameEnd(w2==='white'?'win':'loss', { detail: '🎲 ' + res2.borne.white + '/15 taş çıkardın' }); return; }
         var nextPhase2 = phase === 'white' ? 'black' : 'white';
         var d4 = rollDice();
         var nm4 = d4[0]===d4[1]?[d4[0],d4[0],d4[0],d4[0]]:[...d4];
@@ -10285,6 +10288,26 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
       {selected !== null && (
         <div style={{marginTop:6,fontSize:12,color:'var(--text-secondary)',textAlign:'center'}}>
           Taş seçildi: Puan {selected === 24 ? 'Bar' : selected} — gitmek istediğin noktaya dokun
+        </div>
+      )}
+      {tavlaOver !== null && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+          <div style={{background:'var(--surface)',borderRadius:20,padding:'32px 28px',textAlign:'center',maxWidth:300,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{fontSize:52,marginBottom:8}}>{tavlaOver==='white'?'🏆':'😅'}</div>
+            <h2 style={{fontFamily:"'Sora',sans-serif",fontSize:22,fontWeight:800,marginBottom:6}}>
+              {tavlaOver==='white' ? (gameMode==='bot' ? 'Kazandın!' : 'Beyaz Kazandı!') : (gameMode==='bot' ? 'Bot Kazandı!' : 'Siyah Kazandı!')}
+            </h2>
+            <div style={{marginBottom:16,fontSize:14,color:'var(--text-secondary)'}}>
+              <div>⬜ {borne.white}/15 taş çıkardı</div>
+              <div>⬛ {borne.black}/15 taş çıkardı</div>
+            </div>
+            <button onClick={function(){startGame(gameMode);}} style={{display:'block',width:'100%',padding:'12px 20px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#92400E,#D97706)',color:'#fff',fontWeight:700,fontSize:15,cursor:'pointer',marginBottom:8}}>
+              🔄 Tekrar Oyna
+            </button>
+            <button onClick={function(){setTavlaOver(null);setPhase(null);setWinner(null);}} style={{display:'block',width:'100%',padding:'10px 20px',borderRadius:12,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontWeight:600,fontSize:14,cursor:'pointer'}}>
+              Menü
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -10602,7 +10625,7 @@ function AdamAsmacaGame({ game, onGameEnd, soundOn }) {
       setWrongCount(nw);
       if(soundOn) playSound('wrong');
       playHaptic('wrong');
-      if(nw>=MAX_WRONG) { setPhase('lost'); onGameEnd('loss'); }
+      if(nw>=MAX_WRONG) { setPhase('lost'); onGameEnd('loss', { detail: '🔤 Kelime: ' + word }); }
     } else {
       if(soundOn) playSound('correct');
       playHaptic('correct');
@@ -10611,7 +10634,7 @@ function AdamAsmacaGame({ game, onGameEnd, soundOn }) {
         if(c==='_' || c===' ') return true;
         return newGuessed.indexOf(c)!==-1;
       });
-      if(allGuessed) { setPhase('won'); onGameEnd('win'); }
+      if(allGuessed) { setPhase('won'); onGameEnd('win', { detail: '🔤 Kelime: ' + word }); }
     }
   }
 
@@ -10654,7 +10677,7 @@ function AdamAsmacaGame({ game, onGameEnd, soundOn }) {
       <button onClick={startGame} style={{display:'block',width:'100%',padding:14,borderRadius:12,background:'linear-gradient(135deg,#6366F1,#8B5CF6)',color:'#fff',border:'none',fontWeight:700,fontSize:15,cursor:'pointer',marginBottom:10}}>
         Tekrar Oyna
       </button>
-      <button onClick={function(){onGameEnd(phase==='won'?'win':'loss');}} style={{display:'block',width:'100%',padding:12,borderRadius:12,background:'var(--surface-hover)',color:'var(--text)',border:'1px solid var(--border)',fontWeight:600,fontSize:14,cursor:'pointer'}}>
+      <button onClick={function(){onGameEnd(phase==='won'?'win':'loss', { detail: '🔤 Kelime: ' + word });}} style={{display:'block',width:'100%',padding:12,borderRadius:12,background:'var(--surface-hover)',color:'var(--text)',border:'1px solid var(--border)',fontWeight:600,fontSize:14,cursor:'pointer'}}>
         Çık
       </button>
     </div>
