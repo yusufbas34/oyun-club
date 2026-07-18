@@ -178,8 +178,15 @@ function useSocket(username) {
                   // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
                   socket.emit('get_friends', null, function(r) {
                     if (r) {
-                      setFriendList(dedupFriends(r.friends));
-                      var pending = r.pending || r.requests || [];
+                      var friendsInit = dedupFriends(r.friends);
+                      setFriendList(friendsInit);
+                      var rawPendingInit = r.pending || r.requests || [];
+                      var pending = rawPendingInit.filter(function(req) {
+                        return !friendsInit.some(function(f) {
+                          return f.userId === req.fromId ||
+                            (f.name||'').toLowerCase() === (req.fromName||'').toLowerCase();
+                        });
+                      });
                       setFriendRequests(pending);
                       if (pending.length > 0) {
                         setFriendToast('🤝 ' + pending.length + ' bekleyen arkadaşlık isteği var!');
@@ -551,8 +558,17 @@ function useSocket(username) {
     if (!socketRef.current) return;
     socketRef.current.emit('get_friends', null, function(res) {
       if (res) {
-        setFriendList(dedupFriends(res.friends));
-        setFriendRequests(res.pending || res.requests || []);
+        var friendsLoaded = dedupFriends(res.friends);
+        setFriendList(friendsLoaded);
+        // Filter out requests from people who are already friends (stale backend state)
+        var rawPending = res.pending || res.requests || [];
+        var filteredPending = rawPending.filter(function(req) {
+          return !friendsLoaded.some(function(f) {
+            return f.userId === req.fromId ||
+              (f.name || '').toLowerCase() === (req.fromName || '').toLowerCase();
+          });
+        });
+        setFriendRequests(filteredPending);
         // Cross-ref with currently online users to fix stale offline status
         socketRef.current.emit('get_online_users', null, function(onlineRes) {
           if (onlineRes && onlineRes.users && onlineRes.users.length > 0) {
