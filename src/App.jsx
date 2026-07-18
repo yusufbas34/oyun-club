@@ -169,11 +169,12 @@ function useSocket(username) {
                   try { localStorage.setItem('oyunclub_userid', res.user.id); } catch(e){}
                   // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
                   socket.emit('get_friends', null, function(r) {
-                    if (r && r.friends) {
-                      setFriendList(r.friends);
-                      setFriendRequests(r.pending || r.requests || []);
-                      if ((r.pending || r.requests || []).length > 0) {
-                        setFriendToast('🤝 ' + (r.pending || r.requests).length + ' bekleyen arkadaşlık isteği var!');
+                    if (r) {
+                      setFriendList(r.friends || []);
+                      var pending = r.pending || r.requests || [];
+                      setFriendRequests(pending);
+                      if (pending.length > 0) {
+                        setFriendToast('🤝 ' + pending.length + ' bekleyen arkadaşlık isteği var!');
                         setTimeout(function(){ setFriendToast(null); }, 5000);
                       }
                       // Cross-ref with online users so friends who are already online show correctly
@@ -517,8 +518,8 @@ function useSocket(username) {
   var getFriends = useCallback(function(cb) {
     if (!socketRef.current) return;
     socketRef.current.emit('get_friends', null, function(res) {
-      if (res && res.friends) {
-        setFriendList(res.friends);
+      if (res) {
+        setFriendList(res.friends || []);
         setFriendRequests(res.pending || res.requests || []);
       }
       if (cb) cb(res);
@@ -6404,7 +6405,13 @@ function FriendPanel({ sock, myUserId }) {
     sock.searchUser(searchQ.trim(), (res) => {
       setLoading(false);
       if (res?.error) { setSearchMsg('❌ ' + res.error); return; }
-      const found = (res?.users || res?.results || []).filter(u => u.userId !== myUserId);
+      const seen = new Set();
+      const found = (res?.users || res?.results || []).filter(u => {
+        if (u.userId === myUserId) return false;
+        if (seen.has(u.userId)) return false;
+        seen.add(u.userId);
+        return true;
+      });
       setSearchResults(found);
       if (!found.length) { setSearchMsg(''); setNotFound(true); }
       else setSearchMsg('');
