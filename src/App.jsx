@@ -10262,7 +10262,7 @@ function DeyimTamamlaGame({ game, onGameEnd, soundOn }) {
 // ============================================================
 // TAVLA GAME
 // ============================================================
-function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
+function TavlaGame({ game, onGameEnd, soundOn, onGoOnline, onlineProps }) {
   var s_mode = useState(null); var gameMode = s_mode[0]; var setGameMode = s_mode[1];
   // Simplified Tavla: 24 points, 2 players. White=1 moves 23→0, Black=-1 moves 0→23
   var INITIAL = (function() {
@@ -10290,6 +10290,34 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
   var s8 = useState(false); var botThinking = s8[0]; var setBotThinking = s8[1];
   var s9d = useState('medium'); var tavlaDiff = s9d[0]; var setTavlaDiff = s9d[1];
   var s9e = useState(null); var tavlaOver = s9e[0]; var setTavlaOver = s9e[1];
+
+  var myTavlaColor = onlineProps ? (onlineProps.myIndex === 0 ? 'white' : 'black') : 'white';
+
+  // Auto-start in online mode
+  useEffect(function() {
+    if (onlineProps && !phase) startGame('online');
+  }, []);
+
+  // Receive opponent's moves in online mode
+  useEffect(function() {
+    if (!onlineProps || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.playerIndex === onlineProps.myIndex) return;
+    if (mv.type === 'tavla_turn') {
+      setBoard(mv.board);
+      setBar(mv.bar);
+      setBorne(mv.borne);
+      setPhase(mv.nextPhase);
+      setDice(mv.nextDice);
+      var nm = mv.nextDice[0]===mv.nextDice[1]?[mv.nextDice[0],mv.nextDice[0],mv.nextDice[0],mv.nextDice[0]]:[...mv.nextDice];
+      setMoves(nm);
+      setSelected(null);
+    } else if (mv.type === 'tavla_over') {
+      setWinner(mv.winner);
+      setTavlaOver(mv.winner);
+      onGameEnd(mv.winner === myTavlaColor ? 'win' : 'loss', { detail: '🎲 Tavla bitti!' });
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
 
   function rollDice() { return [Math.ceil(Math.random()*6), Math.ceil(Math.random()*6)]; }
 
@@ -10476,7 +10504,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
   }
 
   function handlePointClick(idx) {
-    var isMyTurn = phase === 'white' || (phase === 'black' && gameMode === 'local');
+    var isMyTurn = onlineProps ? (phase === myTavlaColor) : (phase === 'white' || (phase === 'black' && gameMode === 'local'));
     if (!isMyTurn || botThinking || winner) return;
     var color = phase === 'white' ? 1 : -1;
     var barCount = phase === 'white' ? bar.white : bar.black;
@@ -10503,12 +10531,19 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
         setSelected(null);
         if (res.dice.length === 0) {
           var w = checkWin(res.borne);
-          if (w) { setWinner(w); setTavlaOver(w); onGameEnd(w==='white'?'win':'loss', { detail: '🎲 ' + res.borne.white + '/15 taş çıkardın' }); return; }
+          if (w) {
+            setWinner(w); setTavlaOver(w);
+            onGameEnd(w==='white'?'win':'loss', { detail: '🎲 ' + res.borne.white + '/15 taş çıkardın' });
+            if (onlineProps) onlineProps.onMove({ type:'tavla_over', winner:w, playerIndex:onlineProps.myIndex, _ts:Date.now() });
+            return;
+          }
           var nextPhase = phase === 'white' ? 'black' : 'white';
           var d3 = rollDice();
           var nm3 = d3[0]===d3[1]?[d3[0],d3[0],d3[0],d3[0]]:[...d3];
           setDice(d3); setMoves(nm3); setPhase(nextPhase);
-          if (nextPhase === 'black' && gameMode === 'bot') {
+          if (onlineProps) {
+            onlineProps.onMove({ type:'tavla_turn', board:res.board, bar:res.bar, borne:res.borne, nextDice:d3, nextPhase:nextPhase, playerIndex:onlineProps.myIndex, _ts:Date.now() });
+          } else if (nextPhase === 'black' && gameMode === 'bot') {
             setBotThinking(true);
             setTimeout(function() { doBotMove(res.board, res.bar, res.borne, nm3); }, 700);
           }
@@ -10523,7 +10558,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
   }
 
   function handleBearOff() {
-    var isMyTurn = phase === 'white' || (phase === 'black' && gameMode === 'local');
+    var isMyTurn = onlineProps ? (phase === myTavlaColor) : (phase === 'white' || (phase === 'black' && gameMode === 'local'));
     if (!isMyTurn || botThinking || winner || moves.length === 0) return;
     var bearTo = phase === 'white' ? -1 : 24;
     var legal3 = getLegalMoves(selected !== null ? selected : -99, phase, moves, board, bar);
@@ -10533,12 +10568,19 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
       setBoard(res2.board); setBar(res2.bar); setBorne(res2.borne); setSelected(null);
       if (res2.dice.length === 0) {
         var w2 = checkWin(res2.borne);
-        if (w2) { setWinner(w2); setTavlaOver(w2); onGameEnd(w2==='white'?'win':'loss', { detail: '🎲 ' + res2.borne.white + '/15 taş çıkardın' }); return; }
+        if (w2) {
+          setWinner(w2); setTavlaOver(w2);
+          onGameEnd(w2==='white'?'win':'loss', { detail: '🎲 ' + res2.borne.white + '/15 taş çıkardın' });
+          if (onlineProps) onlineProps.onMove({ type:'tavla_over', winner:w2, playerIndex:onlineProps.myIndex, _ts:Date.now() });
+          return;
+        }
         var nextPhase2 = phase === 'white' ? 'black' : 'white';
         var d4 = rollDice();
         var nm4 = d4[0]===d4[1]?[d4[0],d4[0],d4[0],d4[0]]:[...d4];
         setDice(d4); setMoves(nm4); setPhase(nextPhase2);
-        if (nextPhase2 === 'black' && gameMode === 'bot') {
+        if (onlineProps) {
+          onlineProps.onMove({ type:'tavla_turn', board:res2.board, bar:res2.bar, borne:res2.borne, nextDice:d4, nextPhase:nextPhase2, playerIndex:onlineProps.myIndex, _ts:Date.now() });
+        } else if (nextPhase2 === 'black' && gameMode === 'bot') {
           setBotThinking(true);
           setTimeout(function() { doBotMove(res2.board, res2.bar, res2.borne, nm4); }, 700);
         }
@@ -10550,7 +10592,7 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
 
   var POINT_SIZE = 28;
 
-  if (!phase) return (
+  if (!phase && !onlineProps) return (
     <div style={{maxWidth:420,margin:'0 auto',padding:'40px 20px',textAlign:'center'}}>
       <div style={{fontSize:72,marginBottom:8}}>🎲</div>
       <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:900,fontSize:28,marginBottom:6}}>Tavla</h2>
@@ -10600,8 +10642,9 @@ function TavlaGame({ game, onGameEnd, soundOn, onGoOnline }) {
       {/* Status */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
         <div style={{fontWeight:700,fontSize:13}}>
-          {winner ? (winner==='white' ? (gameMode==='bot'?'🏆 Sen kazandın!':'🏆 Beyaz kazandı!') : (gameMode==='bot'?'😅 Bot kazandı!':'🏆 Siyah kazandı!')) :
+          {winner ? (winner==='white' ? (onlineProps?(myTavlaColor==='white'?'🏆 Kazandın!':'😅 Kaybettin!'):(gameMode==='bot'?'🏆 Sen kazandın!':'🏆 Beyaz kazandı!')) : (onlineProps?(myTavlaColor==='black'?'🏆 Kazandın!':'😅 Kaybettin!'):(gameMode==='bot'?'😅 Bot kazandı!':'🏆 Siyah kazandı!'))) :
            botThinking ? '🤖 Bot düşünüyor...' :
+           onlineProps ? (phase===myTavlaColor ? '🎯 Senin sıran!' : ('⏳ ' + onlineProps.opponentName + ' oynuyor...')) :
            phase==='white' ? (gameMode==='local'?'⬜ Beyaz\'ın sırası':'⬜ Senin hamlen') : (gameMode==='local'?'⬛ Siyah\'ın sırası':'⬛ Bot hamle yapıyor')}
         </div>
         <div style={{display:'flex',gap:6}}>
