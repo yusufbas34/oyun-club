@@ -86,6 +86,7 @@ async function showPWANotification(title, body, opts) {
  
 function useSocket(username) {
   var socketRef = useRef(null);
+  var myUserIdRef = useRef(null);
   var s1 = useState(false);
   var isConnected = s1[0];
   var setIsConnected = s1[1];
@@ -171,6 +172,7 @@ function useSocket(username) {
                 setIsRegistered(true);
                 if (res.user && res.user.id) {
                   setMyUserId(res.user.id);
+                  myUserIdRef.current = res.user.id;
                   try {
                     localStorage.setItem('oyunclub_userid', res.user.id);
                     localStorage.setItem('oyunclub_username', username);
@@ -298,6 +300,7 @@ function useSocket(username) {
           });
 
           socket.on('game_started', function (data) {
+            setLastGameMove(null);
             setRoomData(function (prev) {
               if (!prev) return data;
               return Object.assign({}, prev, data, {
@@ -389,8 +392,11 @@ function useSocket(username) {
             });
           });
           socket.on('friend_request_incoming', function(data) {
-            setFriendRequests(function(prev) { return prev.concat([data]); });
-            setFriendToast('🤝 ' + data.fromName + ' arkadaşlık isteği gönderdi!');
+            setFriendRequests(function(prev) {
+              if (prev.some(function(r) { return r.fromId === (data.fromId || data.id); })) return prev;
+              return prev.concat([Object.assign({}, data, { fromId: data.fromId || data.id, fromName: data.fromName || data.name })]);
+            });
+            setFriendToast('🤝 ' + (data.fromName || data.name) + ' arkadaşlık isteği gönderdi!');
             setTimeout(function(){ setFriendToast(null); }, 4000);
             showPWANotification('Arkadaşlık İsteği 🤝', data.fromName + ' sana arkadaşlık isteği gönderdi', { tag: 'friend-req' });
           });
@@ -518,6 +524,7 @@ function useSocket(username) {
     socketRef.current.emit('restart_game', null, function (res) {
       if (res && res.error) {
       } else {
+        setLastGameMove(null);
         setRoomData(function (prev) {
           if (!prev) return prev;
           return Object.assign({}, prev, {
@@ -588,7 +595,18 @@ function useSocket(username) {
   }, []);
 
   var sendFriendRequest = useCallback(function(toUserId, cb) {
-    if (!socketRef.current) return;
+    if (!socketRef.current || !socketRef.current.connected) {
+      if (cb) cb({ success: false, error: 'Bağlantı yok, tekrar dene' });
+      return;
+    }
+    if (!toUserId) {
+      if (cb) cb({ success: false, error: 'Geçersiz kullanıcı' });
+      return;
+    }
+    if (myUserIdRef.current && toUserId === myUserIdRef.current) {
+      if (cb) cb({ success: false, error: 'Kendinize istek gönderemezsiniz' });
+      return;
+    }
     socketRef.current.emit('friend_request', { toId: toUserId }, cb || function(){});
   }, []);
 
@@ -1541,9 +1559,9 @@ function MultiplayerLobby(props) {
     var maxP = sock.roomData.maxPlayers || 2;
     var canStart = players.length >= maxP;
     var isHost = players[0] && players[0].id === sock.myUserId;
-    var myIndex = sock.myUserId
-      ? players.findIndex(function(p) { return p.id === sock.myUserId; })
-      : players.findIndex(function(p) { return p.name === username; });
+    var myIndex = players.findIndex(function(p) {
+      return (sock.myUserId && p.id === sock.myUserId) || p.name === username;
+    });
     var currentGame = sock.roomData.gameId;
     var onlineProps = {
       myIndex: myIndex >= 0 ? myIndex : 0,
@@ -4152,7 +4170,8 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
           </div>
         </div>
       </div>
-      {!rev&&idx<TOTAL&&<button onClick={reveal} style={{width:'100%',padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:18,fontWeight:700,cursor:'pointer'}}>Kartı Aç 🃏</button>}
+      {!rev&&idx<TOTAL&&(!isOnline||isHost)&&<button onClick={reveal} style={{width:'100%',padding:'16px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#E63946,#F4845F)',color:'#FFF',fontSize:18,fontWeight:700,cursor:'pointer'}}>Kartı Aç 🃏</button>}
+      {!rev&&idx<TOTAL&&isOnline&&!isHost&&<div style={{width:'100%',padding:'16px',borderRadius:14,background:'var(--surface-hover)',textAlign:'center',fontSize:15,color:'var(--text-secondary)'}}>⏳ {onlineProps.opponentName} açıyor...</div>}
       {rev&&rw!==null&&<div style={{marginBottom:12}}>
         <div style={{fontSize:18,fontWeight:700,marginBottom:10,color:rw===-1?'var(--text-secondary)':'#22C55E'}}>{roundLabel}</div>
         {idx+1<TOTAL&&<button onClick={next} style={{padding:'12px 28px',borderRadius:12,border:'none',background:'#1D4ED8',color:'#FFF',fontSize:16,fontWeight:700,cursor:'pointer'}}>Sonraki →</button>}
@@ -6461,7 +6480,7 @@ const LoginPage = ({ onLogin, dark, onToggleDark, nameError, onClearNameError })
 // ============================================================
 // FRIEND PANEL
 // ============================================================
-function FriendPanel({ sock, myUserId }) {
+function FriendPanel({ sock, myUserId, username }) {
   const [tab, setTab] = useState('friends'); // 'friends' | 'requests' | 'search'
   const [searchQ, setSearchQ] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -6487,10 +6506,14 @@ function FriendPanel({ sock, myUserId }) {
       if (res?.error) { setSearchMsg('❌ ' + res.error); return; }
       const seenIds = new Set();
       const seenNames = new Set();
-      const found = (res?.users || res?.results || []).filter(u => {
+      const myNameLower = (username || '').toLowerCase().trim();
+      const rawUsers = (res?.users || res?.results || []).map(u => Object.assign({}, u, { userId: u.userId || u.id }));
+      const found = rawUsers.filter(u => {
+        if (!u.userId) return false;
         if (u.userId === myUserId) return false;
-        if (seenIds.has(u.userId)) return false;
         const nameLower = (u.name || '').toLowerCase().trim();
+        if (myNameLower && nameLower === myNameLower) return false;
+        if (seenIds.has(u.userId)) return false;
         if (seenNames.has(nameLower)) return false;
         seenIds.add(u.userId);
         seenNames.add(nameLower);
@@ -6515,6 +6538,7 @@ function FriendPanel({ sock, myUserId }) {
   };
 
   const sendReq = (toUserId, name) => {
+    if (!toUserId || toUserId === myUserId) return;
     sock.sendFriendRequest(toUserId, (res) => {
       if (res?.success) {
         setSearchMsg('✅ ' + name + ' için istek gönderildi');
@@ -7000,7 +7024,7 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
         <div>
           {sock && sock.isConnected ? (
             <Card style={{ padding: 20 }}>
-              <FriendPanel sock={sock} myUserId={sock.myUserId} />
+              <FriendPanel sock={sock} myUserId={sock.myUserId} username={username} />
             </Card>
           ) : (
             <Card style={{ padding: 32, textAlign: 'center' }}>
