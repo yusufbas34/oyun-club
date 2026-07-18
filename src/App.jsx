@@ -358,13 +358,15 @@ function useSocket(username) {
 
           // --- ARKADAŞ SİSTEMİ EVENTLERİ ---
           socket.on('friend_online', function(data) {
+            var uid = data.userId || data.id;
             setFriendList(function(prev) {
-              return prev.map(function(f) { return f.userId === data.userId ? Object.assign({},f,{online:true,name:data.name}) : f; });
+              return prev.map(function(f) { return f.userId === uid ? Object.assign({},f,{online:true,name:data.name||f.name}) : f; });
             });
           });
           socket.on('friend_offline', function(data) {
+            var uid = data.userId || data.id;
             setFriendList(function(prev) {
-              return prev.map(function(f) { return f.userId === data.userId ? Object.assign({},f,{online:false}) : f; });
+              return prev.map(function(f) { return f.userId === uid ? Object.assign({},f,{online:false}) : f; });
             });
           });
           socket.on('friend_request_incoming', function(data) {
@@ -521,6 +523,15 @@ function useSocket(username) {
       if (res) {
         setFriendList(res.friends || []);
         setFriendRequests(res.pending || res.requests || []);
+        // Cross-ref with currently online users to fix stale offline status
+        socketRef.current.emit('get_online_users', null, function(onlineRes) {
+          if (onlineRes && onlineRes.users) {
+            var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId || u.id; }));
+            setFriendList(function(prev) {
+              return prev.map(function(f) { return Object.assign({}, f, { online: onlineIds.has(f.userId) }); });
+            });
+          }
+        });
       }
       if (cb) cb(res);
     });
@@ -6436,8 +6447,19 @@ function FriendPanel({ sock, myUserId }) {
 
   const sendReq = (toUserId, name) => {
     sock.sendFriendRequest(toUserId, (res) => {
-      if (res?.success) setSearchMsg('✅ ' + name + ' için istek gönderildi');
-      else setSearchMsg('❌ ' + (res?.error || 'Hata'));
+      if (res?.success) {
+        setSearchMsg('✅ ' + name + ' için istek gönderildi');
+        setSearchResults(prev => prev.map(u => u.userId === toUserId ? Object.assign({},u,{reqSent:true}) : u));
+      } else {
+        var errMsg = res?.error || 'Hata';
+        if (errMsg.includes('already') || errMsg.includes('zaten') || errMsg.includes('exist')) {
+          setSearchMsg('⏳ ' + name + ' için istek zaten bekliyor');
+        } else if (errMsg.includes('friend')) {
+          setSearchMsg('✅ ' + name + ' zaten arkadaşın');
+        } else {
+          setSearchMsg('❌ ' + errMsg);
+        }
+      }
     });
   };
 
@@ -6449,7 +6471,7 @@ function FriendPanel({ sock, myUserId }) {
     <div style={{marginTop:20}}>
       <div style={{display:'flex',gap:6,marginBottom:14}}>
         {[['friends','👥 Arkadaşlar',friends.length],['requests','🤝 İstekler',requests.length],['search','🔍 Ara',0]].map(([t,label,count])=>(
-          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'8px 4px',borderRadius:10,border:'none',background:tab===t?'linear-gradient(135deg,#863bff,#5b21b6)':'var(--surface-hover)',color:tab===t?'#fff':'var(--text)',fontWeight:700,fontSize:12,cursor:'pointer',position:'relative'}}>
+          <button key={t} onClick={()=>{ setTab(t); if(t==='friends'||t==='requests') sock.getFriends(); }} style={{flex:1,padding:'8px 4px',borderRadius:10,border:'none',background:tab===t?'linear-gradient(135deg,#863bff,#5b21b6)':'var(--surface-hover)',color:tab===t?'#fff':'var(--text)',fontWeight:700,fontSize:12,cursor:'pointer',position:'relative'}}>
             {label}{count>0&&<span style={{marginLeft:4,background:'#ef4444',color:'#fff',borderRadius:10,padding:'1px 5px',fontSize:10}}>{count}</span>}
           </button>
         ))}
