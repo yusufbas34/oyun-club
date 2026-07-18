@@ -1604,8 +1604,11 @@ function MultiplayerLobby(props) {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {players.map(function(p, i) {
               var isMe = p.id === sock.myUserId;
-              var alreadyFriend = (sock.friendList || []).some(function(f) { return f.userId === p.id; });
-              var reqSent = sentFriendReqs[p.id];
+              var pNameLower = (p.name || '').toLowerCase();
+              var alreadyFriend = (sock.friendList || []).some(function(f) {
+                return f.userId === p.id || (f.name || '').toLowerCase() === pNameLower;
+              });
+              var reqSent = sentFriendReqs[p.id] || alreadyFriend;
               return (
                 <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: isMe ? 'rgba(99,102,241,0.1)' : 'var(--surface-hover)', border: '1px solid ' + (isMe ? '#6366f1' : 'var(--border)'), borderRadius: 10, padding: '8px 14px' }}>
                   <div style={{ width: 28, height: 28, borderRadius: '50%', background: i === 0 ? '#E63946' : '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13 }}>{p.name ? p.name[0].toUpperCase() : '?'}</div>
@@ -1616,11 +1619,12 @@ function MultiplayerLobby(props) {
                   {!isMe && (
                     alreadyFriend
                       ? <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600, marginLeft: 4 }}>✓ Arkadaş</span>
-                      : reqSent
+                      : sentFriendReqs[p.id]
                         ? <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 4 }}>İstek gönderildi</span>
                         : <button onClick={function() {
+                            setSentFriendReqs(function(prev) { var n = Object.assign({}, prev); n[p.id] = true; return n; });
                             sock.sendFriendRequest(p.id, function(res) {
-                              if (res && res.success) setSentFriendReqs(function(prev) { var n = Object.assign({}, prev); n[p.id] = true; return n; });
+                              if (res && !res.success) setSentFriendReqs(function(prev) { var n = Object.assign({}, prev); n[p.id] = false; return n; });
                             });
                           }} style={{ marginLeft: 4, padding: '3px 8px', borderRadius: 6, border: 'none', background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>+ Ekle</button>
                   )}
@@ -6616,7 +6620,7 @@ function FriendPanel({ sock, myUserId }) {
             </div>
           )}
           {searchResults.map(u => {
-            const already = friends.some(f=>f.userId===u.userId);
+            const already = friends.some(f=>f.userId===u.userId||(f.name||'').toLowerCase()===(u.name||'').toLowerCase());
             return (
               <div key={u.userId} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
                 <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#6366f1,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0}}>
