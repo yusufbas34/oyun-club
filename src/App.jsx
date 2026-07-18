@@ -84,7 +84,7 @@ async function showPWANotification(title, body, opts) {
   } catch(e) {}
 }
  
-function useSocket(username) {
+function useSocket(username, persistentUserId) {
   var socketRef = useRef(null);
   var myUserIdRef = useRef(null);
   var s1 = useState(false);
@@ -160,56 +160,46 @@ function useSocket(username) {
             setIsConnected(true);
             setSocketError(null);
             // Daha önce kaydedilmiş userId varsa ve aynı kullanıcıysa gönder — sunucu arkadaş listesini geri yükler
-            var storedUserId = null;
-            try {
-              var storedName = localStorage.getItem('oyunclub_username');
-              var savedId = localStorage.getItem('oyunclub_userid');
-              // Sadece aynı kullanıcı adıyla giriş yapılıyorsa eski userId'yi gönder
-              if (savedId && storedName && storedName === username) storedUserId = savedId;
-            } catch(e){}
+            var storedUserId = persistentUserId || null;
             socket.emit('register', { name: username, userId: storedUserId }, function (res) {
               if (res && res.success) {
                 setIsRegistered(true);
                 if (res.user && res.user.id) {
                   setMyUserId(res.user.id);
                   myUserIdRef.current = res.user.id;
-                  try {
-                    localStorage.setItem('oyunclub_userid', res.user.id);
-                    localStorage.setItem('oyunclub_username', username);
-                  } catch(e){}
-                  // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
-                  socket.emit('get_friends', null, function(r) {
-                    if (r) {
-                      var friendsInit = dedupFriends(r.friends);
-                      setFriendList(friendsInit);
-                      var rawPendingInit = r.pending || r.requests || [];
-                      var pending = rawPendingInit.filter(function(req) {
-                        return !friendsInit.some(function(f) {
-                          return f.userId === req.fromId ||
-                            (f.name||'').toLowerCase() === (req.fromName||'').toLowerCase();
-                        });
-                      });
-                      setFriendRequests(pending);
-                      if (pending.length > 0) {
-                        setFriendToast('🤝 ' + pending.length + ' bekleyen arkadaşlık isteği var!');
-                        setTimeout(function(){ setFriendToast(null); }, 5000);
-                      }
-                      // Cross-ref with online users so friends who are already online show correctly
-                      socket.emit('get_online_users', null, function(onlineRes) {
-                        if (onlineRes && onlineRes.users && onlineRes.users.length > 0) {
-                          var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId || u.id; }));
-                          var onlineNames = new Set(onlineRes.users.map(function(u) { return (u.name || u.username || '').toLowerCase(); }));
-                          setFriendList(function(prev) {
-                            return prev.map(function(f) {
-                              var isOnline = onlineIds.has(f.userId) || onlineNames.has((f.name||'').toLowerCase());
-                              return Object.assign({}, f, { online: isOnline });
-                            });
-                          });
-                        }
-                      });
-                    }
-                  });
                 }
+                // Bağlantı kurulunca arkadaş listesini ve bekleyen istekleri otomatik yükle
+                socket.emit('get_friends', null, function(r) {
+                  if (r) {
+                    var friendsInit = dedupFriends(r.friends);
+                    setFriendList(friendsInit);
+                    var rawPendingInit = r.pending || r.requests || [];
+                    var pending = rawPendingInit.filter(function(req) {
+                      return !friendsInit.some(function(f) {
+                        return f.userId === req.fromId ||
+                          (f.name||'').toLowerCase() === (req.fromName||'').toLowerCase();
+                      });
+                    });
+                    setFriendRequests(pending);
+                    if (pending.length > 0) {
+                      setFriendToast('🤝 ' + pending.length + ' bekleyen arkadaşlık isteği var!');
+                      setTimeout(function(){ setFriendToast(null); }, 5000);
+                    }
+                    // Cross-ref with online users so friends who are already online show correctly
+                    socket.emit('get_online_users', null, function(onlineRes) {
+                      if (onlineRes && onlineRes.users && onlineRes.users.length > 0) {
+                        var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId || u.id; }));
+                        var onlineNames = new Set(onlineRes.users.map(function(u) { return (u.name || u.username || '').toLowerCase(); }));
+                        setFriendList(function(prev) {
+                          return prev.map(function(f) {
+                            var isOnline = onlineIds.has(f.userId) || onlineNames.has((f.name||'').toLowerCase());
+                            return Object.assign({}, f, { online: isOnline });
+                          });
+                        });
+                      }
+                    });
+                  }
+                });
               } else {
                 var errCode = res ? res.error : 'Kayit basarisiz';
                 if (res && res.error === 'name_taken') {
@@ -2037,9 +2027,7 @@ function hasNoMoves2048(grid) {
 function Game2048({ game, onGameEnd, soundOn }) {
   const [grid, setGrid] = useState(init2048Grid);
   const [score, setScore] = useState(0);
-  const [best, setBest] = useState(() => {
-    try { return parseInt(localStorage.getItem('oyunclub_2048_best') || '0'); } catch { return 0; }
-  });
+  const [best, setBest] = useState(0);
   const [won, setWon] = useState(false);
   const [over, setOver] = useState(false);
   const [wonDismissed, setWonDismissed] = useState(false);
@@ -2056,7 +2044,6 @@ function Game2048({ game, onGameEnd, soundOn }) {
         const ns = sc + s;
         setBest(b => {
           const nb = Math.max(b, ns);
-          try { localStorage.setItem('oyunclub_2048_best', String(nb)); } catch {}
           return nb;
         });
         return ns;
@@ -6291,12 +6278,12 @@ const LoginPage = ({ onLogin, dark, onToggleDark, nameError, onClearNameError })
       var created = await cloudCreateUser(name, pin);
       setLoading(false);
       if (!created) { setPinError('Hesap oluşturulamadı, tekrar dene'); return; }
-      onLogin({ name, cloudStats: null, cloudAvatar: '' });
+      onLogin({ name, userId: created.id, cloudStats: null, cloudAvatar: '' });
     } else {
       var user = await cloudGetUser(name);
       setLoading(false);
       if (!user || user.pin !== pin) { setPinError('PIN yanlış'); return; }
-      onLogin({ name, cloudStats: user.stats, cloudAvatar: user.avatar });
+      onLogin({ name, userId: user.id, cloudStats: user.stats, cloudAvatar: user.avatar });
     }
   }
 
@@ -6541,13 +6528,13 @@ function FriendPanel({ sock, myUserId, username }) {
     if (!toUserId || toUserId === myUserId) return;
     sock.sendFriendRequest(toUserId, (res) => {
       if (res?.success) {
-        setSearchMsg('✅ ' + name + ' için istek gönderildi');
+        setSearchMsg('✅ ' + name + ' için istek gönderildi! Çevrimdışı olsa bile bağlandığında bildirim alacak.');
         setSearchResults(prev => prev.map(u => u.userId === toUserId ? Object.assign({},u,{reqSent:true}) : u));
       } else {
         var errMsg = (res?.error || res?.message || res?.msg || 'Hata').toString();
         var lowerErr = errMsg.toLowerCase();
         if (lowerErr.includes('already') || lowerErr.includes('zaten') || lowerErr.includes('exist') || lowerErr.includes('pending') || lowerErr.includes('bekl')) {
-          setSearchMsg('⏳ ' + name + ' için istek zaten gönderildi, kabul bekleniyor');
+          setSearchMsg('⏳ ' + name + ' için istek zaten gönderildi — kabul bekleniyor');
           setSearchResults(prev => prev.map(u => u.userId === toUserId ? Object.assign({},u,{reqSent:true}) : u));
         } else if (lowerErr.includes('friend') || lowerErr.includes('arkadaş')) {
           setSearchMsg('✅ ' + name + ' zaten arkadaşın');
@@ -7988,6 +7975,25 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
           else{navigator.clipboard?.writeText(url);alert('Link kopyalandı!');}
         }} style={{padding:'10px 18px',borderRadius:12,border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',backdropFilter:'blur(10px)'}}>
           📤 Paylaş
+        </button>
+      </div>
+
+      {/* Meydan Okuma Linki */}
+      <div style={{marginTop:12,padding:'16px 20px',borderRadius:16,background:'linear-gradient(135deg,#7c2d12,#dc2626)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>⚔️ Arkadaşına Meydan Oku</div>
+          <div style={{fontSize:12,opacity:0.8}}>Özel oda oluştur, linki gönder, savaş başlasın!</div>
+        </div>
+        <button onClick={()=>{
+          var code = Math.random().toString(36).substring(2,8).toUpperCase();
+          var url = window.location.origin + '?room=' + code;
+          if(onMultiplayer) onMultiplayer();
+          setTimeout(function(){
+            if(navigator.share){navigator.share({title:'oyun.club – Meydan okuyorum! ⚔️',text:(user&&user.name?user.name:'Biri')+" seni oyuna meydan okuyor! Bağlan: "+url,url:url});}
+            else{navigator.clipboard?.writeText(url).then(function(){alert('Oda linki kopyalandı!\n\nArkadaşına gönder: '+url);}).catch(function(){alert('Link: '+url);});}
+          }, 100);
+        }} style={{padding:'10px 18px',borderRadius:12,border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',backdropFilter:'blur(10px)',whiteSpace:'nowrap'}}>
+          ⚔️ Meydan Oku
         </button>
       </div>
 
@@ -11911,7 +11917,7 @@ function TarihEfsaneGame({ game, players, onGameEnd, soundOn }) {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const [user, setUser] = useState(() => { try { const s = localStorage.getItem('oyunclub_user'); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [user, setUser] = useState(() => { try { const s = localStorage.getItem('oyunclub_user'); if (!s) return null; const p = JSON.parse(s); return (p && p.name) ? { name: p.name, userId: p.userId || null } : null; } catch { return null; } });
   const [page, setPage] = useState(() => { try { return localStorage.getItem('oyunclub_user') ? 'lobby' : 'login'; } catch { return 'login'; } });
   const [selectedGame, setSelectedGame] = useState(null);
   const [roomId, setRoomId] = useState(null);
@@ -11923,10 +11929,10 @@ export default function App() {
   const [pendingGame, setPendingGame] = useState(null);
   const adGameCountRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
-  const [userAvatar, setUserAvatar] = useState(() => { try { return localStorage.getItem('oyunclub_avatar') || ''; } catch { return ''; } });
+  const [userAvatar, setUserAvatar] = useState('');
   const EMPTY_STATS = { xox:{played:0,wins:0,losses:0}, minesweeper:{played:0,wins:0,losses:0}, rps:{played:0,wins:0,losses:0}, memory:{played:0,wins:0,losses:0}, snake:{played:0,wins:0,losses:0}, '2048':{played:0,wins:0,losses:0}, wordle:{played:0,wins:0,losses:0}, connectfour:{played:0,wins:0,losses:0}, dama:{played:0,wins:0,losses:0}, sudoku:{played:0,wins:0,losses:0}, gomoku:{played:0,wins:0,losses:0}, reaction:{played:0,wins:0,losses:0}, mathduel:{played:0,wins:0,losses:0}, cardbattle:{played:0,wins:0,losses:0}, memorybattle:{played:0,wins:0,losses:0}, wordrace:{played:0,wins:0,losses:0}, mangala:{played:0,wins:0,losses:0}, simon:{played:0,wins:0,losses:0}, lightsout:{played:0,wins:0,losses:0}, brickbreaker:{played:0,wins:0,losses:0}, nim:{played:0,wins:0,losses:0}, hizcarpim:{played:0,wins:0,losses:0}, tarihefsan:{played:0,wins:0,losses:0}, kelimeav:{played:0,wins:0,losses:0}, emojimuz:{played:0,wins:0,losses:0}, tavla:{played:0,wins:0,losses:0}, kelimezinciri:{played:0,wins:0,losses:0}, deyimtamamla:{played:0,wins:0,losses:0}, sorugecesi:{played:0,wins:0,losses:0}, adamasmaca:{played:0,wins:0,losses:0}, stroop:{played:0,wins:0,losses:0}, reversi:{played:0,wins:0,losses:0} };
   const PROG_DEFAULTS = { xp: 0, level: 1, streak: { count: 0, lastPlayDate: null }, badges: {}, currentWinStreak: 0, bestWinStreak: 0, dailyStats: { date: null, played: 0, wins: 0 }, streakFreeze: { count: 1, weekUsed: null }, season: { num: 0, xp: 0, month: null } };
-  const [stats, setStats] = useState(() => { try { const s = localStorage.getItem('oyunclub_stats'); if (s) { const p = JSON.parse(s); return { ...PROG_DEFAULTS, history: [], ...p, games: { ...EMPTY_STATS, ...(p.games || {}) } }; } } catch {} return { games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }; });
+  const [stats, setStats] = useState(() => ({ games: EMPTY_STATS, history: [], ...PROG_DEFAULTS }));
 
   useEffect(() => {
     if (!user) return;
@@ -11939,9 +11945,14 @@ export default function App() {
     }
   }, [user]);
 
-  useEffect(() => { if (user) localStorage.setItem('oyunclub_user', JSON.stringify(user)); else localStorage.removeItem('oyunclub_user'); }, [user]);
+  useEffect(() => { if (user) localStorage.setItem('oyunclub_user', JSON.stringify({ name: user.name, userId: user.userId || null })); else localStorage.removeItem('oyunclub_user'); }, [user]);
   useEffect(() => { localStorage.setItem('oyunclub_dark', dark); }, [dark]);
   useEffect(() => { localStorage.setItem('oyunclub_sound', soundOn); }, [soundOn]);
+
+  // One-time cleanup: remove old localStorage game-data keys no longer used
+  useEffect(() => {
+    ['oyunclub_stats','oyunclub_avatar','oyunclub_2048_best'].forEach(function(k){ try { localStorage.removeItem(k); } catch {} });
+  }, []);
 
   // Sync stats to Supabase cloud (debounced 3s) — source of truth is cloud, localStorage is just cache
   const cloudSyncTimer = useRef(null);
@@ -12002,7 +12013,7 @@ export default function App() {
   const [profileInitialTab, setProfileInitialTab] = useState('profil');
   const [showDailyReward, setShowDailyReward] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  var sock = useSocket(user ? user.name : 'Oyuncu');
+  var sock = useSocket(user ? user.name : 'Oyuncu', user ? user.userId : null);
   const [loginNameError, setLoginNameError] = useState(null);
 
   useEffect(() => {
@@ -12663,7 +12674,7 @@ export default function App() {
             userAvatar={userAvatar}
             initialTab={profileInitialTab}
             sock={sock}
-            onAvatarChange={(e) => { setUserAvatar(e); try { localStorage.setItem('oyunclub_avatar', e); } catch {} }}
+            onAvatarChange={(e) => { setUserAvatar(e); }}
             onLogout={() => {
               setUser(null);
               setPage('login');
@@ -12679,14 +12690,12 @@ export default function App() {
               if (sock && sock.renameUser) {
                 sock.renameUser(newName, function(res) {
                   if (!res || res.error) return;
-                  const updated = { ...user, name: newName };
+                  const updated = { name: newName, userId: user.userId || null };
                   setUser(updated);
-                  try { localStorage.setItem('oyunclub_user', JSON.stringify(updated)); } catch {}
                 });
               } else {
-                const updated = { ...user, name: newName };
+                const updated = { name: newName, userId: user.userId || null };
                 setUser(updated);
-                try { localStorage.setItem('oyunclub_user', JSON.stringify(updated)); } catch {}
               }
             }}
             onResetStats={() => {
