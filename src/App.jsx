@@ -6400,16 +6400,20 @@ function FriendPanel({ sock, myUserId }) {
   const [copied, setCopied] = useState(false);
 
   const doSearch = () => {
-    if (!searchQ.trim() || searchQ.trim().length < 2) return setSearchMsg('En az 2 karakter gir');
+    if (!searchQ.trim()) return setSearchMsg('Kullanıcı adı gir');
     setLoading(true); setSearchMsg(''); setNotFound(false);
     sock.searchUser(searchQ.trim(), (res) => {
       setLoading(false);
       if (res?.error) { setSearchMsg('❌ ' + res.error); return; }
-      const seen = new Set();
+      const seenIds = new Set();
+      const seenNames = new Set();
       const found = (res?.users || res?.results || []).filter(u => {
         if (u.userId === myUserId) return false;
-        if (seen.has(u.userId)) return false;
-        seen.add(u.userId);
+        if (seenIds.has(u.userId)) return false;
+        const nameLower = (u.name || '').toLowerCase().trim();
+        if (seenNames.has(nameLower)) return false;
+        seenIds.add(u.userId);
+        seenNames.add(nameLower);
         return true;
       });
       setSearchResults(found);
