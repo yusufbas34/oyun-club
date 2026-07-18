@@ -9862,9 +9862,28 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
   }
 
   function doChallenge() {
-    var challengeText = '🎮 ' + gameName + '’da ' + (detail || (result === 'win' ? 'kazandım' : 'oynadım')) + '!\n\nSeni meydan okuyorum — daha iyisini yapabilir misin? 💪\n\n👉 oyun.club';
-    if (navigator.share) { navigator.share({ text: challengeText, url: 'https://oyun.club' }).catch(function(){}); }
-    else { window.open('https://wa.me/?text=' + encodeURIComponent(challengeText), '_blank'); }
+    var challengeText = ‘⚔️ ‘ + gameName + ‘\’da ‘ + (detail || (result === ‘win’ ? ‘kazandım’ : ‘oynadım’)) + ‘!\n\nSeni meydan okuyorum — daha iyisini yapabilir misin? 💪’;
+    generateShareCard(function(dataUrl) {
+      var shareUrl = ‘https://oyun.club’;
+      if (dataUrl && navigator.share && navigator.canShare) {
+        fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob) {
+          var file = new File([blob], ‘meydan-oku.png’, { type: ‘image/png’ });
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], text: challengeText, url: shareUrl }).catch(function() {
+              navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+            });
+          } else {
+            navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+          }
+        }).catch(function() {
+          navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+        });
+      } else if (navigator.share) {
+        navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+      } else {
+        window.open(‘https://wa.me/?text=’ + encodeURIComponent(challengeText + ‘\n’ + shareUrl), ‘_blank’);
+      }
+    });
   }
 
   function doShareText() {
