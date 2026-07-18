@@ -1935,11 +1935,11 @@ function Game2048({ game, onGameEnd, soundOn }) {
       if (withNew.includes(2048) && !won) {
         setWon(true);
         if (soundOn) playSound('win');
-        onGameEnd('win');
+        onGameEnd('win', { detail: '🎮 Skor: ' + (score + s) });
       } else if (hasNoMoves2048(withNew)) {
         setOver(true);
         if (soundOn) playSound('lose');
-        onGameEnd('loss');
+        onGameEnd('loss', { detail: '🎮 Skor: ' + (score + s) });
       }
       return withNew;
     });
@@ -2347,14 +2347,14 @@ function DamaGame({ game, onGameEnd, soundOn, onGoOnline, onlineProps }) {
           var next2 = turn === 'white' ? 'black' : 'white';
           onlineProps.onMove({ type: 'dama_move', from: [selected[0], selected[1]], to: [r, c], capture: move.capture ? move.capture : null, color: turn, playerIndex: onlineProps.myIndex, _ts: Date.now() });
           var winner2 = checkWin(nb, next2);
-          if (winner2) { setGameOver(true); setWon(winner2 === myDamaColor2); onGameEnd(winner2 === myDamaColor2 ? 'win' : 'loss'); if (soundOn) playSound('win'); return; }
+          if (winner2) { setGameOver(true); setWon(winner2 === myDamaColor2); onGameEnd(winner2 === myDamaColor2 ? 'win' : 'loss', { detail: '♟️ Dama bitti' }); if (soundOn) playSound('win'); return; }
           setTurn(next2);
           return;
         }
         if (damaMode === '2p') {
           var next2p = turn === 'white' ? 'black' : 'white';
           var winner2p = checkWin(nb, next2p);
-          if (winner2p) { setGameOver(true); setWon(false); onGameEnd('draw'); if (soundOn) playSound('win'); return; }
+          if (winner2p) { setGameOver(true); setWon(false); onGameEnd('draw', { detail: '♟️ Berabere' }); if (soundOn) playSound('win'); return; }
           setTurn(next2p);
           return;
         }
@@ -2362,7 +2362,7 @@ function DamaGame({ game, onGameEnd, soundOn, onGoOnline, onlineProps }) {
         if (winner) {
           setGameOver(true);
           setWon(winner === 'white');
-          onGameEnd(winner === 'white' ? 'win' : 'loss');
+          onGameEnd(winner === 'white' ? 'win' : 'loss', { detail: '♟️ Dama bitti' });
           if (soundOn) playSound(winner === 'white' ? 'win' : 'lose');
           return;
         }
@@ -2397,7 +2397,7 @@ function DamaGame({ game, onGameEnd, soundOn, onGoOnline, onlineProps }) {
             if (winner2) {
               setGameOver(true);
               setWon(winner2 === 'white');
-              onGameEnd(winner2 === 'white' ? 'win' : 'loss');
+              onGameEnd(winner2 === 'white' ? 'win' : 'loss', { detail: '♟️ Dama bitti' });
               if (soundOn) playSound(winner2 === 'white' ? 'win' : 'lose');
             } else {
               setTurn('white');
@@ -3065,9 +3065,9 @@ function ReversiGame({ game, players, onGameEnd, soundOn, onlineProps, onGoOnlin
           setOver(true);
           var myIdx2 = onlineProps ? onlineProps.myIndex : 0;
           var myColor2 = onlineProps ? (myIdx2===0?'B':'W') : 'B';
-          if (bC2 > wC2) { setMsg((players&&players[0]?players[0]:'Siyah')+' kazandı!'); onGameEnd(myColor2==='B'?'win':'loss'); }
-          else if (wC2 > bC2) { setMsg((players&&players[1]?players[1]:'Beyaz')+' kazandı!'); onGameEnd(myColor2==='W'?'win':'loss'); }
-          else { setMsg('Berabere!'); onGameEnd('draw'); }
+          if (bC2 > wC2) { setMsg((players&&players[0]?players[0]:'Siyah')+' kazandı!'); onGameEnd(myColor2==='B'?'win':'loss', { detail: '⬛ ' + bC2 + ' — ' + wC2 + ' ⬜' }); }
+          else if (wC2 > bC2) { setMsg((players&&players[1]?players[1]:'Beyaz')+' kazandı!'); onGameEnd(myColor2==='W'?'win':'loss', { detail: '⬛ ' + bC2 + ' — ' + wC2 + ' ⬜' }); }
+          else { setMsg('Berabere!'); onGameEnd('draw', { detail: '⬛ ' + bC2 + ' — ' + wC2 + ' ⬜' }); }
           if (soundOn) playSound('win');
         }
       }
@@ -3241,10 +3241,10 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       if (soundOn) playSound('place');
       if (checkGomokuWin(nb, r, c, myColor)) {
         setBoard(nb); setWinner(myColor); setLastMove(idx);
-        onGameEnd(myColor === 'black' ? 'win' : 'loss');
+        onGameEnd(myColor === 'black' ? 'win' : 'loss', { detail: myColor === 'black' ? '⚫ 5 taş sıraladın!' : '⚪ Rakip 5 taş sıraladı' });
         if (soundOn) playSound('win');
       } else if (nb.every(Boolean)) {
-        setBoard(nb); setWinner('draw'); onGameEnd('draw');
+        setBoard(nb); setWinner('draw'); onGameEnd('draw', { detail: '🤝 Tahta doldu' });
       } else {
         setBoard(nb); setTurn(myColor === 'black' ? 'white' : 'black'); setLastMove(idx);
       }
@@ -3258,10 +3258,10 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     if (soundOn) playSound('place');
     if (checkGomokuWin(nb, r, c, turn)) {
       setBoard(nb); setWinner(turn); setLastMove(idx);
-      onGameEnd(turn === 'black' ? 'win' : 'loss');
+      onGameEnd(turn === 'black' ? 'win' : 'loss', { detail: turn === 'black' ? '⚫ 5 taş sıraladın!' : '⚪ Rakip 5 taş sıraladı' });
       if (soundOn) playSound(turn === 'black' ? 'win' : 'lose'); return;
     }
-    if (nb.every(Boolean)) { setBoard(nb); setWinner('draw'); onGameEnd('draw'); return; }
+    if (nb.every(Boolean)) { setBoard(nb); setWinner('draw'); onGameEnd('draw', { detail: '🤝 Tahta doldu' }); return; }
     const next = turn === 'black' ? 'white' : 'black';
     setBoard(nb); setTurn(next); setLastMove(idx);
     if (mode === 'bot' && next === 'white') {
@@ -3297,7 +3297,7 @@ function GomokuGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
         const nb2=[...nb]; nb2[pick]='white';
         if (soundOn) playSound('place');
         const pr=Math.floor(pick/GT_SIZE),pc=pick%GT_SIZE;
-        if (checkGomokuWin(nb2,pr,pc,'white')) { setBoard(nb2); setWinner('white'); setLastMove(pick); onGameEnd('loss'); if(soundOn)playSound('lose'); }
+        if (checkGomokuWin(nb2,pr,pc,'white')) { setBoard(nb2); setWinner('white'); setLastMove(pick); onGameEnd('loss', { detail: '⚪ Rakip 5 taş sıraladı' }); if(soundOn)playSound('lose'); }
         else { setBoard(nb2); setTurn('black'); setLastMove(pick); }
         setBotThinking(false);
       }, 350);
@@ -3408,7 +3408,7 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       setBgColor(mv.winner===onlineProps.myIndex?'#22C55E':'#EF4444');
       if(soundOn)playSound(mv.winner===onlineProps.myIndex?'place':'lose');
       const nr=mv.round+1;roundRef.current=nr;setRound(nr);
-      if(nr>=MAX_ROUNDS){setTimeout(function(){onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');},1500);return;}
+      if(nr>=MAX_ROUNDS){setTimeout(function(){onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss', { detail: '⚡ ' + mv.scores[onlineProps.myIndex] + ' — ' + mv.scores[1-onlineProps.myIndex] });},1500);return;}
       setTimeout(function(){if(isHost)startRound();},1600);
     } else if(mv.type==='rg_restart'){
       clearTimeout(timerRef.current);setScores([0,0]);setRound(0);
@@ -3452,7 +3452,7 @@ function ReactionGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     setScores(ns);setLastWinner(winner);setPhase('result');
     if(isOnline)onlineProps.onMove({type:'rg_result',winner,scores:ns,round:currentRound,_ts:Date.now()});
     var nr=currentRound+1;roundRef.current=nr;setRound(nr);
-    if(nr>=MAX_ROUNDS){setTimeout(function(){onGameEnd(ns[isOnline?onlineProps.myIndex:0]>=ns[isOnline?1-onlineProps.myIndex:1]?'win':'loss');},1500);return;}
+    if(nr>=MAX_ROUNDS){setTimeout(function(){onGameEnd(ns[isOnline?onlineProps.myIndex:0]>=ns[isOnline?1-onlineProps.myIndex:1]?'win':'loss', { detail: '⚡ ' + ns[isOnline?onlineProps.myIndex:0] + ' — ' + ns[isOnline?1-onlineProps.myIndex:1] });},1500);return;}
     setTimeout(function(){if(isHost||!isOnline)startRound();},1500);
   };
 
@@ -3598,7 +3598,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       if(soundOn)playSound(mv.winner===onlineProps.myIndex?'place':'lose');
       const nr=mv.round+1;
       setTimeout(function(){
-        if(nr>=MAX){setRound(nr);onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');return;}
+        if(nr>=MAX){setRound(nr);onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss', { detail: '🧮 ' + mv.scores[onlineProps.myIndex] + ' — ' + mv.scores[1-onlineProps.myIndex] });return;}
         setRound(nr);setAnswered(false);setLastW(null);roundDone.current=false;
         if(isHost){const nq=genMathQ();setQ(nq);sentQ.current=false;}
         else setQ(null);
@@ -3623,7 +3623,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       onlineProps.onMove({type:'md_result',winner,scores:ns,round,_ts:Date.now()});
       const nr=round+1;
       setTimeout(function(){
-        if(nr>=MAX){setRound(nr);onGameEnd(ns[onlineProps.myIndex]>=ns[1-onlineProps.myIndex]?'win':'loss');return;}
+        if(nr>=MAX){setRound(nr);onGameEnd(ns[onlineProps.myIndex]>=ns[1-onlineProps.myIndex]?'win':'loss', { detail: '🧮 ' + ns[onlineProps.myIndex] + ' — ' + ns[1-onlineProps.myIndex] });return;}
         setRound(nr);setAnswered(false);setLastW(null);roundDone.current=false;
         if(isHost){const nq=genMathQ();setQ(nq);sentQ.current=false;}
         else setQ(null);
@@ -3637,7 +3637,7 @@ function MathDuelGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     if(soundOn)playSound(ok?'place':'lose');
     const nr=round+1;
     setTimeout(function(){
-      if(nr>=MAX){setRound(nr);onGameEnd(ns[0]>=ns[1]?'win':'loss');if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
+      if(nr>=MAX){setRound(nr);onGameEnd(ns[0]>=ns[1]?'win':'loss', { detail: '🧮 ' + ns[0] + ' — ' + ns[1] });if(soundOn)playSound(ns[0]>=ns[1]?'win':'lose');return;}
       setRound(nr);setQ(genMathQ());setAnswered(false);setLastW(null);
     },1200);
   };
@@ -3796,7 +3796,7 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       const c1=d[mv.idx*2],c2=d[mv.idx*2+1];
       const w=c1&&c2?(c1.value>c2.value?0:c2.value>c1.value?1:-1):-1;
       setRw(w);setScores(mv.scores);
-      if(mv.idx+1>=TOTAL){setTimeout(()=>{const ms=mv.scores[onlineProps.myIndex],os=mv.scores[1-onlineProps.myIndex];onGameEnd(ms>os?'win':ms<os?'loss':'draw');if(soundOn)playSound('win');},1500);}
+      if(mv.idx+1>=TOTAL){setTimeout(()=>{const ms=mv.scores[onlineProps.myIndex],os=mv.scores[1-onlineProps.myIndex];onGameEnd(ms>os?'win':ms<os?'loss':'draw', { detail: '🃏 ' + ms + ' — ' + os + ' el' });if(soundOn)playSound('win');},1500);}
     } else if(mv.type==='cb_next'){
       setIdx(mv.idx);setRev(false);setRw(null);
     } else if(mv.type==='cb_restart'&&mv.deck){
@@ -3842,7 +3842,7 @@ function CardBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     const ns=[...scores];if(w===0)ns[0]++;else if(w===1)ns[1]++;
     setScores(ns);
     if(isOnline)onlineProps.onMove({type:'cb_reveal',idx,scores:ns,_ts:Date.now()});
-    if(idx+1>=TOTAL){setTimeout(()=>{const mi=isOnline?onlineProps.myIndex:0,oi=isOnline?1-onlineProps.myIndex:1;onGameEnd(ns[mi]>ns[oi]?'win':ns[mi]<ns[oi]?'loss':'draw');if(soundOn)playSound('win');},1500);}
+    if(idx+1>=TOTAL){setTimeout(()=>{const mi=isOnline?onlineProps.myIndex:0,oi=isOnline?1-onlineProps.myIndex:1;onGameEnd(ns[mi]>ns[oi]?'win':ns[mi]<ns[oi]?'loss':'draw', { detail: '🃏 ' + ns[mi] + ' — ' + ns[oi] + ' el' });if(soundOn)playSound('win');},1500);}
   };
   const next=()=>{
     const ni=idx+1;setIdx(ni);setRev(false);setRw(null);
@@ -3951,7 +3951,7 @@ function MemoryBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
             setTimeout(()=>{
               setCs(c=>c.map((card,ci)=>ci===a||ci===b?{...card,matched:true,flipped:true}:card));
               setScores(sc=>{const nsc=[...sc];nsc[flippingTurn]++;
-                if(nsc.reduce((s,v)=>s+v,0)===12){const mi=onlineProps?.myIndex??0,oi=1-mi;const r=nsc[mi]>nsc[oi]?'win':nsc[mi]<nsc[oi]?'loss':'draw';onGameEnd(r);if(soundOn)playSound('win');}
+                if(nsc.reduce((s,v)=>s+v,0)===12){const mi=onlineProps?.myIndex??0,oi=1-mi;const r=nsc[mi]>nsc[oi]?'win':nsc[mi]<nsc[oi]?'loss':'draw';onGameEnd(r, { detail: '🃏 ' + nsc[mi] + ' — ' + nsc[oi] + ' eşleşme' });if(soundOn)playSound('win');}
                 return nsc;});
               setFlipped([]);setLocked(false);
             },500);
@@ -4086,7 +4086,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
       setRoundResult({winner:mv.winner});
       if(soundOn)playSound(mv.winner===onlineProps.myIndex?'place':'lose');
       const nr=mv.ri+1;
-      if(nr>=RACE_WORDS.length){setTimeout(function(){onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss');},1800);return;}
+      if(nr>=RACE_WORDS.length){setTimeout(function(){onGameEnd(mv.scores[onlineProps.myIndex]>=mv.scores[1-onlineProps.myIndex]?'win':'loss', { detail: '📝 ' + mv.scores[onlineProps.myIndex] + ' — ' + mv.scores[1-onlineProps.myIndex] + ' kelime' });},1800);return;}
       setTimeout(function(){
         setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;
         if(isHost){const ni=RACE_WORDS[nr];const ns2=scrmbl(ni.word);setRi(nr);setScr(ns2);sentWord.current=false;}
@@ -4125,7 +4125,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     if(soundOn)playSound('place');
     onlineProps.onMove({type:'wr_result',winner,scores:ns,ri,_ts:Date.now()});
     const nr=ri+1;
-    if(nr>=RACE_WORDS.length){setTimeout(function(){onGameEnd(ns[onlineProps.myIndex]>=ns[1-onlineProps.myIndex]?'win':'loss');},1800);return;}
+    if(nr>=RACE_WORDS.length){setTimeout(function(){onGameEnd(ns[onlineProps.myIndex]>=ns[1-onlineProps.myIndex]?'win':'loss', { detail: '📝 ' + ns[onlineProps.myIndex] + ' — ' + ns[1-onlineProps.myIndex] + ' kelime' });},1800);return;}
     setTimeout(function(){
       setMyInput('');setRevealed(false);setRoundResult(null);roundDone.current=false;
       if(isHost){const ni2=RACE_WORDS[nr];const ns3=scrmbl(ni2.word);setRi(nr);setScr(ns3);sentWord.current=false;}
@@ -4141,7 +4141,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     if(ok||na.every(Boolean)){
       setRevealed(true);
       const nr=ri+1;
-      if(nr>=RACE_WORDS.length){setTimeout(()=>{onGameEnd(ns[0]>=ns[1]?'win':'loss');},1500);return;}
+      if(nr>=RACE_WORDS.length){setTimeout(()=>{onGameEnd(ns[0]>=ns[1]?'win':'loss', { detail: '📝 ' + ns[0] + ' — ' + ns[1] + ' kelime' });},1500);return;}
       setTimeout(()=>{setRi(nr);setInputs(['','']);setAnswered([false,false]);setRevealed(false);},1800);
     }
   };
@@ -4262,7 +4262,7 @@ function MangalaGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
     const w = total[0] > total[1] ? 0 : total[0] < total[1] ? 1 : 2;
     setWinner(w);
     var myIdx = onlineProps ? onlineProps.myIndex : 0;
-    onGameEnd(w === myIdx ? 'win' : w === 2 ? 'draw' : 'loss');
+    onGameEnd(w === myIdx ? 'win' : w === 2 ? 'draw' : 'loss', { detail: '🫙 ' + total[myIdx] + ' — ' + total[1-myIdx] + ' taş' });
   };
 
   const applyPit = (pitIdx, currentTurn) => {
@@ -4467,7 +4467,7 @@ function SimonGame({ onGameEnd, soundOn }) {
     if (colorId !== seq[playerIdx]) {
       if (soundOn) playSound('lose');
       setPhase('over');
-      onGameEnd('loss');
+      onGameEnd('loss', { detail: '🔴 Seviye ' + level });
       return;
     }
     const next = playerIdx + 1;
@@ -4563,7 +4563,7 @@ function LightsOutGame({ onGameEnd, soundOn }) {
     });
     if (soundOn) playSound('click');
     setGrid(ng); setMoves(m => m + 1);
-    if (ng.every(v => !v)) { setWon(true); if (soundOn) playSound('win'); onGameEnd('win'); }
+    if (ng.every(v => !v)) { setWon(true); if (soundOn) playSound('win'); onGameEnd('win', { detail: '💡 ' + (moves + 1) + ' hamlede' }); }
   };
 
   if (!diff) return (
@@ -4643,7 +4643,7 @@ function NimGame({ onGameEnd, soundOn, onlineProps, onGoOnline, game }) {
         nr[mv.row] = Math.max(0, nr[mv.row] - mv.count);
         if (nr.every(function(v){ return v===0; })) {
           setGameOver(true); setWinner(1 - mv.playerIndex);
-          onGameEnd(mv.playerIndex === onlineProps.myIndex ? 'win' : 'loss');
+          onGameEnd(mv.playerIndex === onlineProps.myIndex ? 'win' : 'loss', { detail: mv.playerIndex === onlineProps.myIndex ? '🏆 Son çubuğu bıraktırdın!' : '😅 Son çubuğu sen aldın' });
         } else {
           setTurn(function(t){ return 1 - t; });
         }
@@ -4698,7 +4698,7 @@ function NimGame({ onGameEnd, soundOn, onlineProps, onGoOnline, game }) {
       setRows(nr2); setSelectedRow(null); setRemoving(0);
       if (nr2.every(function(v){ return v===0; })) {
         setGameOver(true); setWinner(1-myIdx);
-        onGameEnd('loss');
+        onGameEnd('loss', { detail: '😅 Son çubuğu sen aldın' });
       } else {
         setTurn(function(t){ return 1-t; });
       }
@@ -4710,7 +4710,7 @@ function NimGame({ onGameEnd, soundOn, onlineProps, onGoOnline, game }) {
     setRows(nr); setSelectedRow(null); setRemoving(0);
     if (loser !== null) {
       setGameOver(true); setWinner(1 - loser);
-      onGameEnd(loser === 0 ? 'loss' : 'win'); return;
+      onGameEnd(loser === 0 ? 'loss' : 'win', { detail: loser === 0 ? '😅 Son çubuğu sen aldın' : '🏆 Son çubuğu bıraktırdın!' }); return;
     }
     const next = 1 - turn; setTurn(next);
     if (mode === 'bot' && next === 1) {
@@ -4719,7 +4719,7 @@ function NimGame({ onGameEnd, soundOn, onlineProps, onGoOnline, game }) {
         const { rows: nr2, loser: l2 } = applyMove(nr, row, count);
         if (soundOn) playSound('place');
         setRows(nr2); setTurn(0);
-        if (l2 !== null) { setGameOver(true); setWinner(0); onGameEnd('win'); }
+        if (l2 !== null) { setGameOver(true); setWinner(0); onGameEnd('win', { detail: '🏆 Son çubuğu bıraktırdın!' }); }
       }, 700);
     }
   };
@@ -4904,11 +4904,11 @@ function BrickBreakerGame({ onGameEnd, soundOn }) {
     // ball lost
     if (b.y - BALL_R > CH) {
       s.lives--; setLives(s.lives);
-      if (s.lives <= 0) { cancelAnimationFrame(rafRef.current); setPhase('over'); onGameEnd('loss'); return; }
+      if (s.lives <= 0) { cancelAnimationFrame(rafRef.current); setPhase('over'); onGameEnd('loss', { detail: '🧱 Skor: ' + s.scoreInc + ' · Seviye ' + level }); return; }
       b.x = canvasSize/2; b.y = p.y - 20; b.vx = 3+level*0.5; b.vy = -(3+level*0.5); s.launched = false;
     }
     // level won
-    if (s.bricks.every(br => !br.alive)) { cancelAnimationFrame(rafRef.current); setPhase('won'); onGameEnd('win'); return; }
+    if (s.bricks.every(br => !br.alive)) { cancelAnimationFrame(rafRef.current); setPhase('won'); onGameEnd('win', { detail: '🧱 Skor: ' + s.scoreInc }); return; }
     drawFrame(ctx, s);
     rafRef.current = requestAnimationFrame(loop);
   };
@@ -6334,17 +6334,19 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
         animation: 'fadeUp 0.4s ease',
       }}
     >
-      {/* Tab bar */}
-      <div style={{ display:'flex', gap:4, marginBottom:20, background:'var(--surface-hover)', borderRadius:14, padding:4 }}>
-        {TABS.map(function(tab) {
-          var active = activeTab === tab.id;
-          return (
-            <button key={tab.id} onClick={function(){ setActiveTab(tab.id); }}
-              style={{ flex:1, padding:'9px 4px', borderRadius:10, border:'none', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--text)' : 'var(--text-secondary)', fontWeight: active ? 700 : 500, fontSize:12, cursor:'pointer', transition:'all 0.2s', boxShadow: active ? 'var(--shadow)' : 'none', whiteSpace:'nowrap' }}>
-              {tab.label}
-            </button>
-          );
-        })}
+      {/* Tab bar — horizontally scrollable on narrow screens */}
+      <div style={{ overflowX:'auto', marginBottom:20, WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
+        <div style={{ display:'flex', gap:4, background:'var(--surface-hover)', borderRadius:14, padding:4, minWidth:'max-content' }}>
+          {TABS.map(function(tab) {
+            var active = activeTab === tab.id;
+            return (
+              <button key={tab.id} onClick={function(){ setActiveTab(tab.id); }}
+                style={{ flexShrink:0, padding:'9px 12px', borderRadius:10, border:'none', background: active ? 'var(--surface)' : 'transparent', color: active ? 'var(--text)' : 'var(--text-secondary)', fontWeight: active ? 700 : 500, fontSize:12, cursor:'pointer', transition:'all 0.2s', boxShadow: active ? 'var(--shadow)' : 'none', whiteSpace:'nowrap' }}>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* PROFIL TAB */}
@@ -7851,10 +7853,10 @@ const XOXGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
     const r = checkWinner(nb);
     if (r) {
       setWinner(r.winner); setWinLine(r.line);
-      const diffOpts = difficulty ? { difficulty } : undefined;
-      if (r.winner === 'draw') { setScores(s=>({...s,draw:s.draw+1})); onGameEnd('draw', diffOpts); }
-      else if (r.winner === 'X') { setScores(s=>({...s,x:s.x+1})); onGameEnd('win', diffOpts); if(soundOn)playSound('win'); setShowConfetti(true); setTimeout(()=>setShowConfetti(false),2000); }
-      else { setScores(s=>({...s,o:s.o+1})); onGameEnd('loss', diffOpts); if(soundOn)playSound('lose'); }
+      const diffOpts = difficulty ? { difficulty } : {};
+      if (r.winner === 'draw') { setScores(s=>({...s,draw:s.draw+1})); onGameEnd('draw', { ...diffOpts, detail: '🤝 Berabere' }); }
+      else if (r.winner === 'X') { setScores(s=>({...s,x:s.x+1})); onGameEnd('win', { ...diffOpts, detail: '❌ Kazandın — ' + (scores.x+1) + '-' + scores.o + ' skor' }); if(soundOn)playSound('win'); setShowConfetti(true); setTimeout(()=>setShowConfetti(false),2000); }
+      else { setScores(s=>({...s,o:s.o+1})); onGameEnd('loss', { ...diffOpts, detail: '⭕ Bot kazandı' }); if(soundOn)playSound('lose'); }
       return true;
     }
     return false;
@@ -8422,7 +8424,7 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
                 setScores(ns);
                 if(ns[0]>=3||ns[1]>=3){
                   const w=ns[0]>=3?0:1;
-                  setTimeout(()=>{ setGameWinner(w); onGameEnd(w===0?'win':'loss'); if(w===0&&soundOn)playSound('win'); if(w===0){setShowConfetti(true);setTimeout(()=>setShowConfetti(false),2000);} },1500);
+                  setTimeout(()=>{ setGameWinner(w); onGameEnd(w===0?'win':'loss', { detail: '✂️ ' + ns[0] + ' — ' + ns[1] }); if(w===0&&soundOn)playSound('win'); if(w===0){setShowConfetti(true);setTimeout(()=>setShowConfetti(false),2000);} },1500);
                 }
               }
             }} style={{padding:'20px 16px',borderRadius:14,border:'2px solid var(--border)',background:'var(--surface)',fontSize:40,cursor:'pointer',transition:'transform 0.1s',flexDirection:'column',display:'flex',alignItems:'center',gap:6}}>
@@ -8464,7 +8466,7 @@ const RPSGame = ({ game, players, onGameEnd, soundOn, onGoOnline }) => {
       const w = ns[0] >= 3 ? 0 : 1;
       setTimeout(() => {
         setGameWinner(w);
-        onGameEnd(w === 0 ? 'win' : 'loss');
+        onGameEnd(w === 0 ? 'win' : 'loss', { detail: '✂️ ' + ns[0] + ' — ' + ns[1] });
         if (w === 0 && soundOn) playSound('win');
         if (w === 0) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 2000); }
       }, 1500);
@@ -8817,7 +8819,7 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
         gameOverRef.current = true;
         setGameState('over');
         if (soundOnRef.current) playSound('explode');
-        onGameEndRef.current('loss');
+        onGameEndRef.current('loss', { detail: '🐍 Skor: ' + scoreRef.current });
       }
       return;
     }
@@ -8827,7 +8829,7 @@ const SnakeGame = ({ game, onGameEnd, soundOn, dark }) => {
         gameOverRef.current = true;
         setGameState('over');
         if (soundOnRef.current) playSound('explode');
-        onGameEndRef.current('loss');
+        onGameEndRef.current('loss', { detail: '🐍 Skor: ' + scoreRef.current });
       }
       return;
     }
@@ -9500,37 +9502,89 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
   var resultText = result === 'win' ? 'kazandım' : result === 'loss' ? 'kaybettim' : 'berabere kaldım';
   var shareText = 'oyun.club\'ta ' + gameName + ' oynadım ve ' + resultText + '! ' + resultEmoji + (detail ? '\n' + detail : '') + '\n\n+' + xpGain + ' XP kazandım 🎮\n\nSen de oyna: oyun.club';
 
+  var accentWin = ['#7C3AED','#A855F7'];
+  var accentLoss = ['#DC2626','#EF4444'];
+  var accentDraw = ['#0369A1','#0EA5E9'];
+  var accent = result === 'win' ? accentWin : result === 'loss' ? accentLoss : accentDraw;
+  var streak = (stats && stats.streak && stats.streak.count) || 0;
+
   function generateShareCard(callback) {
     try {
+      var W = 1080, H = 1080;
       var canvas = document.createElement('canvas');
-      canvas.width = 540; canvas.height = 300;
+      canvas.width = W; canvas.height = H;
       var ctx = canvas.getContext('2d');
-      // Background gradient
-      var grad = ctx.createLinearGradient(0, 0, 540, 300);
-      if (result === 'win') { grad.addColorStop(0, '#1a0a33'); grad.addColorStop(1, '#3d1a6e'); }
-      else if (result === 'loss') { grad.addColorStop(0, '#1a0a0a'); grad.addColorStop(1, '#3d1010'); }
-      else { grad.addColorStop(0, '#0a1a1a'); grad.addColorStop(1, '#0d3030'); }
-      ctx.fillStyle = grad; ctx.fillRect(0, 0, 540, 300);
-      // Card shine overlay
-      ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.beginPath(); ctx.ellipse(270, -30, 260, 120, 0, 0, Math.PI*2); ctx.fill();
-      // Result emoji
-      ctx.font = '80px serif'; ctx.textAlign = 'center'; ctx.fillText(resultEmoji, 270, 105);
+
+      // Dark background
+      ctx.fillStyle = '#0D0D1A'; ctx.fillRect(0, 0, W, H);
+
+      // Glow blob top-left
+      var g1 = ctx.createRadialGradient(200, 200, 0, 200, 200, 420);
+      g1.addColorStop(0, accent[0] + '55'); g1.addColorStop(1, 'transparent');
+      ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+
+      // Glow blob bottom-right
+      var g2 = ctx.createRadialGradient(900, 900, 0, 900, 900, 380);
+      g2.addColorStop(0, accent[1] + '44'); g2.addColorStop(1, 'transparent');
+      ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+
+      // Card panel
+      ctx.save();
+      ctx.shadowColor = accent[0] + '66'; ctx.shadowBlur = 60;
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.beginPath(); ctx.roundRect(60, 60, W-120, H-120, 48); ctx.fill();
+      ctx.restore();
+
+      // Accent top bar
+      var bar = ctx.createLinearGradient(60, 60, W-60, 60);
+      bar.addColorStop(0, accent[0]); bar.addColorStop(1, accent[1]);
+      ctx.fillStyle = bar;
+      ctx.beginPath(); ctx.roundRect(60, 60, W-120, 10, [48,48,0,0]); ctx.fill();
+
+      // Big result emoji
+      ctx.font = '220px serif'; ctx.textAlign = 'center';
+      ctx.fillText(resultEmoji, W/2, 380);
+
       // Game name
-      ctx.font = 'bold 28px sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText(gameName, 270, 148);
-      // Result text
-      ctx.font = '20px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.fillText(result === 'win' ? 'Kazandım!' : result === 'loss' ? 'Kaybettim' : 'Berabere!', 270, 178);
-      // XP pill
-      ctx.fillStyle = 'rgba(168,85,247,0.3)'; ctx.beginPath(); ctx.roundRect(200, 195, 140, 36, 18); ctx.fill();
-      ctx.font = 'bold 17px sans-serif'; ctx.fillStyle = '#d8b4fe'; ctx.fillText('⚡ +' + xpGain + ' XP', 270, 219);
-      // Streak
-      var streak = (stats && stats.streak && stats.streak.count) || 0;
-      if (streak > 1) {
-        ctx.font = '14px sans-serif'; ctx.fillStyle = '#fbbf24';
-        ctx.fillText('🔥 ' + streak + ' günlük seri', 270, 250);
+      ctx.font = 'bold 72px system-ui,sans-serif'; ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(gameName, W/2, 490);
+
+      // Result text with gradient fill
+      var rg = ctx.createLinearGradient(W/2-200, 0, W/2+200, 0);
+      rg.addColorStop(0, accent[0]); rg.addColorStop(1, accent[1]);
+      ctx.fillStyle = rg;
+      ctx.font = 'bold 88px system-ui,sans-serif';
+      ctx.fillText(result === 'win' ? 'KAZANDIM!' : result === 'loss' ? 'KAYBETTİM' : 'BERABERE!', W/2, 600);
+
+      // Detail line
+      if (detail) {
+        ctx.font = '44px system-ui,sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.65)';
+        ctx.fillText(detail, W/2, 668);
       }
-      // Branding
-      ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText('oyun.club', 270, 282);
+
+      // Divider
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(160, 710); ctx.lineTo(W-160, 710); ctx.stroke();
+
+      // XP pill
+      var xpW = 280, xpH = 72, xpX = W/2 - xpW/2, xpY = 740;
+      var xpGrad = ctx.createLinearGradient(xpX, xpY, xpX+xpW, xpY);
+      xpGrad.addColorStop(0, accent[0]); xpGrad.addColorStop(1, accent[1]);
+      ctx.fillStyle = xpGrad;
+      ctx.beginPath(); ctx.roundRect(xpX, xpY, xpW, xpH, 36); ctx.fill();
+      ctx.font = 'bold 38px system-ui,sans-serif'; ctx.fillStyle = '#fff';
+      ctx.fillText('⚡ +' + xpGain + ' XP', W/2, xpY + 48);
+
+      // Streak badge
+      if (streak > 1) {
+        ctx.font = '38px system-ui,sans-serif'; ctx.fillStyle = '#FCD34D';
+        ctx.fillText('🔥 ' + streak + ' günlük seri', W/2, 870);
+      }
+
+      // Branding bottom
+      ctx.font = 'bold 36px system-ui,sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillText('oyun.club', W/2, H - 80);
+
       callback(canvas.toDataURL('image/png'));
     } catch(e) { callback(null); }
   }
@@ -9551,6 +9605,12 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
     });
   }
 
+  function doChallenge() {
+    var challengeText = '🎮 ' + gameName + '’da ' + (detail || (result === 'win' ? 'kazandım' : 'oynadım')) + '!\n\nSeni meydan okuyorum — daha iyisini yapabilir misin? 💪\n\n👉 oyun.club';
+    if (navigator.share) { navigator.share({ text: challengeText, url: 'https://oyun.club' }).catch(function(){}); }
+    else { window.open('https://wa.me/?text=' + encodeURIComponent(challengeText), '_blank'); }
+  }
+
   function doShareText() {
     if (navigator.share) { navigator.share({ text: shareText, url: 'https://oyun.club' }).catch(function(){}); }
     else { window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank'); }
@@ -9562,53 +9622,54 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
   }
 
   function doShareInstagram() {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(shareText + '\n\nhttps://oyun.club').then(function() {
-        alert('Metin kopyalandı! Instagram\'ı aç ve hikayene yapıştır.');
-      }).catch(function() {
-        alert('Instagram paylaşımı için: oyun.club adresini ziyaret edip ekran görüntüsü alabilirsin.');
-      });
-    } else {
-      alert('Instagram paylaşımı için ekran görüntüsü alarak paylaşabilirsin!');
-    }
+    generateShareCard(function(dataUrl) {
+      if (dataUrl) {
+        var link = document.createElement('a'); link.download = 'oyun-club-sonuc.png'; link.href = dataUrl; link.click();
+        setTimeout(function(){ alert('Görsel indirildi! Instagram Hikaye\'ne yükle 📸'); }, 300);
+      } else {
+        if (navigator.clipboard) navigator.clipboard.writeText(shareText + '\n\nhttps://oyun.club').then(function(){ alert('Metin kopyalandı! Instagram\'ı aç ve yapıştır.'); });
+      }
+    });
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', maxWidth: 320, width: '100%', textAlign: 'center', animation: 'fadeUp 0.3s ease' }} onClick={function(e){e.stopPropagation();}}>
-        <div style={{ fontSize: 52, marginBottom: 8 }}>{resultEmoji}</div>
-        <h3 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{gameName}</h3>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: detail ? 4 : 6, fontSize: 15 }}>
-          {result === 'win' ? 'Kazandın!' : result === 'loss' ? 'Kaybettin' : 'Berabere!'}
-        </p>
-        {detail && (
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6, background: 'var(--surface-hover)', borderRadius: 10, padding: '6px 12px', fontWeight: 500 }}>
-            {detail}
-          </p>
-        )}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(134,59,255,0.12)', color: '#a855f7', padding: '6px 16px', borderRadius: 999, fontWeight: 700, fontSize: 14, marginBottom: 20 }}>
-          ⚡ +{xpGain} XP
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.82)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div style={{ background:'var(--surface)', borderRadius:24, padding:'24px 20px', maxWidth:340, width:'100%', textAlign:'center', animation:'fadeUp 0.3s ease', boxShadow:'0 24px 80px rgba(0,0,0,0.6)' }} onClick={function(e){e.stopPropagation();}}>
+
+        {/* Result header */}
+        <div style={{ background:'linear-gradient(135deg,'+accent[0]+','+accent[1]+')', borderRadius:16, padding:'20px 16px', marginBottom:16 }}>
+          <div style={{ fontSize:48, marginBottom:4 }}>{resultEmoji}</div>
+          <div style={{ color:'#fff', fontWeight:900, fontSize:22, letterSpacing:-0.5 }}>{gameName}</div>
+          <div style={{ color:'rgba(255,255,255,0.85)', fontWeight:700, fontSize:17, marginTop:2 }}>
+            {result === 'win' ? 'Kazandın! 🎉' : result === 'loss' ? 'Kaybettin 😅' : 'Berabere! 🤝'}
+          </div>
+          {detail && <div style={{ color:'rgba(255,255,255,0.7)', fontSize:13, marginTop:6, fontWeight:500 }}>{detail}</div>}
         </div>
+
+        {/* XP + streak row */}
+        <div style={{ display:'flex', gap:8, justifyContent:'center', marginBottom:16 }}>
+          <span style={{ background:'rgba(134,59,255,0.12)', color:'#a855f7', padding:'6px 14px', borderRadius:999, fontWeight:700, fontSize:14 }}>⚡ +{xpGain} XP</span>
+          {streak > 1 && <span style={{ background:'rgba(251,191,36,0.12)', color:'#F59E0B', padding:'6px 14px', borderRadius:999, fontWeight:700, fontSize:14 }}>🔥 {streak} gün seri</span>}
+        </div>
+
+        {/* Action buttons */}
         {onReplay && (
-          <button onClick={onReplay} style={{ display: 'block', width: '100%', padding: 14, borderRadius: 12, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+          <button onClick={onReplay} style={{ display:'block', width:'100%', padding:13, borderRadius:12, background:'linear-gradient(135deg,#863bff,#5b21b6)', color:'#fff', border:'none', fontWeight:700, fontSize:15, cursor:'pointer', marginBottom:8 }}>
             🔄 Tekrar Oyna
           </button>
         )}
-        <button onClick={doShareCard} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: '#25D366', color: '#fff', border: 'none', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 8 }}>
-          🖼️ Kart Paylaş
+        <button onClick={doChallenge} style={{ display:'block', width:'100%', padding:13, borderRadius:12, background:'linear-gradient(135deg,#F59E0B,#EF4444)', color:'#fff', border:'none', fontWeight:700, fontSize:15, cursor:'pointer', marginBottom:8 }}>
+          ⚔️ Arkadaşını Meydan Oku
         </button>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-          <button onClick={doShareText} style={{ padding: '10px 4px', borderRadius: 12, background: 'rgba(37,211,102,0.15)', color: '#25D366', border: '1px solid rgba(37,211,102,0.3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            WhatsApp
-          </button>
-          <button onClick={doShareFacebook} style={{ padding: '10px 4px', borderRadius: 12, background: 'rgba(24,119,242,0.12)', color: '#1877F2', border: '1px solid rgba(24,119,242,0.3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Facebook
-          </button>
-          <button onClick={doShareInstagram} style={{ padding: '10px 4px', borderRadius: 12, background: 'rgba(225,48,108,0.1)', color: '#E1306C', border: '1px solid rgba(225,48,108,0.3)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Instagram
-          </button>
+        <button onClick={doShareCard} style={{ display:'block', width:'100%', padding:12, borderRadius:12, background:'#25D366', color:'#fff', border:'none', fontWeight:700, fontSize:14, cursor:'pointer', marginBottom:8 }}>
+          🖼️ Kart Paylaş (1080×1080)
+        </button>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginBottom:10 }}>
+          <button onClick={doShareText} style={{ padding:'9px 4px', borderRadius:10, background:'rgba(37,211,102,0.12)', color:'#25D366', border:'1px solid rgba(37,211,102,0.25)', fontWeight:700, fontSize:11, cursor:'pointer' }}>WhatsApp</button>
+          <button onClick={doShareFacebook} style={{ padding:'9px 4px', borderRadius:10, background:'rgba(24,119,242,0.1)', color:'#1877F2', border:'1px solid rgba(24,119,242,0.25)', fontWeight:700, fontSize:11, cursor:'pointer' }}>Facebook</button>
+          <button onClick={doShareInstagram} style={{ padding:'9px 4px', borderRadius:10, background:'rgba(225,48,108,0.1)', color:'#E1306C', border:'1px solid rgba(225,48,108,0.25)', fontWeight:700, fontSize:11, cursor:'pointer' }}>Instagram</button>
         </div>
-        <button onClick={onClose} style={{ display: 'block', width: '100%', padding: 12, borderRadius: 12, background: 'var(--surface-hover)', color: 'var(--text)', border: '1px solid var(--border)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+        <button onClick={onClose} style={{ display:'block', width:'100%', padding:11, borderRadius:12, background:'var(--surface-hover)', color:'var(--text)', border:'1px solid var(--border)', fontWeight:600, fontSize:14, cursor:'pointer' }}>
           Devam Et
         </button>
       </div>
