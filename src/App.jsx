@@ -9863,7 +9863,7 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
         fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob) {
           var file = new File([blob], 'oyun-club-sonuc.png', { type: 'image/png' });
           if (navigator.canShare({ files: [file] })) {
-            navigator.share({ files: [file], text: shareText, url: 'https://oyun.club' }).catch(function(){ doShareText(); });
+            navigator.share({ files: [file], text: shareText }).catch(function(){ doShareText(); });
           } else { doShareText(); }
         }).catch(function(){ doShareText(); });
       } else {
@@ -9873,32 +9873,31 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
   }
 
   function doChallenge() {
-    var challengeText = "⚔️ " + gameName + "da " + (detail || (result === 'win' ? 'kazandım' : 'oynadım')) + "!\n\nSeni meydan okuyorum — daha iyisini yapabilir misin? 💪";
+    var challengeText = "⚔️ " + gameName + "da " + (detail || (result === 'win' ? 'kazandım' : 'oynadım')) + "!\n\nSeni meydan okuyorum — daha iyisini yapabilir misin? 💪\n\n👉 oyun.club";
     generateShareCard(function(dataUrl) {
-      var shareUrl = 'https://oyun.club';
       if (dataUrl && navigator.share && navigator.canShare) {
         fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob) {
           var file = new File([blob], 'meydan-oku.png', { type: 'image/png' });
           if (navigator.canShare({ files: [file] })) {
-            navigator.share({ files: [file], text: challengeText, url: shareUrl }).catch(function() {
-              navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+            navigator.share({ files: [file], text: challengeText }).catch(function() {
+              navigator.share({ text: challengeText }).catch(function(){});
             });
           } else {
-            navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+            navigator.share({ text: challengeText }).catch(function(){});
           }
         }).catch(function() {
-          navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+          navigator.share({ text: challengeText }).catch(function(){});
         });
       } else if (navigator.share) {
-        navigator.share({ text: challengeText, url: shareUrl }).catch(function(){});
+        navigator.share({ text: challengeText }).catch(function(){});
       } else {
-        window.open('https://wa.me/?text=' + encodeURIComponent(challengeText + '\n' + shareUrl), '_blank');
+        window.open('https://wa.me/?text=' + encodeURIComponent(challengeText), '_blank');
       }
     });
   }
 
   function doShareText() {
-    if (navigator.share) { navigator.share({ text: shareText, url: 'https://oyun.club' }).catch(function(){}); }
+    if (navigator.share) { navigator.share({ text: shareText }).catch(function(){}); }
     else { window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank'); }
   }
 
@@ -9913,7 +9912,7 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
         var link = document.createElement('a'); link.download = 'oyun-club-sonuc.png'; link.href = dataUrl; link.click();
         setTimeout(function(){ alert('Görsel indirildi! Instagram Hikaye\'ne yükle 📸'); }, 300);
       } else {
-        if (navigator.clipboard) navigator.clipboard.writeText(shareText + '\n\nhttps://oyun.club').then(function(){ alert('Metin kopyalandı! Instagram\'ı aç ve yapıştır.'); });
+        if (navigator.clipboard) navigator.clipboard.writeText(shareText).then(function(){ alert('Metin kopyalandı! Instagram\'ı aç ve yapıştır.'); });
       }
     });
   }
