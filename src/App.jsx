@@ -6520,13 +6520,15 @@ function FriendPanel({ sock, myUserId }) {
         setSearchMsg('✅ ' + name + ' için istek gönderildi');
         setSearchResults(prev => prev.map(u => u.userId === toUserId ? Object.assign({},u,{reqSent:true}) : u));
       } else {
-        var errMsg = res?.error || 'Hata';
-        if (errMsg.includes('already') || errMsg.includes('zaten') || errMsg.includes('exist')) {
-          setSearchMsg('⏳ ' + name + ' için istek zaten bekliyor');
-        } else if (errMsg.includes('friend')) {
+        var errMsg = (res?.error || res?.message || res?.msg || 'Hata').toString();
+        var lowerErr = errMsg.toLowerCase();
+        if (lowerErr.includes('already') || lowerErr.includes('zaten') || lowerErr.includes('exist') || lowerErr.includes('pending') || lowerErr.includes('bekl')) {
+          setSearchMsg('⏳ ' + name + ' için istek zaten gönderildi, kabul bekleniyor');
+          setSearchResults(prev => prev.map(u => u.userId === toUserId ? Object.assign({},u,{reqSent:true}) : u));
+        } else if (lowerErr.includes('friend') || lowerErr.includes('arkadaş')) {
           setSearchMsg('✅ ' + name + ' zaten arkadaşın');
         } else {
-          setSearchMsg('❌ ' + errMsg);
+          setSearchMsg('❌ Hata oluştu, tekrar dene');
         }
       }
     });
@@ -6634,8 +6636,11 @@ function FriendPanel({ sock, myUserId }) {
                   <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
                   <div style={{fontSize:11,color:u.online?'#22c55e':'var(--text-secondary)'}}>{u.online?'Online':'Çevrimdışı'}</div>
                 </div>
-                {already ? <span style={{fontSize:11,color:'#22c55e',fontWeight:600}}>✓ Arkadaş</span>
-                  : <button onClick={()=>sendReq(u.userId,u.name)} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Ekle</button>}
+                {already
+                  ? <span style={{fontSize:11,color:'#22c55e',fontWeight:600}}>✓ Arkadaş</span>
+                  : u.reqSent
+                    ? <span style={{fontSize:11,color:'#f59e0b',fontWeight:600}}>⏳ Bekliyor</span>
+                    : <button onClick={()=>sendReq(u.userId,u.name)} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>+ Ekle</button>}
               </div>
             );
           })}
