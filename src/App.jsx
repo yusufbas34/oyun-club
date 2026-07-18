@@ -11494,12 +11494,27 @@ export default function App() {
   }, []);
 
   // Request notification permission once user is logged in, only in PWA mode
+  // Also register Periodic Background Sync for daily reminders
   useEffect(() => {
     if (!user || !isPWA()) return;
-    if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
-    var t = setTimeout(function() {
-      Notification.requestPermission().catch(function() {});
-    }, 3000);
+    if (typeof Notification === 'undefined') return;
+    var doRegister = async function() {
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission().catch(function() {});
+      }
+      if (Notification.permission === 'granted' && 'serviceWorker' in navigator && 'periodicSync' in (await navigator.serviceWorker.ready.catch(() => ({})))) {
+        try {
+          var reg = await navigator.serviceWorker.ready;
+          if ('periodicSync' in reg) {
+            var status = await navigator.permissions.query({ name: 'periodic-background-sync' }).catch(() => ({ state: 'denied' }));
+            if (status.state === 'granted') {
+              await reg.periodicSync.register('daily-reminder', { minInterval: 24 * 60 * 60 * 1000 });
+            }
+          }
+        } catch(e) {}
+      }
+    };
+    var t = setTimeout(doRegister, 3000);
     return function() { clearTimeout(t); };
   }, [!!user]);
 
