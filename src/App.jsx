@@ -9495,10 +9495,10 @@ function BadgeGrid({ badges }) {
   );
 }
 
-function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats }) {
+function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats, detail }) {
   var resultEmoji = result === 'win' ? '🏆' : result === 'loss' ? '😅' : '🤝';
   var resultText = result === 'win' ? 'kazandım' : result === 'loss' ? 'kaybettim' : 'berabere kaldım';
-  var shareText = 'oyun.club\'ta ' + gameName + ' oynadım ve ' + resultText + '! ' + resultEmoji + '\n\n+' + xpGain + ' XP kazandım 🎮\n\nSen de oyna: oyun.club';
+  var shareText = 'oyun.club\'ta ' + gameName + ' oynadım ve ' + resultText + '! ' + resultEmoji + (detail ? '\n' + detail : '') + '\n\n+' + xpGain + ' XP kazandım 🎮\n\nSen de oyna: oyun.club';
 
   function generateShareCard(callback) {
     try {
@@ -9578,9 +9578,14 @@ function ShareResultOverlay({ gameName, result, xpGain, onClose, onReplay, stats
       <div style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', maxWidth: 320, width: '100%', textAlign: 'center', animation: 'fadeUp 0.3s ease' }} onClick={function(e){e.stopPropagation();}}>
         <div style={{ fontSize: 52, marginBottom: 8 }}>{resultEmoji}</div>
         <h3 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{gameName}</h3>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: 6, fontSize: 15 }}>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: detail ? 4 : 6, fontSize: 15 }}>
           {result === 'win' ? 'Kazandın!' : result === 'loss' ? 'Kaybettin' : 'Berabere!'}
         </p>
+        {detail && (
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6, background: 'var(--surface-hover)', borderRadius: 10, padding: '6px 12px', fontWeight: 500 }}>
+            {detail}
+          </p>
+        )}
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(134,59,255,0.12)', color: '#a855f7', padding: '6px 16px', borderRadius: 999, fontWeight: 700, fontSize: 14, marginBottom: 20 }}>
           ⚡ +{xpGain} XP
         </div>
@@ -11450,6 +11455,7 @@ export default function App() {
   const handleGameEnd = (result, opts) => {
     if (!selectedGame) return;
     const difficulty = (opts && opts.difficulty) || null;
+    const detail = (opts && opts.detail) || null;
     const isDailyGame = selectedGame.id === getDailyGameId();
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86400000).toDateString();
@@ -11583,7 +11589,7 @@ export default function App() {
     setPage('lobby');
     setSelectedGame(null);
     setTimeout(() => {
-      setShareResult({ gameName, result, xpGain, game: gameToReplay });
+      setShareResult({ gameName, result, xpGain, game: gameToReplay, detail });
       setFloatingXP(xpGain);
     }, 400);
   };
@@ -11983,6 +11989,7 @@ export default function App() {
           onClose={() => setShareResult(null)}
           onReplay={shareResult.game ? () => { setShareResult(null); handleSelectGame(shareResult.game); } : undefined}
           stats={stats}
+          detail={shareResult.detail}
         />
       )}
       {showAd && pendingGame && (
