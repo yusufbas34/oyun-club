@@ -187,10 +187,14 @@ function useSocket(username) {
                       }
                       // Cross-ref with online users so friends who are already online show correctly
                       socket.emit('get_online_users', null, function(onlineRes) {
-                        if (onlineRes && onlineRes.users) {
-                          var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId; }));
+                        if (onlineRes && onlineRes.users && onlineRes.users.length > 0) {
+                          var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId || u.id; }));
+                          var onlineNames = new Set(onlineRes.users.map(function(u) { return (u.name || u.username || '').toLowerCase(); }));
                           setFriendList(function(prev) {
-                            return prev.map(function(f) { return Object.assign({}, f, { online: onlineIds.has(f.userId) }); });
+                            return prev.map(function(f) {
+                              var isOnline = onlineIds.has(f.userId) || onlineNames.has((f.name||'').toLowerCase());
+                              return Object.assign({}, f, { online: isOnline });
+                            });
                           });
                         }
                       });
@@ -551,10 +555,14 @@ function useSocket(username) {
         setFriendRequests(res.pending || res.requests || []);
         // Cross-ref with currently online users to fix stale offline status
         socketRef.current.emit('get_online_users', null, function(onlineRes) {
-          if (onlineRes && onlineRes.users) {
+          if (onlineRes && onlineRes.users && onlineRes.users.length > 0) {
             var onlineIds = new Set(onlineRes.users.map(function(u) { return u.userId || u.id; }));
+            var onlineNames = new Set(onlineRes.users.map(function(u) { return (u.name || u.username || '').toLowerCase(); }));
             setFriendList(function(prev) {
-              return prev.map(function(f) { return Object.assign({}, f, { online: onlineIds.has(f.userId) }); });
+              return prev.map(function(f) {
+                var isOnline = onlineIds.has(f.userId) || onlineNames.has((f.name||'').toLowerCase());
+                return Object.assign({}, f, { online: isOnline });
+              });
             });
           }
         });
@@ -6436,7 +6444,13 @@ function FriendPanel({ sock, myUserId }) {
   const [searchMsg, setSearchMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (sock && myUserId) sock.getFriends(); }, [myUserId]);
+  useEffect(() => {
+    if (!sock || !myUserId) return;
+    sock.getFriends();
+    // Refresh online status every 20 seconds
+    var timer = setInterval(function() { sock.getFriends(); }, 20000);
+    return function() { clearInterval(timer); };
+  }, [myUserId]);
 
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -6510,9 +6524,12 @@ function FriendPanel({ sock, myUserId }) {
 
       {tab === 'friends' && (
         <div>
-          {onlineFriends.length > 0 && (
-            <div style={{marginBottom:10,fontSize:12,color:'#22c55e',fontWeight:600}}>🟢 {onlineFriends.length} arkadaş online</div>
-          )}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            {onlineFriends.length > 0
+              ? <div style={{fontSize:12,color:'#22c55e',fontWeight:600}}>🟢 {onlineFriends.length} arkadaş online</div>
+              : <div />}
+            <button onClick={()=>sock.getFriends()} style={{fontSize:11,padding:'3px 8px',borderRadius:6,border:'1px solid var(--border)',background:'transparent',color:'var(--text-secondary)',cursor:'pointer'}}>🔄 Yenile</button>
+          </div>
           {friends.length === 0 ? (
             <div style={{textAlign:'center',padding:'24px',color:'var(--text-secondary)',fontSize:13}}>
               <div style={{fontSize:32,marginBottom:8}}>👤</div>
