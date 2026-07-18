@@ -4315,9 +4315,9 @@ function MemoryBattleGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
 // ============================================================
 const RACE_WORDS=[
   {word:'ARABA',clue:'Dört tekerlekli araç'},{word:'KALEM',clue:'Yazı yazmak için'},
-  {word:'KITAP',clue:'Okuruz bunu'},{word:'ELMAS',clue:'Değerli taş'},
+  {word:'KİTAP',clue:'Okuruz bunu'},{word:'ELMAS',clue:'Değerli taş'},
   {word:'BULUT',clue:'Gökyüzünde'},{word:'FENER',clue:'Işık verir'},
-  {word:'LIMON',clue:'Ekşi sarı meyve'},{word:'MAKAS',clue:'Kesmek için'},
+  {word:'LİMON',clue:'Ekşi sarı meyve'},{word:'MAKAS',clue:'Kesmek için'},
   {word:'PAZAR',clue:'Alışveriş yeri'},{word:'ZAMAN',clue:'Geçip gider'},
   {word:'KANAT',clue:'Uçmak için'},{word:'DUMAN',clue:'Ateşten çıkar'},
 ];
@@ -4387,7 +4387,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
 
   const onlineSubmit=function(){
     if(roundDone.current||revealed||!myInput.trim())return;
-    const ok=myInput.toUpperCase().trim()===item.word;
+    const ok=turkishUpper(myInput.trim())===item.word;
     if(!ok){setMyInput('');return;}
     roundDone.current=true;
     const winner=onlineProps.myIndex;
@@ -4406,7 +4406,7 @@ function WordRaceGame({ onGameEnd, soundOn, onlineProps, onGoOnline }) {
   // Local submit (non-online)
   const submit=(player)=>{
     if(answered[player]||revealed)return;
-    const ok=inputs[player].toUpperCase().trim()===item.word;
+    const ok=turkishUpper(inputs[player].trim())===item.word;
     const na=[...answered];na[player]=true;setAnswered(na);
     const ns=[...scores];if(ok){ns[player]++;setScores(ns);if(soundOn)playSound('place');}
     if(ok||na.every(Boolean)){
@@ -11226,6 +11226,13 @@ function turkishLower(s) {
     if(c==='İ') return 'i';
     if(c==='I') return 'ı';
     return c.toLowerCase();
+  }).join('');
+}
+function turkishUpper(s) {
+  return s.split('').map(function(c){
+    if(c==='i') return 'İ';
+    if(c==='ı') return 'I';
+    return c.toUpperCase();
   }).join('');
 }
 
