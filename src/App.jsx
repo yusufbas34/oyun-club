@@ -6515,10 +6515,19 @@ function FriendPanel({ sock, myUserId, username }) {
   useEffect(() => {
     if (!sock || !myUserId) return;
     sock.getFriends();
-    // Refresh online status every 20 seconds
     var timer = setInterval(function() { sock.getFriends(); }, 20000);
     return function() { clearInterval(timer); };
   }, [myUserId]);
+
+  const [supaRequests, setSupaRequests] = useState([]);
+
+  // "İstekler" sekmesi açılınca Supabase'den de kontrol et
+  useEffect(() => {
+    if (tab !== 'requests' || !username) return;
+    cloudGetPendingReqs(username).then(function(supaReqs) {
+      setSupaRequests(supaReqs || []);
+    }).catch(function(){});
+  }, [tab, username]);
 
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -6586,7 +6595,12 @@ function FriendPanel({ sock, myUserId, username }) {
   };
 
   const friends = sock?.friendList || [];
-  const requests = sock?.friendRequests || [];
+  const sockRequests = sock?.friendRequests || [];
+  // Supabase'den gelen istekleri socket istekleriyle birleştir (offline teslimat)
+  const requests = sockRequests.concat(supaRequests.filter(function(sr) {
+    return !sockRequests.some(function(r) { return r.fromId === sr.fromId; }) &&
+           !friends.some(function(f) { return f.userId === sr.fromId; });
+  }));
   const onlineFriends = friends.filter(f => f.online);
 
   return (
@@ -6644,11 +6658,11 @@ function FriendPanel({ sock, myUserId, username }) {
           ) : requests.map(r => (
             <div key={r.fromId} style={{display:'flex',alignItems:'center',gap:10,padding:'12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
               <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#f59e0b,#d97706)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0}}>
-                {r.fromName.charAt(0).toUpperCase()}
+                {(r.fromName || '?').charAt(0).toUpperCase()}
               </div>
               <div style={{flex:1,fontSize:14,fontWeight:600}}>{r.fromName}</div>
-              <button onClick={()=>sock.acceptFriend(r.fromId)} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#22c55e',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✓ Kabul</button>
-              <button onClick={()=>sock.rejectFriend(r.fromId)} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--text-secondary)',fontSize:12,cursor:'pointer'}}>✕</button>
+              <button onClick={()=>{ sock.acceptFriend(r.fromId); setSupaRequests(function(p){return p.filter(function(x){return x.fromId!==r.fromId;})}); if(username) cloudClearPendingReq(username,r.fromId).catch(function(){}); }} style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#22c55e',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>✓ Kabul</button>
+              <button onClick={()=>{ sock.rejectFriend(r.fromId); setSupaRequests(function(p){return p.filter(function(x){return x.fromId!==r.fromId;})}); if(username) cloudClearPendingReq(username,r.fromId).catch(function(){}); }} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--text-secondary)',fontSize:12,cursor:'pointer'}}>✕</button>
             </div>
           ))}
         </div>
