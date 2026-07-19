@@ -2192,7 +2192,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
   const submitGuess = useCallback(() => {
     if (current.length !== 5) { showMsg('5 harf gir!'); return; }
     if (gameOver) return;
-    const newGuess = current.toUpperCase();
+    const newGuess = turkishUpper(current);
     const result = Array(5).fill('absent');
     const targetArr = target.split('');
     const guessArr = newGuess.split('');
@@ -2235,8 +2235,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
       if (gameOver) return;
       if (e.key === 'Enter') { submitGuess(); return; }
       if (e.key === 'Backspace') { setCurrent(c => c.slice(0, -1)); return; }
-      let ch = e.key.toUpperCase();
-      // keep 'I' as-is; keyboard has both I and İ buttons
+      let ch = turkishUpper(e.key);
       if (/^[A-ZÇĞİÖŞÜ]$/.test(ch) && current.length < 5) setCurrent(c => c + ch);
     };
     window.addEventListener('keydown', onKey);
@@ -2274,7 +2273,7 @@ function WordleGame({ game, onGameEnd, soundOn }) {
   };
 
   return (
-    <div style={{ maxWidth: 380, margin: '0 auto', padding: '16px 12px', textAlign: 'center' }}>
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: '16px 8px', textAlign: 'center' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: 24, letterSpacing: -1 }}>Wordle TR</h2>
         <Button onClick={reset} style={{ fontSize: 13, padding: '6px 12px' }}>Yeni Kelime</Button>
@@ -2286,11 +2285,11 @@ function WordleGame({ game, onGameEnd, soundOn }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateRows: 'repeat(6,1fr)', gap: 6, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateRows: 'repeat(6,1fr)', gap: 5, marginBottom: 14 }}>
         {rows.map((row, ri) => {
           const isCurrentRow = !row && ri === guesses.length && !gameOver;
           return (
-            <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6 }}>
+            <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 5 }}>
               {Array(5).fill(0).map((_, ci) => {
                 const letter = row ? row.word[ci] : (isCurrentRow ? current[ci] || '' : '');
                 const status = row ? row.result[ci] : null;
@@ -2313,17 +2312,21 @@ function WordleGame({ game, onGameEnd, soundOn }) {
         })}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
         {KB_ROWS.map((row, ri) => (
-          <div key={ri} style={{ display: 'flex', gap: 5 }}>
+          <div key={ri} style={{ display: 'flex', gap: 4, width: '100%' }}>
             {row.map(k => (
               <button key={k} onClick={() => handleKbKey(k)} style={{
-                minWidth: k.length > 1 ? 54 : 34, height: 52, borderRadius: 6,
+                flex: k.length > 1 ? 1.7 : 1,
+                minWidth: 0,
+                height: 44,
+                borderRadius: 6,
                 border: '1px solid var(--border)',
                 background: usedKeys[k] ? keyColor(k) : 'var(--surface)',
                 color: usedKeys[k] ? '#FFF' : 'var(--text)',
-                fontWeight: 700, fontSize: k.length > 1 ? 11 : 14, cursor: 'pointer',
+                fontWeight: 700, fontSize: k.length > 1 ? 10 : 13, cursor: 'pointer',
                 fontFamily: "'DM Sans',sans-serif",
+                padding: 0,
               }}>
                 {k}
               </button>
