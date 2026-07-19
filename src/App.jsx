@@ -1446,6 +1446,7 @@ var MP_GAMES = [
   { id: 'reversi',     name: 'Reversi',              icon: '⬛⬜',   players: 2, local: true   },
   { id: 'tavla',       name: 'Tavla',                icon: '🎲',     players: 2, local: true   },
   { id: 'dama',        name: 'Dama',                 icon: '⚫',     players: 2, local: true   },
+  { id: 'sorugecesi',  name: 'Soru Gecesi',          icon: '🧠',     players: 4, local: true   },
 ];
 
 function OnlineUsersInvitePanel({ sock, onlineUsers, setOnlineUsers, invitedUsers, setInvitedUsers, roomId, gameId }) {
@@ -1593,6 +1594,8 @@ function MultiplayerLobby(props) {
       opponentName: (players.find(function(p) { return p.id !== sock.myUserId && p.name !== username; }) || players[myIndex === 0 ? 1 : 0] || {}).name || 'Rakip',
       onMove: sock.sendGameMove,
       remoteMove: sock.lastGameMove,
+      players: players,
+      playerCount: players.length,
     };
 
     return (
@@ -1747,6 +1750,9 @@ function MultiplayerLobby(props) {
         )}
         {sock.roomData.state === 'playing' && currentGame === 'dama' && (
           <DamaGame game={{id:'dama',color:'#8B4513',bg:'linear-gradient(135deg,#8B4513,#D2691E)'}} onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
+        )}
+        {sock.roomData.state === 'playing' && currentGame === 'sorugecesi' && (
+          <SoruGecesiGame game={{id:'sorugecesi',color:'#6366F1',bg:'linear-gradient(135deg,#6366F1,#A78BFA)'}} onGameEnd={function(){}} soundOn={false} onlineProps={onlineProps} />
         )}
 
         {/* Game finished */}
@@ -5618,7 +5624,7 @@ const GAMES = [
   {
     id: 'sorugecesi',
     name: 'Soru Gecesi',
-    desc: '2-4 kişilik bilgi yarışması — sırayla oynayın',
+    desc: '2-4 kişilik bilgi yarışması — online veya aynı ekranda oynayın',
     icon: '🧠',
     players: 4,
     minPlayers: 2,
@@ -7657,8 +7663,8 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
                     <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
                     <div style={{ fontSize: 11, color: f.online ? '#22c55e' : 'var(--text-secondary)' }}>{f.online ? 'Online' : 'Çevrimdışı'}</div>
                   </div>
-                  {f.online && (
-                    <button onClick={() => sock.inviteFriend && sock.inviteFriend(f.userId, null, null)}
+                  {f.online && sock && sock.roomData && (
+                    <button onClick={() => sock.inviteFriend && sock.inviteFriend(f.userId, sock.roomData.id, sock.roomData.gameId)}
                       style={{ flexShrink: 0, fontSize: 12, background: 'linear-gradient(135deg,#863bff,#5b21b6)', color: '#fff', border: 'none', borderRadius: 10, padding: '6px 12px', cursor: 'pointer', fontWeight: 700 }}>
                       Davet Et
                     </button>
@@ -8053,12 +8059,12 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
           <div style={{fontSize:12,opacity:0.8}}>Özel oda oluştur, linki gönder, savaş başlasın!</div>
         </div>
         <button onClick={()=>{
-          var code = Math.random().toString(36).substring(2,8).toUpperCase();
-          var url = window.location.origin + '?room=' + code;
+          var url = window.location.origin;
+          var text = (user&&user.name?user.name:'Biri') + ' seni oyun.club\'a meydan okuyor! Gel oyna: ' + url;
           if(onMultiplayer) onMultiplayer();
           setTimeout(function(){
-            if(navigator.share){navigator.share({title:'oyun.club – Meydan okuyorum! ⚔️',text:(user&&user.name?user.name:'Biri')+" seni oyuna meydan okuyor! Bağlan: "+url,url:url});}
-            else{navigator.clipboard?.writeText(url).then(function(){alert('Oda linki kopyalandı!\n\nArkadaşına gönder: '+url);}).catch(function(){alert('Link: '+url);});}
+            if(navigator.share){navigator.share({title:'oyun.club – Meydan okuyorum! ⚔️', text:text, url:url});}
+            else{navigator.clipboard?.writeText(url).then(function(){alert('Link kopyalandı!\n\nArkadaşına gönder: '+url);}).catch(function(){alert('Link: '+url);});}
           }, 100);
         }} style={{padding:'10px 18px',borderRadius:12,border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',fontWeight:700,fontSize:14,cursor:'pointer',backdropFilter:'blur(10px)',whiteSpace:'nowrap'}}>
           ⚔️ Meydan Oku
@@ -10976,8 +10982,13 @@ const SORUGECESI_QS = [
 const PLAYER_COLORS = ['#E63946','#2A9D8F','#6366F1','#D97706'];
 const PLAYER_EMOJIS = ['🔴','🟢','🔵','🟡'];
 
-function SoruGecesiGame({ game, onGameEnd, soundOn }) {
-  const [phase, setPhase] = React.useState('setup');
+function SoruGecesiGame({ game, onGameEnd, soundOn, onlineProps }) {
+  var isOnline = !!onlineProps;
+  var onlinePlayers = isOnline && onlineProps.players ? onlineProps.players : [];
+  var isHost = isOnline ? onlineProps.myIndex === 0 : true;
+  var myOnlineIdx = isOnline ? onlineProps.myIndex : 0;
+
+  const [phase, setPhase] = React.useState(isOnline ? 'waiting' : 'setup');
   const [playerCount, setPlayerCount] = React.useState(2);
   const [names, setNames] = React.useState(['Oyuncu 1','Oyuncu 2','Oyuncu 3','Oyuncu 4']);
   const [scores, setScores] = React.useState([0,0,0,0]);
@@ -10986,45 +10997,156 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
   const [selected, setSelected] = React.useState(null);
   const [showAns, setShowAns] = React.useState(false);
   const [timer, setTimer] = React.useState(15);
+  const [myAnswer, setMyAnswer] = React.useState(null);
+  const [receivedAnswers, setReceivedAnswers] = React.useState({});
+  const hostAdvancingRef = React.useRef(false);
+
   const TOTAL_Q = 10;
-  const shuffled = React.useMemo(function() {
-    var arr = SORUGECESI_QS.slice(); for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;} return arr.slice(0,TOTAL_Q);
-  },[]);
+  const questions = React.useMemo(function() {
+    if (isOnline) return SORUGECESI_QS.slice(0, TOTAL_Q);
+    var arr = SORUGECESI_QS.slice();
+    for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;}
+    return arr.slice(0, TOTAL_Q);
+  }, [isOnline]);
 
-  React.useEffect(function(){
-    if(phase!=='playing'||showAns)return;
-    if(timer<=0){handleAnswer(null);return;}
-    var t=setTimeout(function(){setTimer(function(v){return v-1;});},1000);
-    return function(){clearTimeout(t);};
-  },[phase,timer,showAns]);
+  var effectiveCount = isOnline ? onlinePlayers.length || 2 : playerCount;
+  var effectiveNames = isOnline ? onlinePlayers.map(function(p){return p.name||'Oyuncu';}) : names.slice(0, playerCount);
 
-  function handleAnswer(idx){
-    setSelected(idx);
-    setShowAns(true);
-    var correct=idx===shuffled[qIdx].a;
-    if(correct){
-      var bonus=Math.floor(timer/3);
-      setScores(function(s){var n=s.slice();n[pIdx]+=10+bonus;return n;});
-      if(soundOn)playSound('correct');
-      playHaptic('correct');
-    } else {
-      if(soundOn)playSound('wrong');
-      playHaptic('wrong');
+  // Online: start game (host only)
+  React.useEffect(function() {
+    if (!isOnline || !isHost || phase !== 'waiting') return;
+    var t = setTimeout(function() {
+      onlineProps.onMove({ type: 'sq_question', qIdx: 0 });
+    }, 1500);
+    return function() { clearTimeout(t); };
+  }, [isOnline, isHost, phase]);
+
+  // Online: receive remote moves
+  React.useEffect(function() {
+    if (!isOnline || !onlineProps.remoteMove) return;
+    var mv = onlineProps.remoteMove;
+    if (mv.type === 'sq_question') {
+      setQIdx(mv.qIdx);
+      setPhase('playing');
+      setSelected(null);
+      setShowAns(false);
+      setTimer(15);
+      setMyAnswer(null);
+      setReceivedAnswers({});
+      hostAdvancingRef.current = false;
     }
-    setTimeout(function(){
-      setShowAns(false);setSelected(null);setTimer(15);
-      var nextP=pIdx+1;
-      if(nextP>=playerCount){
-        var nextQ=qIdx+1;
-        if(nextQ>=TOTAL_Q){setPhase('result');return;}
-        setQIdx(nextQ);setPIdx(0);
-      } else { setPIdx(nextP); }
-    },1800);
+    if (mv.type === 'sq_answer') {
+      var pidx = mv.playerIdx;
+      setReceivedAnswers(function(prev) {
+        var n = Object.assign({}, prev);
+        n[pidx] = { answerIdx: mv.answerIdx, correct: mv.correct };
+        return n;
+      });
+      if (pidx !== myOnlineIdx) {
+        setScores(function(prev) {
+          var n = prev.slice();
+          n[pidx] = (n[pidx] || 0) + (mv.pts || 0);
+          return n;
+        });
+      }
+    }
+    if (mv.type === 'sq_reveal') {
+      setShowAns(true);
+    }
+    if (mv.type === 'sq_done') {
+      setPhase('result');
+    }
+  }, [onlineProps && onlineProps.remoteMove && onlineProps.remoteMove._ts]);
+
+  // Local timer
+  React.useEffect(function() {
+    if (isOnline || phase !== 'playing' || showAns) return;
+    if (timer <= 0) { handleAnswer(null); return; }
+    var t = setTimeout(function() { setTimer(function(v){return v-1;}); }, 1000);
+    return function() { clearTimeout(t); };
+  }, [phase, timer, showAns, isOnline]);
+
+  // Online timer
+  React.useEffect(function() {
+    if (!isOnline || phase !== 'playing' || showAns) return;
+    if (timer <= 0) {
+      if (myAnswer === null) {
+        setMyAnswer(-1);
+        onlineProps.onMove({ type: 'sq_answer', qIdx: qIdx, playerIdx: myOnlineIdx, answerIdx: null, correct: false, pts: 0 });
+      }
+      if (isHost && !hostAdvancingRef.current) {
+        hostAdvancingRef.current = true;
+        setTimeout(function() {
+          onlineProps.onMove({ type: 'sq_reveal' });
+          setShowAns(true);
+          setTimeout(function() {
+            var nextQ = qIdx + 1;
+            if (nextQ >= TOTAL_Q) {
+              onlineProps.onMove({ type: 'sq_done' });
+              setPhase('result');
+            } else {
+              onlineProps.onMove({ type: 'sq_question', qIdx: nextQ });
+            }
+          }, 2500);
+        }, 800);
+      }
+      return;
+    }
+    var t = setTimeout(function() { setTimer(function(v){return v-1;}); }, 1000);
+    return function() { clearTimeout(t); };
+  }, [phase, timer, showAns, isOnline, myAnswer]);
+
+  function handleAnswer(idx) {
+    if (isOnline) {
+      if (myAnswer !== null) return;
+      var correct = idx !== null && idx === questions[qIdx].a;
+      var pts = correct ? (10 + Math.floor(timer / 3)) : 0;
+      setMyAnswer(idx === null ? -1 : idx);
+      setSelected(idx);
+      setScores(function(prev) { var n=prev.slice(); n[myOnlineIdx]=(n[myOnlineIdx]||0)+pts; return n; });
+      setReceivedAnswers(function(prev) { var n=Object.assign({},prev); n[myOnlineIdx]={answerIdx:idx,correct:correct}; return n; });
+      onlineProps.onMove({ type:'sq_answer', qIdx:qIdx, playerIdx:myOnlineIdx, answerIdx:idx, correct:correct, pts:pts });
+      if (soundOn) { try { if(correct)playSound('correct'); else playSound('wrong'); } catch(e){} }
+    } else {
+      setSelected(idx);
+      setShowAns(true);
+      var correct2 = idx === questions[qIdx].a;
+      if (correct2) {
+        var bonus = Math.floor(timer / 3);
+        setScores(function(s){ var n=s.slice(); n[pIdx]+=10+bonus; return n; });
+        if(soundOn){try{playSound('correct');}catch(e){}}
+        playHaptic('correct');
+      } else {
+        if(soundOn){try{playSound('wrong');}catch(e){}}
+        playHaptic('wrong');
+      }
+      setTimeout(function(){
+        setShowAns(false); setSelected(null); setTimer(15);
+        var nextP=pIdx+1;
+        if(nextP>=playerCount){ var nextQ=qIdx+1; if(nextQ>=TOTAL_Q){setPhase('result');return;} setQIdx(nextQ);setPIdx(0); }
+        else { setPIdx(nextP); }
+      },1800);
+    }
   }
 
-  var activePlayers = names.slice(0,playerCount);
+  var activePlayers = effectiveNames;
 
-  if(phase==='setup'){
+  // Waiting phase (online non-host)
+  if (phase === 'waiting') {
+    return (
+      <div style={{maxWidth:480,margin:'0 auto',padding:'40px 16px',textAlign:'center'}}>
+        <div style={{fontSize:52,marginBottom:12}}>🧠</div>
+        <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:22,marginBottom:8}}>Soru Gecesi</h2>
+        <div style={{color:'var(--text-secondary)',fontSize:14}}>Oyun başlatılıyor...</div>
+        <div style={{marginTop:24,display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+          {effectiveNames.map(function(n,i){return(<span key={i} style={{background:'var(--surface-hover)',borderRadius:20,padding:'6px 14px',fontSize:13,fontWeight:600,color:PLAYER_COLORS[i]}}>{PLAYER_EMOJIS[i]} {n}</span>);})}
+        </div>
+      </div>
+    );
+  }
+
+  // Setup phase (local only)
+  if (phase === 'setup') {
     return (
       <div style={{maxWidth:480,margin:'0 auto',padding:'28px 16px',textAlign:'center'}}>
         <div style={{fontSize:52,marginBottom:8}}>🧠</div>
@@ -11033,19 +11155,16 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
         <div style={{marginBottom:20}}>
           <div style={{fontWeight:600,marginBottom:8}}>Oyuncu sayısı</div>
           <div style={{display:'flex',gap:8,justifyContent:'center'}}>
-            {[2,3,4].map(function(n){
-              return <button key={n} onClick={function(){setPlayerCount(n);}} style={{width:52,height:52,borderRadius:12,border:playerCount===n?'none':'1px solid var(--border)',background:playerCount===n?'#6366f1':'var(--surface)',color:playerCount===n?'#fff':'var(--text)',fontWeight:700,fontSize:18,cursor:'pointer'}}>{n}</button>;
-            })}
+            {[2,3,4].map(function(n){return <button key={n} onClick={function(){setPlayerCount(n);}} style={{width:52,height:52,borderRadius:12,border:playerCount===n?'none':'1px solid var(--border)',background:playerCount===n?'#6366f1':'var(--surface)',color:playerCount===n?'#fff':'var(--text)',fontWeight:700,fontSize:18,cursor:'pointer'}}>{n}</button>;})}
           </div>
         </div>
         <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:28}}>
-          {Array.from({length:playerCount},function(_,i){
-            return (
-              <div key={i} style={{display:'flex',alignItems:'center',gap:10}}>
-                <span style={{fontSize:22}}>{PLAYER_EMOJIS[i]}</span>
-                <input value={names[i]} onChange={function(e){var v=e.target.value;setNames(function(n){var a=n.slice();a[i]=v;return a;});}} style={{flex:1,padding:'10px 12px',borderRadius:10,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:15,outline:'none'}} maxLength={16} />
-              </div>
-            );
+          {Array.from({length:playerCount},function(_,i){return(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:22}}>{PLAYER_EMOJIS[i]}</span>
+              <input value={names[i]} onChange={function(e){var v=e.target.value;setNames(function(n){var a=n.slice();a[i]=v;return a;});}} style={{flex:1,padding:'10px 12px',borderRadius:10,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:15,outline:'none'}} maxLength={16} />
+            </div>
+          );
           })}
         </div>
         <button onClick={function(){setPhase('playing');}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
@@ -11055,69 +11174,102 @@ function SoruGecesiGame({ game, onGameEnd, soundOn }) {
     );
   }
 
-  if(phase==='result'){
-    var ranked=activePlayers.map(function(n,i){return{name:n,score:scores[i],color:PLAYER_COLORS[i],emoji:PLAYER_EMOJIS[i]};}).sort(function(a,b){return b.score-a.score;});
-    var winner=ranked[0];
+  // Result phase
+  if (phase === 'result') {
+    var ranked = activePlayers.map(function(n,i){return{name:n,score:scores[i]||0,color:PLAYER_COLORS[i],emoji:PLAYER_EMOJIS[i]};}).sort(function(a,b){return b.score-a.score;});
+    var winner = ranked[0];
     return (
       <div style={{maxWidth:480,margin:'0 auto',padding:'28px 16px',textAlign:'center'}}>
         <div style={{fontSize:52,marginBottom:8}}>🏆</div>
         <h2 style={{fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:22,marginBottom:4}}>Oyun Bitti!</h2>
         <div style={{marginBottom:6,fontSize:18,fontWeight:700}}>{winner.emoji} {winner.name} kazandı!</div>
         <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:28,marginTop:20}}>
-          {ranked.map(function(p,i){
-            return (
-              <div key={p.name} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:12,background:i===0?'rgba(134,59,255,0.12)':'var(--surface)',border:i===0?'1px solid rgba(134,59,255,0.3)':'1px solid var(--border)'}}>
-                <span style={{fontSize:20,width:28}}>{i===0?'🥇':i===1?'🥈':'🥉'}</span>
-                <span style={{fontSize:20}}>{p.emoji}</span>
-                <span style={{flex:1,fontWeight:700,textAlign:'left'}}>{p.name}</span>
-                <span style={{fontWeight:800,color:p.color,fontSize:18}}>{p.score} puan</span>
-              </div>
-            );
-          })}
+          {ranked.map(function(p,i){return(
+            <div key={p.name} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:12,background:i===0?'rgba(134,59,255,0.12)':'var(--surface)',border:i===0?'1px solid rgba(134,59,255,0.3)':'1px solid var(--border)'}}>
+              <span style={{fontSize:20,width:28}}>{i===0?'🥇':i===1?'🥈':'🥉'}</span>
+              <span style={{fontSize:20}}>{p.emoji}</span>
+              <span style={{flex:1,fontWeight:700,textAlign:'left'}}>{p.name}</span>
+              <span style={{fontWeight:800,color:p.color,fontSize:18}}>{p.score} puan</span>
+            </div>
+          );})}
         </div>
-        <button onClick={function(){onGameEnd('win');}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>
-          Lobiyi Bitir ✓
-        </button>
+        {!isOnline && <button onClick={function(){onGameEnd('win');}} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#863bff,#5b21b6)',color:'#fff',fontWeight:800,fontSize:16,cursor:'pointer',fontFamily:"'Sora',sans-serif"}}>Tekrar Oyna 🎉</button>}
       </div>
     );
   }
 
-  var q=shuffled[qIdx];
+  // Playing phase
+  var q = questions[qIdx];
+  var timerPct = timer / 15;
+  var answeredCount = Object.keys(receivedAnswers).length;
 
   return (
-    <div style={{maxWidth:480,margin:'0 auto',padding:'24px 16px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <span style={{fontSize:13,color:'var(--text-secondary)',fontWeight:600}}>Soru {qIdx+1}/{TOTAL_Q}</span>
-        <div style={{display:'flex',gap:8}}>
-          {activePlayers.map(function(n,i){return <span key={i} style={{fontSize:11,padding:'3px 8px',borderRadius:8,background:i===pIdx?PLAYER_COLORS[pIdx]:'var(--surface)',color:i===pIdx?'#fff':'var(--text-secondary)',fontWeight:700}}>{PLAYER_EMOJIS[i]}{scores[i]}</span>;})}
-        </div>
+    <div style={{maxWidth:520,margin:'0 auto',padding:'16px'}}>
+      {/* Scoreboard */}
+      <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:12,flexWrap:'wrap'}}>
+        {activePlayers.map(function(n,i){
+          var isMe = isOnline && i === myOnlineIdx;
+          var isCurrent = !isOnline && i === pIdx;
+          var hasAnswered = isOnline && receivedAnswers[i] !== undefined;
+          return(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:20,background:isCurrent?PLAYER_COLORS[i]+'22':isMe?PLAYER_COLORS[i]+'22':'var(--surface)',border:(isCurrent||isMe)?'2px solid '+PLAYER_COLORS[i]:'1px solid var(--border)',opacity:hasAnswered?0.7:1}}>
+              <span style={{fontSize:14}}>{PLAYER_EMOJIS[i]}</span>
+              <span style={{fontWeight:700,fontSize:12,color:PLAYER_COLORS[i]}}>{scores[i]||0}</span>
+              {hasAnswered && <span style={{fontSize:10}}>✓</span>}
+            </div>
+          );
+        })}
       </div>
-      <div style={{textAlign:'center',marginBottom:16}}>
-        <div style={{fontSize:28,fontWeight:800,color:PLAYER_COLORS[pIdx]}}>{PLAYER_EMOJIS[pIdx]} {activePlayers[pIdx]}</div>
-        <div style={{fontSize:12,color:'var(--text-secondary)'}}>sırasında</div>
+      {/* Progress */}
+      <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--text-secondary)',marginBottom:6}}>
+        <span>Soru {qIdx+1}/{TOTAL_Q}</span>
+        {!isOnline && <span style={{fontWeight:600,color:PLAYER_COLORS[pIdx]}}>{PLAYER_EMOJIS[pIdx]} {activePlayers[pIdx]} sırasında</span>}
+        {isOnline && <span>{answeredCount}/{effectiveCount} cevapladı</span>}
+        <span style={{fontWeight:700,color:timer<=5?'#ef4444':'var(--text)'}}>{timer}s</span>
       </div>
-      <div style={{background:'var(--surface)',borderRadius:16,padding:'20px',marginBottom:20,border:'1px solid var(--border)'}}>
-        <div style={{fontFamily:"'Sora',sans-serif",fontWeight:700,fontSize:17,lineHeight:1.4,textAlign:'center'}}>{q.q}</div>
+      {/* Timer bar */}
+      <div style={{height:5,borderRadius:4,background:'var(--surface-hover)',marginBottom:16,overflow:'hidden'}}>
+        <div style={{height:'100%',borderRadius:4,background:timer<=5?'#ef4444':'#6366f1',width:(timerPct*100)+'%',transition:'width 1s linear'}}/>
       </div>
-      <div style={{position:'relative',height:8,background:'var(--surface-hover)',borderRadius:4,marginBottom:20,overflow:'hidden'}}>
-        <div style={{position:'absolute',left:0,top:0,height:'100%',borderRadius:4,background:timer>8?'#22c55e':timer>4?'#D97706':'#E63946',width:(timer/15*100)+'%',transition:'width 1s linear'}}/>
-        <div style={{position:'absolute',right:8,top:-12,fontSize:12,fontWeight:700,color:timer>8?'#22c55e':timer>4?'#D97706':'#E63946'}}>{timer}s</div>
+      {/* Question */}
+      <div style={{background:'var(--surface)',borderRadius:16,padding:'20px',marginBottom:16,textAlign:'center',border:'1px solid var(--border)'}}>
+        <div style={{fontWeight:700,fontSize:17,lineHeight:1.4}}>{q.q}</div>
       </div>
+      {/* Options */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-        {q.opts.map(function(opt,i){
-          var bg='var(--surface)',color='var(--text)',border='1px solid var(--border)';
-          if(showAns){
-            if(i===q.a){bg='#22c55e';color='#fff';border='none';}
-            else if(i===selected&&selected!==q.a){bg='#ef4444';color='#fff';border='none';}
+        {q.opts.map(function(opt, oi){
+          var isCorrect = oi === q.a;
+          var isMine = isOnline ? selected === oi : selected === oi;
+          var bg = 'var(--surface)';
+          var border = '1px solid var(--border)';
+          var disabled = isOnline ? myAnswer !== null : showAns;
+          if (showAns) {
+            if (isCorrect) { bg='rgba(34,197,94,0.15)'; border='2px solid #22c55e'; }
+            else if (isMine && !isCorrect) { bg='rgba(239,68,68,0.1)'; border='2px solid #ef4444'; }
+          } else if (isMine && !showAns) {
+            bg='rgba(99,102,241,0.12)'; border='2px solid #6366f1';
           }
-          return (
-            <button key={i} onClick={function(){if(!showAns)handleAnswer(i);}} disabled={showAns}
-              style={{padding:'14px 10px',borderRadius:12,border:border,background:bg,color:color,fontWeight:600,fontSize:14,cursor:showAns?'default':'pointer',fontFamily:"'DM Sans',sans-serif",lineHeight:1.3,transition:'all 0.2s'}}>
+          return(
+            <button key={oi} onClick={function(){handleAnswer(oi);}} disabled={disabled} style={{padding:'14px 12px',borderRadius:14,border:border,background:bg,color:'var(--text)',fontWeight:600,fontSize:14,cursor:disabled?'default':'pointer',textAlign:'center',lineHeight:1.3,transition:'all 0.2s'}}>
               {opt}
             </button>
           );
         })}
       </div>
+      {/* Show answer context */}
+      {showAns && isOnline && (
+        <div style={{marginTop:12,textAlign:'center'}}>
+          <div style={{fontWeight:700,color:'#22c55e',fontSize:14}}>Doğru cevap: {q.opts[q.a]}</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:8,flexWrap:'wrap'}}>
+            {activePlayers.map(function(n,i){
+              var ans = receivedAnswers[i];
+              return ans ? (
+                <span key={i} style={{fontSize:12,fontWeight:600,color:ans.correct?'#22c55e':'#ef4444'}}>{PLAYER_EMOJIS[i]} {n}: {ans.correct?'✓':q.opts[ans.answerIdx]||'—'}</span>
+              ) : <span key={i} style={{fontSize:12,color:'var(--text-secondary)'}}>{PLAYER_EMOJIS[i]} {n}: —</span>;
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
