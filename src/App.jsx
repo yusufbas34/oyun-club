@@ -6133,6 +6133,8 @@ const Header = ({
   dark,
   onToggleDark,
   onProfileTab,
+  onFriends,
+  friendRequestCount,
 }) => {
   const [showDrop, setShowDrop] = React.useState(false);
   return (
@@ -6236,9 +6238,15 @@ const Header = ({
                 display: 'flex', alignItems: 'center',
                 padding: '4px 6px', borderRadius: 50,
                 transition: 'var(--transition)',
+                position: 'relative',
               }}
             >
               <Avatar name={user.name} size={30} />
+              {friendRequestCount > 0 && (
+                <span style={{position:'absolute',top:2,right:2,background:'#ef4444',color:'#fff',borderRadius:10,padding:'1px 4px',fontSize:9,fontWeight:700,minWidth:14,textAlign:'center',lineHeight:'14px',pointerEvents:'none'}}>
+                  {friendRequestCount}
+                </span>
+              )}
             </button>
             {showDrop && (
               <>
@@ -6251,14 +6259,20 @@ const Header = ({
                     { icon:'👤', label:'Profil', tab:'profil' },
                     { icon:'📊', label:'İstatistikler', tab:'istatistik' },
                     { icon:'🏅', label:'Rozetlerim', tab:'rozetler' },
+                    { icon:'🤝', label:'Arkadaşlar' + (friendRequestCount > 0 ? ' (' + friendRequestCount + ')' : ''), tab:'arkadaşlar' },
                     { icon:'⚙️', label:'Ayarlar', tab:'ayarlar' },
                   ].map(function(item) {
                     return (
                       <button key={item.tab}
-                        onClick={function(){ setShowDrop(false); if(onProfileTab) onProfileTab(item.tab); else if(onProfile) onProfile(); }}
-                        style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 12px', borderRadius:10, border:'none', background:'none', color:'var(--text)', fontSize:14, fontWeight:500, cursor:'pointer', textAlign:'left' }}
+                        onClick={function(){
+                          setShowDrop(false);
+                          if (item.tab === 'arkadaşlar' && onFriends) { onFriends(); }
+                          else if(onProfileTab) onProfileTab(item.tab);
+                          else if(onProfile) onProfile();
+                        }}
+                        style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 12px', borderRadius:10, border:'none', background: item.tab === 'arkadaşlar' && friendRequestCount > 0 ? 'rgba(239,68,68,0.08)' : 'none', color: item.tab === 'arkadaşlar' && friendRequestCount > 0 ? '#ef4444' : 'var(--text)', fontSize:14, fontWeight: item.tab === 'arkadaşlar' && friendRequestCount > 0 ? 700 : 500, cursor:'pointer', textAlign:'left' }}
                         onMouseEnter={function(e){ e.currentTarget.style.background='var(--surface-hover)'; }}
-                        onMouseLeave={function(e){ e.currentTarget.style.background='none'; }}
+                        onMouseLeave={function(e){ e.currentTarget.style.background= item.tab === 'arkadaşlar' && friendRequestCount > 0 ? 'rgba(239,68,68,0.08)' : 'none'; }}
                       >
                         <span>{item.icon}</span> {item.label}
                       </button>
@@ -12069,6 +12083,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   var sock = useSocket(user ? user.name : 'Oyuncu', user ? user.userId : null);
   const [loginNameError, setLoginNameError] = useState(null);
+  const [supaFriendReqCount, setSupaFriendReqCount] = useState(0);
 
   useEffect(() => {
     if (sock.registerError) {
@@ -12078,6 +12093,14 @@ export default function App() {
       sock.clearRegisterError();
     }
   }, [sock.registerError]);
+
+  // Supabase'deki bekleyen istek sayısını yükle
+  useEffect(() => {
+    if (!sock.isRegistered || !user || !user.name) return;
+    cloudGetPendingReqs(user.name).then(function(reqs) {
+      setSupaFriendReqCount((reqs || []).length);
+    }).catch(function(){});
+  }, [sock.isRegistered, user && user.name]);
 
   const showToast = (msg) => {
     setToast({ message: msg, visible: true });
@@ -12669,11 +12692,13 @@ export default function App() {
           }
           onProfile={() => setPage('profile')}
           onProfileTab={(tab) => { setProfileInitialTab(tab); setPage('profile'); }}
+          onFriends={() => { setProfileInitialTab('arkadaşlar'); setPage('profile'); }}
           onLeaderboard={() => setPage('leaderboard')}
           onMultiplayer={() => setPage('multiplayer')}
           onHome={handleHome}
           dark={dark}
           onToggleDark={() => setDark((d) => !d)}
+          friendRequestCount={(sock ? (sock.friendRequests || []).length : 0) + supaFriendReqCount}
         />
         {user && !['login', 'game'].includes(page) && (
           <BottomNav
@@ -12683,7 +12708,7 @@ export default function App() {
             onLeaderboard={() => setPage('leaderboard')}
             onProfile={() => setPage('profile')}
             onFriends={() => { setProfileInitialTab('arkadaşlar'); setPage('profile'); }}
-            friendRequestCount={sock ? (sock.friendRequests || []).length : 0}
+            friendRequestCount={(sock ? (sock.friendRequests || []).length : 0) + supaFriendReqCount}
           />
         )}
         {page === 'lobby' && (
