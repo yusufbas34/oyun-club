@@ -55,6 +55,20 @@ async function cloudSaveUser(username, stats, avatar) {
     updated_at: new Date().toISOString(),
   });
 }
+
+async function cloudGetPendingReqs(username) {
+  var rows = await supaFetch('oyunclub_users?username=eq.' + encodeURIComponent(username) + '&select=pending_reqs&limit=1');
+  return rows && rows[0] ? (rows[0].pending_reqs || []) : [];
+}
+async function cloudAddPendingReq(targetUsername, fromId, fromName) {
+  var current = await cloudGetPendingReqs(targetUsername);
+  if (current.some(function(r) { return r.fromId === fromId; })) return;
+  return supaFetch('oyunclub_users?username=eq.' + encodeURIComponent(targetUsername), 'PATCH', { pending_reqs: current.concat([{ fromId: fromId, fromName: fromName }]) });
+}
+async function cloudClearPendingReq(myUsername, fromId) {
+  var current = await cloudGetPendingReqs(myUsername);
+  return supaFetch('oyunclub_users?username=eq.' + encodeURIComponent(myUsername), 'PATCH', { pending_reqs: current.filter(function(r) { return r.fromId !== fromId; }) });
+}
 // ────────────────────────────────────────────────────────────────────────────
 
 // PWA detection — true only when installed (standalone), not in browser tab
@@ -173,7 +187,7 @@ function useSocket(username, persistentUserId) {
                   if (r) {
                     var friendsInit = dedupFriends(r.friends);
                     setFriendList(friendsInit);
-                    var rawPendingInit = r.pending || r.requests || [];
+                    var rawPendingInit = r.pending || r.pendingRequests || r.pending_requests || r.requests || r.incoming || [];
                     var pending = rawPendingInit.filter(function(req) {
                       return !friendsInit.some(function(f) {
                         return f.userId === req.fromId ||
@@ -184,6 +198,23 @@ function useSocket(username, persistentUserId) {
                     if (pending.length > 0) {
                       setFriendToast('🤝 ' + pending.length + ' bekleyen arkadaşlık isteği var!');
                       setTimeout(function(){ setFriendToast(null); }, 5000);
+                    }
+                    // Offline iletilemeyen istekleri Supabase'den de kontrol et
+                    if (username && username !== 'Oyuncu') {
+                      cloudGetPendingReqs(username).then(function(supaReqs) {
+                        if (!supaReqs || !supaReqs.length) return;
+                        setFriendRequests(function(prev) {
+                          var merged = prev.slice();
+                          supaReqs.forEach(function(req) {
+                            if (!merged.some(function(m) { return m.fromId === req.fromId; })) {
+                              merged.push({ fromId: req.fromId, fromName: req.fromName });
+                            }
+                          });
+                          return merged;
+                        });
+                        setFriendToast('🤝 ' + supaReqs.length + ' bekleyen arkadaşlık isteği var!');
+                        setTimeout(function(){ setFriendToast(null); }, 5000);
+                      }).catch(function(){});
                     }
                     // Cross-ref with online users so friends who are already online show correctly
                     socket.emit('get_online_users', null, function(onlineRes) {
@@ -611,18 +642,22 @@ function useSocket(username, persistentUserId) {
           var dup = prev.some(function(f){ return f.userId===fid || (f.name||'').toLowerCase()===(fname||'').toLowerCase(); });
           return dup ? prev : prev.concat([{userId:fid,name:fname,online:true}]);
         });
+        if (username && username !== 'Oyuncu') cloudClearPendingReq(username, fromId).catch(function(){});
       }
       if (cb) cb(res);
     });
-  }, []);
+  }, [username]);
 
   var rejectFriend = useCallback(function(fromId, cb) {
     if (!socketRef.current) return;
     socketRef.current.emit('reject_friend', { fromId }, function(res) {
-      if (res && res.success) setFriendRequests(function(prev){ return prev.filter(function(r){ return r.fromId !== fromId; }); });
+      if (res && res.success) {
+        setFriendRequests(function(prev){ return prev.filter(function(r){ return r.fromId !== fromId; }); });
+        if (username && username !== 'Oyuncu') cloudClearPendingReq(username, fromId).catch(function(){});
+      }
       if (cb) cb(res);
     });
-  }, []);
+  }, [username]);
 
   var removeFriend = useCallback(function(friendId, cb) {
     if (!socketRef.current) return;
@@ -6533,6 +6568,8 @@ function FriendPanel({ sock, myUserId, username }) {
       if (res?.success) {
         setSearchMsg('✅ ' + name + ' için istek gönderildi! Çevrimdışı olsa bile bağlandığında bildirim alacak.');
         setSearchResults(prev => prev.map(u => u.userId === toUserId ? Object.assign({},u,{reqSent:true}) : u));
+        // Offline teslimat için Supabase'e de yaz
+        cloudAddPendingReq(name, myUserId, username).catch(function(){});
       } else {
         var errMsg = (res?.error || res?.message || res?.msg || 'Hata').toString();
         var lowerErr = errMsg.toLowerCase();
