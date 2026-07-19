@@ -6580,7 +6580,7 @@ function FriendPanel({ sock, myUserId, username }) {
             return (
             <div key={f.userId} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface-hover)',borderRadius:12,marginBottom:8}}>
               <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#863bff,#5b21b6)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:14,flexShrink:0,position:'relative'}}>
-                {f.name.charAt(0).toUpperCase()}
+                {(f.name || '?').charAt(0).toUpperCase()}
                 <div style={{position:'absolute',bottom:0,right:0,width:10,height:10,borderRadius:'50%',background:f.online?'#22c55e':'#6b7280',border:'2px solid var(--surface-hover)'}}/>
               </div>
               <div style={{flex:1}}>
@@ -7014,7 +7014,7 @@ const ProfilePage = ({ user, stats, onLogout, userAvatar, onAvatarChange, sock, 
         <div>
           {sock && sock.isConnected ? (
             <Card style={{ padding: 20 }}>
-              <FriendPanel sock={sock} myUserId={sock.myUserId} username={username} />
+              <FriendPanel sock={sock} myUserId={sock.myUserId} username={user ? user.name : ''} />
             </Card>
           ) : (
             <Card style={{ padding: 32, textAlign: 'center' }}>
@@ -7584,7 +7584,7 @@ const Lobby = ({ onSelectGame, onJoinRoom, onMultiplayer, user, stats, sock, onG
                 <div key={f.userId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ width: 36, height: 36, borderRadius: '50%', background: f.online ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#6b7280,#4b5563)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14 }}>
-                      {f.name.charAt(0).toUpperCase()}
+                      {(f.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: f.online ? '#22c55e' : '#6b7280', border: '2px solid var(--surface)' }} />
                   </div>
